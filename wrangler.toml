@@ -6,7 +6,7 @@ compatibility_date = "2024-11-01"
 
 # DATA_BASE: raw-GitHub-Link zum Ordner mit prices.json (ohne / am Ende)
 [vars]
-DATA_BASE = "https://raw.githubusercontent.com/DEINNAME/gear-sniper/main"
+DATA_BASE = "https://raw.githubusercontent.com/Hakomine/Gear-Sniper/main"
 
 # KV-Namespace danach binden (id aus: wrangler kv namespace create GEAR_KV)
 # [[kv_namespaces]]

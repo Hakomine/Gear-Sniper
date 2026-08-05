@@ -75,7 +75,7 @@ damit die erste `prices.json` entsteht.
 
 | Typ | Name | Wert |
 |---|---|---|
-| Variable | `DATA_BASE` | `https://raw.githubusercontent.com/DEINNAME/gear-sniper/main` |
+| Variable | `DATA_BASE` | `https://raw.githubusercontent.com/Hakomine/Gear-Sniper/main` |
 | Secret | `DISCORD_WEBHOOK` | Webhook-URL deines Discord-Kanals |
 
 5. **Storage & Databases → KV** → Namespace anlegen → im Worker unter
