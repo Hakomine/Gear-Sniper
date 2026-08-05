@@ -1,0 +1,24 @@
+{
+  "usedMinPct": 50,
+  "suspiciousPct": 85,
+
+  "throttleMs": 1000,
+  "historyDays": 90,
+  "minHistoryDays": 7,
+  "fastBlock": 60,
+  "dealFloorPct": 20,
+
+  "elgato": {
+    "base": "https://www.elgato.com",
+    "locale": "de/de",
+    "sitemap": "https://www.elgato.com/de-sitemap-products-1.xml"
+  },
+
+  "kleinanzeigen": {
+    "enabled": true,
+    "queries": ["elgato", "stream deck", "cam link"],
+    "pages": 3,
+    "minPrice": 15,
+    "maxPrice": 900
+  }
+}

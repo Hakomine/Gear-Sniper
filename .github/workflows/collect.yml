@@ -1,0 +1,81 @@
+name: Preise sammeln
+
+on:
+  schedule:
+    # Schnelllauf: Watchlist, Kleinanzeigen und ein rotierender Katalog-Block
+    - cron: '*/30 * * * *'
+    # Nachtlauf: kompletter Elgato-Katalog (dauert ~10 Min)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'fast oder full'
+        required: false
+        default: 'fast'
+
+# Der Job schreibt prices.json zurück ins Repo
+permissions:
+  contents: write
+
+# Zwei Läufe gleichzeitig würden sich beim Commit in die Quere kommen
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    # Der Volllauf braucht real ~25 Min (578 Produkte, 1 Sek Pause dazwischen).
+    # Lieber Luft lassen, als den Job mittendrin abschneiden.
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Modus bestimmen
+        id: mode
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 3 * * *" ]; then
+            echo "value=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.mode || 'fast' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sammeln
+        run: node collector.mjs --mode=${{ steps.mode.outputs.value }}
+
+      - name: Ergebnis committen
+        run: |
+          git config user.name  "gear-sniper-bot"
+          git config user.email "actions@github.com"
+          git add prices.json deals.json history.json
+          if git diff --staged --quiet; then
+            echo "Keine Preisaenderung"
+          else
+            git commit -m "Preise ${{ steps.mode.outputs.value }} $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            git push
+          fi
+
+      # Ohne das wäre ein kaputter Sammler unsichtbar: der Worker meldet zwar
+      # veraltete Daten, aber erst nach 90 Minuten.
+      - name: Bei Fehlschlag Discord benachrichtigen
+        if: failure()
+        env:
+          HOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          [ -z "$HOOK" ] && exit 0
+          curl -sS -X POST "$HOOK" -H 'content-type: application/json' -d @- <<JSON
+          {
+            "username": "Gear Sniper",
+            "content": "⚠️ **Sammler fehlgeschlagen** (${{ steps.mode.outputs.value }})",
+            "embeds": [{
+              "title": "GitHub Actions Log",
+              "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "description": "Der Preis-Sammellauf ist abgebrochen. Meist hat Elgato die Seitenstruktur geaendert oder eine Quelle sperrt gerade.",
+              "color": 16007990
+            }]
+          }
+          JSON
