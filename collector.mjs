@@ -1,10 +1,12 @@
 // Gear Sniper – Collector
-// Sammelt Preise aus drei Quellen und schreibt sie in kompakte JSON-Dateien,
+// Sammelt Preise aus vier Quellen und schreibt sie in kompakte JSON-Dateien,
 // die der Cloudflare Worker dann nur noch liest:
 //
 //   1. Elgato-Shop DE  – kompletter Katalog aus der Sitemap (UVP + aktueller Preis)
 //   2. Watchlist       – beliebige Produkt-Links anderer Shops (watchlist.json)
 //   3. Kleinanzeigen   – Gebraucht-Angebote, verglichen mit dem Neupreis
+//   4. Cam-Jagd        – Kameras, die besser sind als die OBSBOT Meet 2,
+//                        verglichen mit dem Median vergleichbarer Anzeigen
 //
 // Läuft in GitHub Actions (und lokal per run.bat). Bewusst NICHT im Worker:
 // ein Elgato-Produkt-JSON ist ~500 KB, das sprengt jedes Cloudflare-Free-Limit.
@@ -30,7 +32,7 @@ const arg = (name, def = null) => {
 const MODE = arg('mode', 'fast');
 const DRY = !!arg('dry-run');
 const SIMULATE = arg('simulate-deal', null);
-const ONLY = arg('only', null); // elgato | watch | ka
+const ONLY = arg('only', null); // elgato | watch | ka | cam
 
 // Ehrlicher User-Agent statt Browser-Tarnung. Getestet: Elgato und
 // Kleinanzeigen antworten damit genauso wie einem echten Browser.
@@ -125,7 +127,7 @@ async function elgatoProduct(buildId, slug) {
 }
 
 async function collectElgato(mode, prevItems, state) {
-  console.log('\n[1/3] Elgato-Shop');
+  console.log('\n[1/4] Elgato-Shop');
   const buildId = await elgatoBuildId();
   console.log('  buildId: ' + buildId);
 
@@ -229,7 +231,7 @@ function findOffer(node, depth = 0) {
 }
 
 async function collectWatchlist() {
-  console.log('\n[2/3] Watchlist');
+  console.log('\n[2/4] Watchlist');
   const file = path.join(__dirname, 'watchlist.json');
   if (!fs.existsSync(file)) {
     console.log('  keine watchlist.json – übersprungen');
@@ -294,6 +296,77 @@ const RENTAL = /\b(miete|mieten|vermiete|vermietung|leihen|leihe|verleih)\b/i;
 // ganz normalen Geräte-Anzeigen ("… mit Zubehör und OVP").
 const ACCESSORY = /\b(halterung|halter|mount|case|huelle|tasche|skin|aufkleber|faceplate|abdeckung|schutzfolie|tastenkappen)\b/;
 
+// Kaputt ist kein Schnäppchen. Eine defekte Kamera für 30% des Marktpreises
+// ist genau das, was sie kostet – und würde den Alarm dauerhaft verstopfen.
+const DEFECT = /\b(defekt|kaputt|bastler|ersatzteil|ersatzteile|fuer teile|nicht funktionsfaehig|gebrochen)\b/;
+
+// Zubehör rund um Kameras. Der erste Testlauf fischte fast nur so was:
+// SmallRig-Cages, Handgriffe, Fachbücher – und eine Kia-Stahlfelge mit der
+// Teilenummer 52910-A6000.
+// HART: Wörter, die eine Kamera-Anzeige ausschließen, egal wo sie stehen.
+// "kompatibel" ist das beste Einzelsignal überhaupt – so schreibt niemand
+// über eine Kamera, aber jeder Zubehör-Verkäufer.
+const CAM_ACCESSORY =
+  /\b(\w*buch|cage|kaefig|smallrig|rig|akku\w*|batterie|ladegeraet|ladestation|blitz\w*|gurt|speicherkarte|fernausloeser|fernbedienung|anleitung|ratgeber|displayschutz|schutzfolie|schutzglas|zwischenring|telekonverter|softbox|gimbal|unterwassergehaeuse|kompatibel|ersatzakku)\b/;
+
+// WEICH: Wörter, die auch in echten Angeboten vorkommen ("A6400 mit 16-50
+// Objektiv", "inkl. Tasche"). Die zählen nur, wenn sie vorne stehen oder ein
+// "für <Modell>" dahinter kommt – dann ist es Zubehör FÜR die Kamera.
+const CAM_SOFT_WORDS =
+  'objektiv|griff|grip|halterung|halter|platte|winkel|tasche|koffer|adapter|deckel|filter|stativ|sucher|schutz';
+const CAM_SOFT = new RegExp('\\b(' + CAM_SOFT_WORDS + ')\\w*\\b');
+const CAM_SOFT_FUER = new RegExp('\\b(' + CAM_SOFT_WORDS + ')\\w*\\s+(fuer|for)\\b');
+
+function isAccessoryAd(t) {
+  if (CAM_ACCESSORY.test(t)) return true;
+  const head = ' ' + t.trim().split(' ').slice(0, 3).join(' ') + ' ';
+  if (CAM_SOFT.test(head) || ACCESSORY.test(head)) return true;
+  return CAM_SOFT_FUER.test(t);
+}
+
+// Wo im Titel steht der Modellname? Das ist der eigentliche Trick: bei einer
+// echten Kamera-Anzeige steht das Modell vorne ("Sony Alpha 6000 Gehäuse"),
+// bei Zubehör hinten in einer Kompatibilitätsliste ("Baxxtar Akku … für
+// Sony A6000 A6300 A6400").
+function phrasePos(words, phrases) {
+  let best = -1;
+  for (const p of phrases) {
+    const pw = p.split(' ');
+    for (let i = 0; i + pw.length <= words.length; i++) {
+      if (pw.every((w, k) => words[i + k] === w)) {
+        if (best === -1 || i < best) best = i;
+        break;
+      }
+    }
+  }
+  return best;
+}
+
+// Eine Kleinanzeigen-Suche abrufen. Seite 6+ sperrt deren robots.txt.
+async function kleinanzeigenAds(query, pages, minPrice, maxPrice) {
+  const slug = query.trim().toLowerCase().replace(/\s+/g, '-');
+  const out = [];
+  for (let page = 1; page <= Math.min(pages, 5); page++) {
+    const u =
+      page === 1
+        ? `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/${slug}/k0`
+        : `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/seite:${page}/${slug}/k0`;
+    let ads;
+    try {
+      ads = parseKleinanzeigen(await get(u));
+    } catch (e) {
+      console.log(`  × "${query}" Seite ${page}: nicht abrufbar (${e.message})`);
+      break;
+    }
+    if (!ads.length) break;
+    out.push(...ads);
+  }
+  return out;
+}
+
+// Anzeigen, die generell nicht als Kauf zählen
+const isJunk = (ad) => !ad.price || WANTED.test(ad.title) || RENTAL.test(ad.title) || DEFECT.test(norm(ad.title));
+
 export function parseKleinanzeigen(html) {
   const out = [];
   for (const block of html.split(/(?=<article[^>]*class="aditem)/).slice(1)) {
@@ -312,7 +385,7 @@ export function parseKleinanzeigen(html) {
 }
 
 async function collectKleinanzeigen(catalog) {
-  console.log('\n[3/3] Kleinanzeigen (gebraucht)');
+  console.log('\n[3/4] Kleinanzeigen (gebraucht)');
   if (!CFG.kleinanzeigen.enabled) {
     console.log('  deaktiviert');
     return [];
@@ -322,55 +395,135 @@ async function collectKleinanzeigen(catalog) {
   const out = [];
 
   for (const q of ka.queries) {
-    const slug = q.trim().toLowerCase().replace(/\s+/g, '-');
-    for (let page = 1; page <= ka.pages; page++) {
-      // Seite 6+ sperrt die robots.txt von Kleinanzeigen – da gehen wir nicht hin.
-      if (page > 5) break;
-      const u =
-        page === 1
-          ? `https://www.kleinanzeigen.de/s-preis:${ka.minPrice}:${ka.maxPrice}/${slug}/k0`
-          : `https://www.kleinanzeigen.de/s-preis:${ka.minPrice}:${ka.maxPrice}/seite:${page}/${slug}/k0`;
-      let ads;
-      try {
-        ads = parseKleinanzeigen(await get(u));
-      } catch (e) {
-        console.log(`  × "${q}" Seite ${page}: nicht abrufbar (${e.message})`);
-        break;
-      }
-      if (!ads.length) break;
+    const ads = await kleinanzeigenAds(q, ka.pages, ka.minPrice, ka.maxPrice);
+    for (const ad of ads) {
+      if (seen.has(ad.id)) continue;
+      seen.add(ad.id);
+      if (isJunk(ad)) continue;
 
-      for (const ad of ads) {
-        if (seen.has(ad.id)) continue;
-        seen.add(ad.id);
-        if (!ad.price || WANTED.test(ad.title) || RENTAL.test(ad.title)) continue;
+      const match = matchProduct(ad.title, catalog);
+      if (!match) continue; // ohne Neupreis kein Vergleich – kein Rabatt berechenbar
 
-        const match = matchProduct(ad.title, catalog);
-        if (!match) continue; // ohne Neupreis kein Vergleich – kein Rabatt berechenbar
-
-        const p = pct(match.ref, ad.price);
-        out.push({
-          id: 'ka:' + ad.id,
-          src: 'ka',
-          name: ad.title,
-          shop: 'Kleinanzeigen',
-          url: 'https://www.kleinanzeigen.de' + ad.href,
-          img: ad.img,
-          cur: ad.price,
-          ref: match.ref,
-          pct: p,
-          stock: 'USED',
-          match: match.name,
-          vb: ad.vb,
-          // Auffällig weit unter Neupreis: eher Betrugsmasche oder defekt.
-          // Nicht wegwerfen, aber markieren – die Entscheidung trifft Hakan.
-          sus: p >= CFG.suspiciousPct,
-        });
-      }
-      console.log(`  "${q}" Seite ${page}: ${ads.length} Anzeigen`);
+      const p = pct(match.ref, ad.price);
+      out.push({
+        id: 'ka:' + ad.id,
+        src: 'ka',
+        name: ad.title,
+        shop: 'Kleinanzeigen',
+        url: 'https://www.kleinanzeigen.de' + ad.href,
+        img: ad.img,
+        cur: ad.price,
+        ref: match.ref,
+        pct: p,
+        stock: 'USED',
+        match: match.name,
+        vb: ad.vb,
+        // Auffällig weit unter Neupreis: eher Betrugsmasche oder defekt.
+        // Nicht wegwerfen, aber markieren – die Entscheidung trifft Hakan.
+        sus: p >= CFG.suspiciousPct,
+      });
     }
+    console.log(`  "${q}": ${ads.length} Anzeigen`);
   }
   const hits = out.filter((o) => o.pct >= CFG.usedMinPct).length;
   console.log(`  ${out.length} zuordenbare Angebote, davon ${hits} über ${CFG.usedMinPct}% unter Neupreis`);
+  return out;
+}
+
+// --- Quelle 4: Cam-Jagd -----------------------------------------------
+//
+// Der eigentliche Zweck der App: Kameras finden, die besser sind als Hakans
+// OBSBOT Meet 2. Welche das sind, steht in cams.json – nur Modelle mit
+// groesserem Sensor kommen da rein.
+//
+// Entscheidend ist der Referenzpreis. Gegen den NEUPREIS zu rechnen waere
+// Unsinn: eine gebrauchte A6000 fuer 250 € ist dann "−55%", obwohl das
+// einfach der normale Gebrauchtpreis ist. Verglichen wird deshalb gegen den
+// MEDIAN der Anzeigen fuer dasselbe Modell. Ein Fund ist erst dann einer,
+// wenn er deutlich unter dem liegt, was alle anderen verlangen.
+
+async function collectCams() {
+  console.log('\n[4/4] Cam-Jagd (besser als die Meet 2)');
+  const file = path.join(__dirname, 'cams.json');
+  if (!fs.existsSync(file)) {
+    console.log('  keine cams.json – übersprungen');
+    return [];
+  }
+  const db = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const ka = CFG.kleinanzeigen;
+  const out = [];
+
+  for (const m of db.modelle) {
+    const phrases = (m.queries || []).map(norm).filter(Boolean);
+    const marken = (m.marke || []).map(norm).filter(Boolean);
+    const found = [];
+    const seen = new Set();
+
+    for (const q of m.queries) {
+      for (const ad of await kleinanzeigenAds(q, CFG.camPages, ka.minPrice, 4000)) {
+        if (seen.has(ad.id)) continue;
+        seen.add(ad.id);
+        if (isJunk(ad)) continue;
+
+        const words = norm(ad.title).split(' ');
+        const t = ' ' + words.join(' ') + ' ';
+
+        // Modellname muss am Stueck UND weit vorne im Titel stehen
+        const pos = phrasePos(words, phrases);
+        if (pos < 0 || pos > 5) continue;
+        // Marke muss vorkommen. Ohne das matchte eine Kia-Stahlfelge mit der
+        // Teilenummer 52910-A6000 auf die Sony Alpha 6000.
+        if (!marken.some((b) => t.includes(' ' + b))) continue;
+        if (isAccessoryAd(t)) continue;
+        // "<Irgendwas> für <Modell>" ist Zubehör, "<Modell> für <Zweck>" nicht.
+        // Entscheidet allein die Reihenfolge – das braucht keine Wortliste und
+        // fängt auch Exoten wie "Fusionrig Cineback für Sony a6400".
+        const fuer = words.indexOf('fuer');
+        if (fuer !== -1 && fuer < pos) continue;
+        found.push(ad);
+      }
+    }
+
+    // Median der eigenen Anzeigen – erst ab genug Datenpunkten belastbar
+    const prices = found.map((a) => a.price).sort((a, b) => a - b);
+    const genug = prices.length >= CFG.camMinListings;
+    const median = genug ? prices[Math.floor(prices.length / 2)] : null;
+    const ref = median ?? m.markt;
+
+    for (const ad of found) {
+      const p = pct(ref, ad.price);
+      out.push({
+        id: 'cam:' + ad.id,
+        src: 'cam',
+        name: ad.title,
+        shop: 'Kleinanzeigen',
+        url: 'https://www.kleinanzeigen.de' + ad.href,
+        img: ad.img,
+        cur: ad.price,
+        ref: round2(ref),
+        pct: p,
+        stock: 'USED',
+        vb: ad.vb,
+        match: m.name,
+        typ: m.typ,
+        sensor: m.sensor,
+        blende: m.blende,
+        warum: m.warum,
+        neu: m.neu,
+        // Woher der Vergleichspreis kommt – das gehoert sichtbar dazu,
+        // sonst weiss man nicht, wie ernst man die Prozentzahl nehmen darf
+        refArt: median ? 'Median aus ' + prices.length + ' Anzeigen' : 'geschätzter Marktpreis',
+        sus: p >= CFG.suspiciousPct,
+      });
+    }
+
+    const treffer = out.filter((o) => o.match === m.name && o.pct >= CFG.camMinPct).length;
+    console.log(
+      `  ${m.name.padEnd(22)} ${String(found.length).padStart(3)} Anzeigen · ` +
+        `Vergleich ${eur(ref)} (${median ? 'Median' : 'geschätzt'})` +
+        (treffer ? ` · ${treffer} unter −${CFG.camMinPct}%` : '')
+    );
+  }
   return out;
 }
 
@@ -411,7 +564,9 @@ export function matchProduct(title, catalog) {
 const norm = (s) =>
   (s || '')
     .toLowerCase()
-    .replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss')
+    // ae/oe/ue statt a/o/u: sonst wird aus "für" ein "fur" und aus "Hülle"
+    // ein "hulle" – und sämtliche Filter unten greifen ins Leere.
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
     // Sonst wären "Stream Deck +" und "Stream Deck" nach dem Putzen identisch
     // und ein Plus-Modell würde gegen den Preis des kleinen Modells gerechnet.
     .replace(/\+/g, ' plus ')
@@ -425,7 +580,7 @@ const norm = (s) =>
 function updateHistory(hist, items) {
   const d = today();
   for (const it of items) {
-    if (it.cur == null || it.src === 'ka') continue; // Gebraucht-Anzeigen sind Einzelstücke
+    if (it.cur == null || it.src === 'ka' || it.src === 'cam') continue; // Einzelstücke, kein Preisverlauf
     // Nicht neu geprüfte Produkte behalten ihren alten Stand – sonst würde der
     // Verlauf Tagespunkte erfinden, die nie gemessen wurden.
     if (it.stale) continue;
@@ -537,12 +692,15 @@ async function main() {
   if (!ONLY || ONLY === 'ka') {
     items.push(...(await collectKleinanzeigen(catalog)));
   }
+  if (!ONLY || ONLY === 'cam') {
+    items.push(...(await collectCams()));
+  }
 
   // Im Schnelllauf nicht geprüfte Produkte behalten ihren letzten Stand,
   // sonst wäre die App nach jedem Lauf halb leer.
   const fresh = new Set(items.map((i) => i.id));
   for (const p of prev.items || []) {
-    if (!fresh.has(p.id) && p.src !== 'ka') items.push({ ...p, stale: true });
+    if (!fresh.has(p.id) && p.src !== 'ka' && p.src !== 'cam') items.push({ ...p, stale: true });
   }
 
   updateHistory(hist, items);
@@ -566,7 +724,8 @@ async function main() {
   // Zweite, winzige Datei nur für den Alarm-Cron: der Worker hat auf dem
   // Free-Plan 10 ms CPU – 500 Produkte zu parsen wäre Verschwendung.
   const deals = items.filter(
-    (i) => i.pct >= CFG.dealFloorPct || i.atLow || i.status === 'blocked' || i.simulated
+    (i) => i.pct >= CFG.dealFloorPct || i.atLow || i.status === 'blocked' || i.simulated ||
+         (i.src === 'cam' && i.pct >= CFG.camMinPct)
   );
   const dealFile = { at: prices.at, mode: MODE, count: deals.length, items: deals };
 

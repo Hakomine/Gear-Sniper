@@ -28,17 +28,38 @@ Warum getrennt: ein Elgato-Produkt-JSON ist ~500 KB. Der Cloudflare-Free-Plan
 gibt einem Cron-Lauf 10 ms CPU und 50 Subrequests – der komplette Katalog passt
 da nie rein. Also sammelt GitHub, und der Worker liest nur die fertige Datei.
 
-## Die drei Quellen
+## Die vier Quellen
 
 | Quelle | Was sie bringt |
 |---|---|
+| **Cam-Jagd** | Kameras, die besser sind als Hakans OBSBOT Meet 2 — **der Hauptzweck** |
+| **Kleinanzeigen** | Elgato-Gebrauchtangebote gegen den Neupreis gerechnet |
 | **Elgato-Shop DE** | 578 Produkte mit UVP, aktuellem Preis und Lagerstatus |
 | **Watchlist** | eigene Produkt-Links, beliebiger Shop, beliebige Marke |
-| **Kleinanzeigen** | Gebraucht-Angebote, automatisch gegen den Neupreis gerechnet |
 
-Die Gebraucht-Quelle ist die wichtigste. Im offiziellen Shop gibt es 50 %
+Der Gebrauchtmarkt ist der wichtige Teil. Im offiziellen Shop gibt es 50 %
 praktisch nie, auf Kleinanzeigen laufend. Beim ersten Testlauf stand dort direkt
 eine „Elgato Premium Facecam" für 50 €.
+
+## Cam-Jagd (der eigentliche Zweck)
+
+Hakan streamt mit einer **OBSBOT Meet 2** (1/2″ Sensor, f/1.8). Die App jagt
+gezielt Kameras, die die beim Bild schlagen — Details in `CAMS.md`, Datenbank
+in `cams.json`.
+
+**Der Kniff: verglichen wird gegen den Median vergleichbarer Anzeigen, nicht
+gegen den Neupreis.** Eine gebrauchte A6000 für 250 € ist gegen 549 € Neupreis
+„−55 %" — aber das ist einfach der normale Gebrauchtpreis. Gegen den Median von
+400 € ist sie ein müder −38 %, und *das* stimmt. Der erste echte Fund im Test:
+eine **Sony Alpha 6400 für 300 € bei einem Median von 800 €** aus 63 Anzeigen.
+
+Im Bestand sind aktuell: Razer Kiyo Pro Ultra (1/1.2″), Elgato Facecam Pro
+(1/1.8″), OBSBOT Tiny 2 (1/1.5″), Facecam 4K (1/1.8″, aber nur f/4.0 — mit
+Warnhinweis), dazu Sony ZV-E10 / A6400 / A6000, Canon EOS M50 und Lumix G7
+fürs Cam-Link-Setup.
+
+Bewusst **nicht** drin, weil kein Upgrade: Insta360 Link 2 (auch 1/2″) und
+Logitech MX Brio (1/2.8″, kleiner).
 
 ## Snipe-Logik
 - **Rabatt auf UVP**: Alarm ab **50 %** (`ALARM_MIN_PCT` in `worker.js`).
@@ -99,8 +120,23 @@ GitHub-Job ab, meldet der sich selbst.
   gegen den 999-€-„Stream Deck Studio" – sah aus wie −91 %, war Unsinn.
   Ebenso aussortiert: Mietanzeigen und Zubehör (eine Halterung fürs Stream Deck
   ist kein Stream Deck). Bündel taugen nicht als Referenzpreis.
-- **Der allererste Alarm ist laut.** Im Test waren es 39 Gebraucht-Funde auf
-  einmal, weil für den Sniper alles neu ist. Danach kommt nur noch Neues.
+- **Der allererste Alarm ist laut.** Im Test waren es 54 Funde auf einmal, weil
+  für den Sniper alles neu ist. Danach kommt nur noch Neues.
+- **Bei der Cam-Jagd ist der Neupreis als Referenz wertlos.** Jede normale
+  Gebrauchtanzeige sähe wie ein Schnäppchen aus. Der Median vergleichbarer
+  Anzeigen ist die richtige Messlatte — und pflegt sich von selbst.
+- **Zubehör erkennt man an der Wortstellung, nicht am Wort.** Steht das Modell
+  vorne im Titel, ist es die Kamera; steht es hinten in einer
+  Kompatibilitätsliste, ist es Zubehör. „X für Y" heißt Zubehör, „Y für Zweck"
+  nicht. Reine Wortlisten reichen nicht: „A6400 mit 16-50 Objektiv" ist ein
+  echtes Angebot, „Griff für A6400" nicht.
+- **Eine Kia-Stahlfelge matchte auf die Sony Alpha 6000** — Teilenummer
+  `52910-A6000`. Seitdem muss auch die Marke im Titel stehen.
+- **Umlaute im Normalisierer müssen zu ae/oe/ue werden.** Mit ä→a wurde aus
+  „für" ein „fur", und sämtliche Filter liefen ins Leere, ohne zu meckern.
+- **Kein Regex mit Schrägstrich in die Worker-Oberfläche.** Die steckt in einem
+  Template-String — aus `/^f\//` wird beim Einbetten `/^f//` und die ganze
+  Seite bleibt tot. `startsWith` nehmen.
 
 ## Notizen
 - Region steht auf DE/EUR.

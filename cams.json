@@ -1,0 +1,157 @@
+{
+  "_": "Kameras, die Hakans OBSBOT Meet 2 (1/2 Zoll, f/1.8) beim Bild schlagen. 'markt' ist der uebliche Gebrauchtpreis und dient als Notnagel, solange zu wenige Anzeigen fuer einen eigenen Median da sind.",
+  "meineCam": {
+    "name": "OBSBOT Meet 2",
+    "sensor": "1/2\"",
+    "blende": "f/1.8"
+  },
+  "modelle": [
+    {
+      "name": "Razer Kiyo Pro Ultra",
+      "typ": "webcam",
+      "sensor": "1/1.2\"",
+      "blende": "f/1.7",
+      "warum": "Groesster Sensor, den es in einer Webcam gibt – rund 2,8x die Flaeche deiner Meet 2, bei sogar leicht offenerer Blende. Der klarste Sprung ohne Systemkamera.",
+      "neu": 299.99,
+      "markt": 190,
+      "queries": [
+        "kiyo pro ultra"
+      ],
+      "marke": [
+        "razer",
+        "kiyo"
+      ]
+    },
+    {
+      "name": "Elgato Facecam Pro",
+      "typ": "webcam",
+      "sensor": "1/1.8\"",
+      "blende": "f/2.0",
+      "warum": "1,6x Sensorflaeche bei fast gleicher Lichtstaerke, dazu als einzige Webcam echtes 4K60.",
+      "neu": 349.99,
+      "markt": 200,
+      "queries": [
+        "facecam pro"
+      ],
+      "marke": [
+        "elgato",
+        "facecam"
+      ]
+    },
+    {
+      "name": "OBSBOT Tiny 2",
+      "typ": "webcam",
+      "sensor": "1/1.5\"",
+      "blende": "f/1.9",
+      "warum": "Deutlich groesserer Sensor als deine Meet 2 bei praktisch gleicher Blende. Gleiche Software, die du schon kennst.",
+      "neu": 329.0,
+      "markt": 200,
+      "queries": [
+        "obsbot tiny 2"
+      ],
+      "marke": [
+        "obsbot"
+      ]
+    },
+    {
+      "name": "Elgato Facecam 4K",
+      "typ": "webcam",
+      "sensor": "1/1.8\"",
+      "blende": "f/4.0",
+      "warum": "ACHTUNG: groesserer Sensor, aber f/4.0 sind rund fuenfmal weniger Licht als deine f/1.8. Nur mit gutem Key Light ein Upgrade, im Dunkeln eher schlechter.",
+      "neu": 199.99,
+      "markt": 140,
+      "queries": [
+        "facecam 4k"
+      ],
+      "marke": [
+        "elgato",
+        "facecam"
+      ]
+    },
+    {
+      "name": "Sony ZV-E10",
+      "typ": "systemkamera",
+      "sensor": "APS-C",
+      "blende": "je nach Objektiv",
+      "warum": "APS-C ist rund 30x die Sensorflaeche deiner Meet 2. Sauberes Bild bei wenig Licht und echtes Bokeh. Speziell fuer Video gebaut, sauberes HDMI ab Werk.",
+      "neu": 699.0,
+      "markt": 380,
+      "queries": [
+        "zv-e10",
+        "sony zv e10"
+      ],
+      "marke": [
+        "sony",
+        "zv"
+      ]
+    },
+    {
+      "name": "Sony Alpha 6400",
+      "typ": "systemkamera",
+      "sensor": "APS-C",
+      "blende": "je nach Objektiv",
+      "warum": "APS-C mit sehr gutem Autofokus, kein 30-Minuten-Limit. Beliebter Streaming-Klassiker.",
+      "neu": 899.0,
+      "markt": 550,
+      "queries": [
+        "a6400",
+        "alpha 6400"
+      ],
+      "marke": [
+        "sony",
+        "alpha"
+      ]
+    },
+    {
+      "name": "Sony Alpha 6000",
+      "typ": "systemkamera",
+      "sensor": "APS-C",
+      "blende": "je nach Objektiv",
+      "warum": "Der guenstigste Weg zu APS-C. Alt, aber der Sensor spielt in einer voellig anderen Liga als jede Webcam.",
+      "neu": 549.0,
+      "markt": 250,
+      "queries": [
+        "a6000",
+        "alpha 6000"
+      ],
+      "marke": [
+        "sony",
+        "alpha"
+      ]
+    },
+    {
+      "name": "Canon EOS M50",
+      "typ": "systemkamera",
+      "sensor": "APS-C",
+      "blende": "je nach Objektiv",
+      "warum": "APS-C, sehr verbreitet und dadurch guenstig zu bekommen.",
+      "neu": 599.0,
+      "markt": 280,
+      "queries": [
+        "eos m50",
+        "canon m50"
+      ],
+      "marke": [
+        "canon",
+        "eos"
+      ]
+    },
+    {
+      "name": "Panasonic Lumix G7",
+      "typ": "systemkamera",
+      "sensor": "MFT",
+      "blende": "je nach Objektiv",
+      "warum": "MFT ist immer noch rund 15x deine Meet 2. Bekannt fuer sauberes HDMI ohne Zeitlimit – der Preis-Leistungs-Tipp fuers Cam-Link-Setup.",
+      "neu": 449.0,
+      "markt": 230,
+      "queries": [
+        "lumix g7"
+      ],
+      "marke": [
+        "panasonic",
+        "lumix"
+      ]
+    }
+  ]
+}

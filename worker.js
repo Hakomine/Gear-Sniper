@@ -22,6 +22,10 @@
 const ALARM_MIN_PCT = 50;      // % Rabatt auf UVP – ab hier gibt es Alarm
 const ALARM_HISTLOW_PCT = 25;  // beim Allzeittief reicht dieser kleinere Rabatt
 const ALARM_USED_PCT = 50;     // % unter Neupreis bei Gebraucht-Angeboten
+// Cam-Jagd: hier wird gegen den MEDIAN vergleichbarer Anzeigen gerechnet,
+// nicht gegen den Neupreis. 30% unter dem, was alle anderen verlangen, ist
+// deshalb schon ein echter Fund – keine 50 nötig.
+const ALARM_CAM_PCT = 30;
 // Die Betrugs-Markierung setzt der Collector (suspiciousPct in config.json) –
 // hier wird sie nur noch angezeigt, damit es nur eine Quelle der Wahrheit gibt.
 const ALARM_TTL = 14 * 24 * 3600;  // so lange gilt ein Treffer als "schon gemeldet"
@@ -194,6 +198,7 @@ async function runCron(env) {
 function isHit(i) {
   if (i.cur == null || !i.ref) return false;
   if (i.stale) return false;               // alter Stand, nicht neu geprüft
+  if (i.src === 'cam') return i.pct >= ALARM_CAM_PCT;
   if (i.src === 'ka') return i.pct >= ALARM_USED_PCT;
   if (i.stock === 'OUT_OF_STOCK') return false; // ausverkauft ist kein Deal
   if (i.pct >= ALARM_MIN_PCT) return true;
@@ -215,7 +220,9 @@ async function onlyNew(env, hits) {
   return out.sort((a, b) => score(b) - score(a));
 }
 
-const score = (h) => (h.src === 'ka' ? 500 : 0) + (h.atLow ? 1000 : 0) + (h.pct || 0);
+// Kamera-Funde zuerst – dafür ist die App gebaut.
+const score = (h) =>
+  (h.src === 'cam' ? 2000 : 0) + (h.src === 'ka' ? 500 : 0) + (h.atLow ? 1000 : 0) + (h.pct || 0);
 
 // ---------- Discord ----------
 
@@ -228,8 +235,25 @@ async function sendDiscord(env, hits) {
   }
 
   const embeds = hits.slice(0, ALARM_MAX_EMBEDS).map((h) => {
+    const cam = h.src === 'cam';
     const used = h.src === 'ka';
     const lines = [`**${eurTxt(h.cur)}** statt ${eurTxt(h.ref)} · **−${h.pct}%**`];
+
+    if (cam) {
+      const blende = /^f\//.test(h.blende || '') ? ' · ' + h.blende : '';
+      lines.push(`${h.match} · Sensor ${h.sensor}${blende}`);
+      lines.push(`Vergleich: ${h.refArt}${h.neu ? ' · neu ' + eurTxt(h.neu) : ''}`);
+      if (h.warum) lines.push('> ' + String(h.warum).slice(0, 300));
+      if (h.sus) lines.push('⚠️ **Auffällig günstig** – erst prüfen, dann zahlen.');
+      return {
+        title: '📷 ' + String(h.name).slice(0, 240),
+        url: h.url || undefined,
+        description: lines.join('\n'),
+        color: 5814783,
+        thumbnail: h.img ? { url: h.img } : undefined,
+        footer: { text: 'Cam-Jagd · besser als deine Meet 2' },
+      };
+    }
 
     if (used) {
       lines.push(`Gebraucht bei Kleinanzeigen${h.vb ? ' (VB)' : ''}`);
@@ -329,7 +353,7 @@ const HTML = `<!doctype html>
 <style>
   :root {
     --bg:#0b0d11; --card:#141821; --line:#232936; --txt:#e8ecf3; --dim:#8f9bb0;
-    --accent:#4ade80; --hot:#fb923c; --used:#a78bfa; --warn:#f87171;
+    --accent:#4ade80; --hot:#fb923c; --used:#a78bfa; --warn:#f87171; --cam:#60a5fa;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--txt);
@@ -357,6 +381,7 @@ const HTML = `<!doctype html>
   .card:hover { border-color:#39445a; }
   .card.deal { border-left:4px solid var(--hot); }
   .card.used { border-left:4px solid var(--used); }
+  .card.cam { border-left:4px solid var(--cam); background:linear-gradient(90deg,rgba(96,165,250,.09),var(--card) 60%); }
   .thumb { width:62px; height:62px; flex:0 0 auto; border-radius:9px; object-fit:contain;
     background:#0f131a; }
   .body { flex:1; min-width:0; }
@@ -369,6 +394,7 @@ const HTML = `<!doctype html>
     background:var(--hot); color:#1a1005; }
   .meta { font-size:11.5px; color:var(--dim); margin-top:5px; display:flex; gap:8px; flex-wrap:wrap; }
   .tag-low { color:var(--accent); font-weight:700; }
+  .tag-cam { color:var(--cam); font-weight:700; }
   .tag-sus { color:var(--warn); font-weight:700; }
   .tag-out { color:var(--warn); }
   .empty { text-align:center; color:var(--dim); padding:50px 20px; font-size:14px; line-height:1.6; }
@@ -388,6 +414,7 @@ const HTML = `<!doctype html>
       <option value="name">Name</option>
     </select>
     <label class="chip" id="c-deal"><input type="checkbox" id="onlyDeal" /> nur reduziert</label>
+    <label class="chip" id="c-cam"><input type="checkbox" id="onlyCam" /> 📷 nur Kameras</label>
     <label class="chip" id="c-used"><input type="checkbox" id="onlyUsed" /> nur gebraucht</label>
     <label class="chip" id="c-low"><input type="checkbox" id="onlyLow" /> nur Allzeittief</label>
     <label class="chip" id="c-stock"><input type="checkbox" id="onlyStock" /> nur auf Lager</label>
@@ -408,7 +435,7 @@ const eur = n => n == null ? '–' : n.toFixed(2).replace('.', ',') + ' €';
 let ITEMS = [];
 
 const el = id => document.getElementById(id);
-const chips = [['onlyDeal','c-deal'],['onlyUsed','c-used'],['onlyLow','c-low'],['onlyStock','c-stock']];
+const chips = [['onlyCam','c-cam'],['onlyDeal','c-deal'],['onlyUsed','c-used'],['onlyLow','c-low'],['onlyStock','c-stock']];
 
 async function load() {
   try {
@@ -417,9 +444,11 @@ async function load() {
     if (d.error) throw new Error(d.error);
     ITEMS = d.items || [];
     const age = Math.round((Date.now() - new Date(d.at)) / 60000);
+    const camHits = ITEMS.filter(i => i.src === 'cam' && i.pct >= 30).length;
     const deals = ITEMS.filter(i => i.pct > 0).length;
     el('status').textContent =
-      ITEMS.length + ' Produkte · ' + deals + ' gerade reduziert · Stand vor ' + age + ' Min';
+      '📷 ' + camHits + ' Cam-Funde · ' + deals + ' reduziert · ' +
+      ITEMS.length + ' Einträge · Stand vor ' + age + ' Min';
     render();
   } catch (e) {
     el('status').textContent = 'Fehler: ' + e.message;
@@ -436,6 +465,7 @@ function render() {
     if (i.cur == null) return false;
     if (i.pct < min) return false;
     if (el('onlyDeal').checked && i.pct <= 0) return false;
+    if (el('onlyCam').checked && i.src !== 'cam') return false;
     if (el('onlyUsed').checked && i.src !== 'ka') return false;
     if (el('onlyLow').checked && !i.atLow) return false;
     if (el('onlyStock').checked && i.stock === 'OUT_OF_STOCK') return false;
@@ -456,13 +486,13 @@ function render() {
 
   el('empty').hidden = list.length > 0;
   el('empty').textContent = list.length ? '' :
-    'Nichts gefunden. Elgato reduziert selten – die richtig großen Rabatte kommen zu Black Friday und Prime Day. Gebraucht-Funde tauchen dagegen laufend auf.';
+    'Nichts gefunden. Stell den Regler runter oder nimm einen Filter raus – die Cam-Funde stehen unter 📷 nur Kameras.';
   el('foot').textContent = list.length + ' von ' + ITEMS.length + ' angezeigt';
 }
 
 function card(i) {
   const a = document.createElement('a');
-  a.className = 'card' + (i.src === 'ka' ? ' used' : i.pct > 0 ? ' deal' : '');
+  a.className = 'card' + (i.src === 'cam' ? ' cam' : i.src === 'ka' ? ' used' : i.pct > 0 ? ' deal' : '');
   a.href = i.url; a.target = '_blank'; a.rel = 'noopener';
 
   // Bild-URLs kommen von fremden Servern (auch aus Kleinanzeigen-Inseraten),
@@ -471,6 +501,14 @@ function card(i) {
                     : '<div class="thumb"></div>';
 
   const tags = [];
+  if (i.src === 'cam') {
+    tags.push('<span class="tag-cam">📷 ' + esc(i.match) + '</span>');
+    // Kein Regex mit Schrägstrich hier drin: diese Seite steckt in einem
+    // Template-String: aus /^f\// würde beim Einbetten /^f// – und damit
+    // stünde die ganze Oberfläche still.
+    tags.push('Sensor ' + esc(i.sensor) + (String(i.blende || '').startsWith('f/') ? ' · ' + esc(i.blende) : ''));
+    if (i.refArt) tags.push(esc(i.refArt));
+  }
   if (i.src === 'ka') tags.push('♻️ gebraucht' + (i.vb ? ' · VB' : ''));
   if (i.atLow) tags.push('<span class="tag-low">📉 Allzeittief</span>');
   if (i.sus) tags.push('<span class="tag-sus">⚠️ verdächtig günstig</span>');
@@ -495,7 +533,7 @@ function card(i) {
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-for (const id of ['q','sort','minPct','onlyDeal','onlyUsed','onlyLow','onlyStock']) {
+for (const id of ['q','sort','minPct','onlyCam','onlyDeal','onlyUsed','onlyLow','onlyStock']) {
   el(id).addEventListener('input', render);
 }
 load();

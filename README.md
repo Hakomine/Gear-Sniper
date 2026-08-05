@@ -4,15 +4,16 @@ Findet Schnäppchen bei Streaming-Hardware – neu wie gebraucht – und meldet 
 von allein per Discord. Vorbild ist der Key Sniper, nur eben für Technik statt
 für Spiele-Keys.
 
-Drei Quellen:
+Vier Quellen:
 
 | Quelle | Was sie liefert |
 |---|---|
+| **Cam-Jagd** | Kameras, die besser sind als die OBSBOT Meet 2 — verglichen mit dem Median vergleichbarer Anzeigen. **Der Hauptzweck**, siehe [CAMS.md](CAMS.md) |
+| **Kleinanzeigen** | Elgato-Gebrauchtangebote, automatisch gegen den Neupreis gerechnet |
 | **Elgato-Shop DE** | kompletter Katalog (578 Produkte) mit UVP, aktuellem Preis und Lagerstatus |
 | **Watchlist** | beliebige Produkt-Links anderer Shops, die du selbst einträgst |
-| **Kleinanzeigen** | Gebraucht-Angebote, automatisch gegen den Neupreis gerechnet |
 
-Die Gebraucht-Quelle ist die interessanteste: 50 % unter Neupreis kommen dort
+Der Gebrauchtmarkt ist der interessante Teil: 50 % unter Neupreis kommen dort
 ständig vor, im offiziellen Shop praktisch nie.
 
 ## Wie es aufgebaut ist
@@ -42,7 +43,7 @@ node collector.mjs --mode=fast --dry-run
 |---|---|
 | `--mode=fast` | Watchlist + Kleinanzeigen + rotierender 60er-Block aus dem Katalog (~2 Min) |
 | `--mode=full` | kompletter Elgato-Katalog (~10 Min) |
-| `--only=elgato\|watch\|ka` | nur eine Quelle |
+| `--only=elgato\|watch\|ka\|cam` | nur eine Quelle |
 | `--dry-run` | nichts schreiben |
 | `--simulate-deal=SKU` | künstlichen 60-%-Rabatt setzen, um den Alarm zu testen |
 
@@ -102,6 +103,7 @@ Alle Schwellen stehen als Konstanten oben in `worker.js`:
 |---|---|---|
 | `ALARM_MIN_PCT` | 50 | % Rabatt auf UVP im Shop |
 | `ALARM_USED_PCT` | 50 | % unter Neupreis bei Kleinanzeigen |
+| `ALARM_CAM_PCT` | 30 | % unter dem Median vergleichbarer Kamera-Anzeigen |
 | `ALARM_HISTLOW_PCT` | 25 | reicht, wenn es zugleich ein Allzeittief ist |
 | `ALARM_SUS_PCT` | 85 | darüber: als Betrugsverdacht markiert |
 | `ALARM_REDROP_PCT` | 10 | erneut melden erst bei weiterem Preissturz |
@@ -155,6 +157,7 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 
 - `collector.mjs` – der Sammler, **die Hauptdatei** für die Datenbeschaffung
 - `worker.js` – Oberfläche, `/api/deals`, `/api/health` und der Discord-Alarm
+- `cams.json` – die Kamera-Datenbank der Cam-Jagd, siehe [CAMS.md](CAMS.md)
 - `config.json` – Schwellen, Suchbegriffe, Tempo
 - `watchlist.json` – deine eigenen Produkt-Links
 - `prices.json` / `deals.json` / `history.json` – erzeugt der Sammler

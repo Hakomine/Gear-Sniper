@@ -2,6 +2,10 @@
   "usedMinPct": 50,
   "suspiciousPct": 85,
 
+  "camMinPct": 30,
+  "camMinListings": 5,
+  "camPages": 2,
+
   "throttleMs": 1000,
   "historyDays": 90,
   "minHistoryDays": 7,
