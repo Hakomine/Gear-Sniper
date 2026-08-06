@@ -74,6 +74,8 @@ Drei Ebenen:
 Alarm gibt es nur im Fenster zwischen 25 % und 55 % unter Median.
 
 ## Snipe-Logik
+- **Jagd (Grafikkarten)**: Alarm zwischen **25 %** und **55 %** unter dem Median
+  vergleichbarer Anzeigen. Darüber gilt es als Betrug und wird nicht gemeldet.
 - **Rabatt auf UVP**: Alarm ab **50 %** (`ALARM_MIN_PCT` in `worker.js`).
 - **Gebraucht**: Alarm ab **50 %** unter dem Neupreis des gleichen Produkts.
   Zuordnung über den Anzeigentitel – alle Wörter des Produktnamens müssen
@@ -102,11 +104,11 @@ Mindest-Rabatt, Filter für „nur reduziert", „nur gebraucht", „nur Allzeit
 | GitHub Secret | `DISCORD_WEBHOOK` | Meldung wenn der Sammler abbricht |
 | GitHub Setting | Workflow: Read and write | damit der Job Preise zurückschreiben darf |
 
-**Kein API-Key nötig** – keine der drei Quellen verlangt einen.
+**Kein API-Key nötig** – keine der vier Quellen verlangt einen.
 
 ## Wächter
 Stille ist zweideutig: keine Deals oder alles kaputt? Deshalb meldet der Worker,
-wenn die Preisdaten älter als 90 Minuten sind, schickt 1× täglich ein
+wenn die Preisdaten älter als 4 Stunden sind, schickt 1× täglich ein
 Lebenszeichen und zeigt seinen Zustand unter `/api/health`. Bricht der
 GitHub-Job ab, meldet der sich selbst.
 
