@@ -119,8 +119,9 @@ kommen nur noch echte Neuigkeiten.
 
 Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 
-- `/api/health` zeigt den letzten Cron-Lauf und wie alt die Preisdaten sind
-- Sind die Daten älter als 90 Minuten, meldet der Worker das per Discord
+- `/api/health` zeigt den letzten Cron-Lauf, wie alt die Preisdaten sind und
+  ob das KV-Binding greift (`kvGebunden`)
+- Sind die Daten älter als 4 Stunden, meldet der Worker das per Discord
   (höchstens 1× pro Stunde)
 - 1× täglich kommt ein Lebenszeichen
 - Bricht der GitHub-Job ab, meldet er sich selbst
@@ -150,6 +151,14 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   Studio" und meldete −91 %. Ebenfalls aussortiert: Mietanzeigen („MIETE Cam
   Link 4K, 15 €") und Zubehör („Stream Deck Mini Halterung"). Bündel taugen
   nicht als Referenz und werden übersprungen.
+- **GitHub hält sich nicht an den Zeitplan.** `*/30 * * * *` läuft auf einem
+  kostenlosen Konto real alle **17 bis 190 Minuten** (gemessen über einen Tag).
+  Die Warnschwelle steht deshalb auf 4 Stunden – mit 90 Minuten meldete der
+  Wächter GitHubs Trödelei statt echter Probleme. Der Nachtlauf um 3 Uhr kam
+  entsprechend erst um 6 Uhr.
+- **`lastRun: null` bei `/api/health` heißt fast immer: KV fehlt.** Ohne das
+  Binding landet der Zustand in einem flüchtigen Zwischenspeicher. Deshalb
+  meldet `/api/health` jetzt `kvGebunden` mit.
 - **Der Tagespunkt im Preisverlauf kommt nur vom Nachtlauf.** Sonst änderte
   sich `history.json` 48-mal täglich und würde das Repo mit Commits zumüllen.
 

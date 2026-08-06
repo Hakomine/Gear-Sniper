@@ -37,7 +37,12 @@ const CACHE_SECONDS = 300;
 const HEALTH_TTL = 7 * 24 * 3600;
 const ERROR_COOLDOWN = 3600;   // Fehler höchstens 1x pro Stunde melden
 const REPORT_HOUR_UTC = 7;     // Tagesbericht ab dieser UTC-Stunde (~9 Uhr DE)
-const STALE_MINUTES = 90;      // ältere Daten heißen: der Sammler hakt
+// Gemessen: GitHub führt den `*/30`-Zeitplan auf kostenlosen Konten in
+// Wirklichkeit alle 17 bis 190 Minuten aus. Mit 90 Minuten meldete der
+// Wächter deshalb GitHubs Trödelei statt echter Probleme. 240 liegt über
+// dem schlechtesten gemessenen Abstand und schlägt trotzdem an, wenn der
+// Sammler wirklich steht.
+const STALE_MINUTES = 240;
 
 export default {
   async fetch(request, env, ctx) {
@@ -132,6 +137,10 @@ async function handleHealth(env) {
   const age = h ? Math.round((Date.now() - new Date(h.at).getTime()) / 60000) : null;
   return json({
     ok: !!h && h.ok && age <= 30,
+    // Ohne KV landet der Zustand in einem flüchtigen Zwischenspeicher und ist
+    // gleich wieder weg. Das steht hier, damit man von außen sieht, ob das
+    // Binding wirklich greift, statt es aus fehlenden Werten zu erraten.
+    kvGebunden: !!env.GEAR_KV,
     lastRun: h?.at || null,
     ageMinutes: age,
     checked: h?.checked ?? null,
