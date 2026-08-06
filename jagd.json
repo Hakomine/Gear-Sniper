@@ -1,0 +1,161 @@
+{
+  "_": "Modelle, auf die gezielt gejagt wird. Verglichen wird gegen den MEDIAN der Anzeigen fuer dasselbe Modell, nicht gegen den Neupreis. 'markt' ist nur der Notnagel, solange zu wenige Anzeigen fuer einen eigenen Median da sind.",
+
+  "label": "Grafikkarten",
+  "emoji": "🎮",
+
+  "_ausschluss": "Gilt fuer ALLE Modelle. Wasserkuehler und Luefter sind Zubehoer, der Rest sind die ueblichen Maschen: nur der Karton, ein Poster, eine Attrappe.",
+  "ausschluss": [
+    "notebook", "laptop", "gaming laptop", "gaming notebook", "mobile",
+    "komplettsystem", "komplett system", "gaming setup", "spiele pc", "tower",
+    "wasserkuehler", "wasserblock", "waterblock", "eisblock", "fullcover",
+    "heatsink", "shroud", "kuehlkoerper", "backplate",
+    "reserviert", "verkauft",
+    "leerkarton", "attrappe", "nachbildung", "replika", "replica",
+    "poster", "aufkleber", "sticker", "tasse", "schluesselanhaenger",
+    "3d druck", "modellbau"
+  ],
+
+  "_ausschlussMuster": "Der eigentliche Trick. Eine reine Grafikkarten-Anzeige nennt NIE eine CPU, keinen Arbeitsspeicher und keine Bildwiederholrate - wer das tut, verkauft einen ganzen Rechner oder ein Notebook. Ohne diese Regel lag der Median der RTX 4060 bei 849 € statt bei 280, weil lauter Gaming-Notebooks mitgerechnet wurden. Achtung bei Modellreihen: 'Strix', 'TUF', 'Nitro' und 'Pulse' heissen auch Grafikkarten und duerfen NICHT ausgeschlossen werden.",
+  "ausschlussMuster": [
+    "\\b(ryzen|threadripper|xeon|core ultra|i[3579][ -]?\\d{4,5}|\\bi[3579]\\b)",
+    "\\b(ssd|hdd|nvme|ram|arbeitsspeicher|mainboard|motherboard)\\b",
+    "\\b\\d{2,3} ?hz\\b",
+    "\\b(legion|vivobook|inspiron|thinkpad|ideapad|predator|omen|victus|zephyrus|katana|cyborg|aspire|macbook|latitude|probook|elitebook|pavilion|envy)\\b",
+    "\\b(gaming|komplett|kompletter|spiele)[ -]?(pc|rechner|system)\\b",
+    "\\bnur \\w*(ovp|karton|verpackung|box|schachtel)\\b",
+    "\\bleere?r?s? \\w*(ovp|karton|verpackung|box)\\b",
+    "\\bnur (ein )?(bild|foto)\\b",
+    "\\b\\w*(ovp|karton|verpackung) ohne (karte|grafikkarte|gpu)\\b"
+  ],
+
+  "modelle": [
+    {
+      "name": "RTX 5090",
+      "typ": "gpu",
+      "specs": "32 GB GDDR7",
+      "warum": "Aktuelle Spitze. Bei Gebrauchtpreisen weit unter Median ist Vorsicht angesagt - genau hier sitzen die meisten Betrueger.",
+      "neu": 2329.0, "markt": 2000,
+      "queries": ["rtx 5090"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 5080",
+      "typ": "gpu", "specs": "16 GB GDDR7",
+      "warum": "Oberklasse der aktuellen Generation.",
+      "neu": 1169.0, "markt": 950,
+      "queries": ["rtx 5080"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 5070 Ti",
+      "typ": "gpu", "specs": "16 GB GDDR7",
+      "warum": "Der Preis-Leistungs-Punkt der 50er-Reihe fuer 1440p.",
+      "neu": 879.0, "markt": 700,
+      "queries": ["rtx 5070 ti"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 5070",
+      "typ": "gpu", "specs": "12 GB GDDR7",
+      "warum": "Solide fuer 1440p, guenstigster Einstieg in die aktuelle Generation.",
+      "neu": 649.0, "markt": 520,
+      "queries": ["rtx 5070"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RTX 5060 Ti",
+      "typ": "gpu", "specs": "16 GB GDDR7",
+      "warum": "Mittelklasse, reicht fuer 1080p/1440p und Streaming locker.",
+      "neu": 449.0, "markt": 380,
+      "queries": ["rtx 5060 ti"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 4090",
+      "typ": "gpu", "specs": "24 GB GDDR6X",
+      "warum": "Vorgaenger-Spitze, gebraucht immer noch teuer - und das beliebteste Betrugsziel ueberhaupt.",
+      "neu": 1899.0, "markt": 1700,
+      "queries": ["rtx 4090"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 4080 Super",
+      "typ": "gpu", "specs": "16 GB GDDR6X",
+      "warum": "Oberklasse der Vorgaenger-Generation, gebraucht oft vernuenftig bepreist.",
+      "neu": 1109.0, "markt": 850,
+      "queries": ["rtx 4080"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 4070 Ti Super",
+      "typ": "gpu", "specs": "16 GB GDDR6X",
+      "warum": "16 GB Speicher - altert deutlich besser als die 12-GB-Varianten.",
+      "neu": 889.0, "markt": 620,
+      "queries": ["rtx 4070 ti super"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 4070 Super",
+      "typ": "gpu", "specs": "12 GB GDDR6X",
+      "warum": "Sehr beliebter Gebrauchtkauf, viel Leistung fuers Geld.",
+      "neu": 659.0, "markt": 480,
+      "queries": ["rtx 4070 super"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RTX 4070",
+      "typ": "gpu", "specs": "12 GB GDDR6X",
+      "warum": "Der Klassiker fuer 1440p, gebraucht reichlich verfuegbar.",
+      "neu": 589.0, "markt": 420,
+      "queries": ["rtx 4070"], "marke": ["rtx"], "nicht": ["ti", "super"]
+    },
+    {
+      "name": "RTX 4060 Ti",
+      "typ": "gpu", "specs": "8/16 GB GDDR6",
+      "warum": "Mittelklasse. Achtung: es gibt sie mit 8 und mit 16 GB - im Titel steht das selten.",
+      "neu": 439.0, "markt": 300,
+      "queries": ["rtx 4060 ti"], "marke": ["rtx"], "nicht": []
+    },
+    {
+      "name": "RTX 4060",
+      "typ": "gpu", "specs": "8 GB GDDR6",
+      "warum": "Einstieg, sparsam. Fuer Brawlhalla plus Streaming mehr als genug.",
+      "neu": 329.0, "markt": 230,
+      "queries": ["rtx 4060"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RTX 3080",
+      "typ": "gpu", "specs": "10/12 GB GDDR6X",
+      "warum": "Gebraucht oft ein echter Preis-Leistungs-Tipp - aber haeufig aus Mining-Betrieb.",
+      "neu": 759.0, "markt": 300,
+      "queries": ["rtx 3080"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RTX 3070",
+      "typ": "gpu", "specs": "8 GB GDDR6",
+      "warum": "Guenstiger Gebrauchtkauf mit ordentlich Dampf fuer 1080p.",
+      "neu": 519.0, "markt": 220,
+      "queries": ["rtx 3070"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RTX 3060",
+      "typ": "gpu", "specs": "12 GB GDDR6",
+      "warum": "12 GB zum kleinen Preis, sehr verbreitet auf dem Gebrauchtmarkt.",
+      "neu": 329.0, "markt": 160,
+      "queries": ["rtx 3060"], "marke": ["rtx"], "nicht": ["ti"]
+    },
+    {
+      "name": "RX 9070 XT",
+      "typ": "gpu", "specs": "16 GB GDDR6",
+      "warum": "AMDs aktueller Preis-Leistungs-Schlager mit 16 GB.",
+      "neu": 689.0, "markt": 560,
+      "queries": ["rx 9070 xt"], "marke": ["rx", "radeon"], "nicht": []
+    },
+    {
+      "name": "RX 7900 XTX",
+      "typ": "gpu", "specs": "24 GB GDDR6",
+      "warum": "24 GB Speicher, starke Rohleistung, gebraucht oft unter Wert.",
+      "neu": 999.0, "markt": 700,
+      "queries": ["rx 7900 xtx"], "marke": ["rx", "radeon"], "nicht": []
+    },
+    {
+      "name": "RX 7800 XT",
+      "typ": "gpu", "specs": "16 GB GDDR6",
+      "warum": "16 GB in der Mittelklasse - guenstige Alternative zur 4070.",
+      "neu": 529.0, "markt": 380,
+      "queries": ["rx 7800 xt"], "marke": ["rx", "radeon"], "nicht": []
+    }
+  ]
+}

@@ -5,8 +5,8 @@
 //   1. Elgato-Shop DE  – kompletter Katalog aus der Sitemap (UVP + aktueller Preis)
 //   2. Watchlist       – beliebige Produkt-Links anderer Shops (watchlist.json)
 //   3. Kleinanzeigen   – Gebraucht-Angebote, verglichen mit dem Neupreis
-//   4. Cam-Jagd        – Kameras, die besser sind als die OBSBOT Meet 2,
-//                        verglichen mit dem Median vergleichbarer Anzeigen
+//   4. Jagd            – gezielte Modelle (jagd.json), verglichen mit dem
+//                        Median vergleichbarer Anzeigen
 //
 // Läuft in GitHub Actions (und lokal per run.bat). Bewusst NICHT im Worker:
 // ein Elgato-Produkt-JSON ist ~500 KB, das sprengt jedes Cloudflare-Free-Limit.
@@ -32,7 +32,8 @@ const arg = (name, def = null) => {
 const MODE = arg('mode', 'fast');
 const DRY = !!arg('dry-run');
 const SIMULATE = arg('simulate-deal', null);
-const ONLY = arg('only', null); // elgato | watch | ka | cam
+const ONLY = arg('only', null); // elgato | watch | ka | jagd
+const ZEIGE = arg('zeige', null); // Modellname: listet alle zugeordneten Anzeigen
 
 // Ehrlicher User-Agent statt Browser-Tarnung. Getestet: Elgato und
 // Kleinanzeigen antworten damit genauso wie einem echten Browser.
@@ -284,7 +285,9 @@ async function collectWatchlist() {
 // --- Quelle 3: Kleinanzeigen (gebraucht) -------------------------------
 
 // Wanted-Ads und Tauschgesuche raus – wir wollen Angebote, keine Suchenden.
-const WANTED = /^\s*(suche|kaufe|tausche|ankauf|gesucht|suchen)\b/i;
+// Nicht nur am Titelanfang prüfen: "Ich werde kaufen RTX 5090" stand so
+// zwischen den Grafikkarten-Treffern.
+const WANTED = /^(\W*\w+){0,3}\W*\b(suche|suchen|kaufe|kaufen|tausche|ankauf|gesucht|biete an fuer)\b/i;
 
 // Vermietung ist kein Kauf. Stand echt in den Treffern: "MIETE Elgato Cam Link
 // 4K – 15 €" sah aus wie −85%, war aber ein Tagespreis.
@@ -313,7 +316,9 @@ const CAM_ACCESSORY =
 // Objektiv", "inkl. Tasche"). Die zählen nur, wenn sie vorne stehen oder ein
 // "für <Modell>" dahinter kommt – dann ist es Zubehör FÜR die Kamera.
 const CAM_SOFT_WORDS =
-  'objektiv|griff|grip|halterung|halter|platte|winkel|tasche|koffer|adapter|deckel|filter|stativ|sucher|schutz';
+  'objektiv|griff|grip|halterung|halter|platte|winkel|tasche|koffer|adapter|deckel|filter|stativ|sucher|schutz|' +
+  // Grafikkarten-Zubehoer: "Luefter fuer RTX 3070" ist keine Grafikkarte
+  'luefter|kuehler|kuehlkoerper|wasserkuehler|wasserblock|backplate|riser|stuetze|halteb|blende';
 const CAM_SOFT = new RegExp('\\b(' + CAM_SOFT_WORDS + ')\\w*\\b');
 const CAM_SOFT_FUER = new RegExp('\\b(' + CAM_SOFT_WORDS + ')\\w*\\s+(fuer|for)\\b');
 
@@ -329,12 +334,12 @@ function isAccessoryAd(t) {
 // bei Zubehör hinten in einer Kompatibilitätsliste ("Baxxtar Akku … für
 // Sony A6000 A6300 A6400").
 function phrasePos(words, phrases) {
-  let best = -1;
+  let best = { pos: -1, len: 0 };
   for (const p of phrases) {
     const pw = p.split(' ');
     for (let i = 0; i + pw.length <= words.length; i++) {
       if (pw.every((w, k) => words[i + k] === w)) {
-        if (best === -1 || i < best) best = i;
+        if (best.pos === -1 || i < best.pos) best = { pos: i, len: pw.length };
         break;
       }
     }
@@ -430,37 +435,48 @@ async function collectKleinanzeigen(catalog) {
   return out;
 }
 
-// --- Quelle 4: Cam-Jagd -----------------------------------------------
+// --- Quelle 4: Die Jagd ------------------------------------------------
 //
-// Der eigentliche Zweck der App: Kameras finden, die besser sind als Hakans
-// OBSBOT Meet 2. Welche das sind, steht in cams.json – nur Modelle mit
-// groesserem Sensor kommen da rein.
+// Der eigentliche Zweck der App: gezielt auf bestimmte Modelle lauern.
+// Welche das sind, steht in jagd.json – aktuell Grafikkarten.
 //
 // Entscheidend ist der Referenzpreis. Gegen den NEUPREIS zu rechnen waere
-// Unsinn: eine gebrauchte A6000 fuer 250 € ist dann "−55%", obwohl das
+// Unsinn: eine gebrauchte RTX 3070 fuer 220 € ist dann "−58%", obwohl das
 // einfach der normale Gebrauchtpreis ist. Verglichen wird deshalb gegen den
 // MEDIAN der Anzeigen fuer dasselbe Modell. Ein Fund ist erst dann einer,
 // wenn er deutlich unter dem liegt, was alle anderen verlangen.
+//
+// Und weil bei Grafikkarten massenhaft betrogen wird, gibt es eine zweite
+// Grenze nach unten: was zu gut ist, um wahr zu sein, wird als Betrugsverdacht
+// markiert und ausdruecklich NICHT als Fund gemeldet.
 
-async function collectCams() {
-  console.log('\n[4/4] Cam-Jagd (besser als die Meet 2)');
-  const file = path.join(__dirname, 'cams.json');
+async function collectJagd() {
+  const file = path.join(__dirname, 'jagd.json');
   if (!fs.existsSync(file)) {
-    console.log('  keine cams.json – übersprungen');
+    console.log('\n[4/4] Jagd – keine jagd.json, übersprungen');
     return [];
   }
   const db = JSON.parse(fs.readFileSync(file, 'utf8'));
+  console.log(`\n[4/4] Jagd: ${db.label || 'Modelle'}`);
+
   const ka = CFG.kleinanzeigen;
   const out = [];
+
+  // Kategorie-weite Ausschluesse: bei Grafikkarten vor allem Komplett-PCs und
+  // Notebooks. Die wuerden den Median nach oben ziehen und sind ohnehin ein
+  // anderes Produkt.
+  const ausschluss = (db.ausschluss || []).map(norm).filter(Boolean);
+  const muster = (db.ausschlussMuster || []).map((r) => new RegExp(r));
 
   for (const m of db.modelle) {
     const phrases = (m.queries || []).map(norm).filter(Boolean);
     const marken = (m.marke || []).map(norm).filter(Boolean);
+    const nicht = (m.nicht || []).map(norm).filter(Boolean);
     const found = [];
     const seen = new Set();
 
     for (const q of m.queries) {
-      for (const ad of await kleinanzeigenAds(q, CFG.camPages, ka.minPrice, 4000)) {
+      for (const ad of await kleinanzeigenAds(q, CFG.jagdPages, ka.minPrice, CFG.jagdMaxPrice)) {
         if (seen.has(ad.id)) continue;
         seen.add(ad.id);
         if (isJunk(ad)) continue;
@@ -469,32 +485,50 @@ async function collectCams() {
         const t = ' ' + words.join(' ') + ' ';
 
         // Modellname muss am Stueck UND weit vorne im Titel stehen
-        const pos = phrasePos(words, phrases);
-        if (pos < 0 || pos > 5) continue;
-        // Marke muss vorkommen. Ohne das matchte eine Kia-Stahlfelge mit der
-        // Teilenummer 52910-A6000 auf die Sony Alpha 6000.
+        const hit = phrasePos(words, phrases);
+        if (hit.pos < 0 || hit.pos > 5) continue;
+
+        // Direkt hinter dem Modellnamen darf keine groessere Variante stehen:
+        // "RTX 4070 Ti" ist nicht die "RTX 4070" und kostet deutlich mehr.
+        // Bewusst nur die zwei Woerter danach pruefen – sonst fiele eine echte
+        // 4070-Anzeige raus, die im Text eine 4060 Ti erwaehnt.
+        const danach = words.slice(hit.pos + hit.len, hit.pos + hit.len + 2);
+        if (nicht.some((w) => danach.includes(w))) continue;
+
         if (!marken.some((b) => t.includes(' ' + b))) continue;
+        if (ausschluss.some((w) => t.includes(' ' + w + ' '))) continue;
+        if (muster.some((r) => r.test(t))) continue;
         if (isAccessoryAd(t)) continue;
+
         // "<Irgendwas> für <Modell>" ist Zubehör, "<Modell> für <Zweck>" nicht.
-        // Entscheidet allein die Reihenfolge – das braucht keine Wortliste und
-        // fängt auch Exoten wie "Fusionrig Cineback für Sony a6400".
+        // Entscheidet allein die Reihenfolge – das braucht keine Wortliste.
         const fuer = words.indexOf('fuer');
-        if (fuer !== -1 && fuer < pos) continue;
+        if (fuer !== -1 && fuer < hit.pos) continue;
+
         found.push(ad);
       }
     }
 
     // Median der eigenen Anzeigen – erst ab genug Datenpunkten belastbar
     const prices = found.map((a) => a.price).sort((a, b) => a - b);
-    const genug = prices.length >= CFG.camMinListings;
+    const genug = prices.length >= CFG.jagdMinListings;
     const median = genug ? prices[Math.floor(prices.length / 2)] : null;
     const ref = median ?? m.markt;
 
+    let treffer = 0;
+    let betrug = 0;
+
     for (const ad of found) {
       const p = pct(ref, ad.price);
+      // Zu gut, um wahr zu sein. Bei Grafikkarten ist das die Regel, nicht die
+      // Ausnahme: eine 4090 fuer 300 € ist nie ein Schnaeppchen.
+      const scam = p >= CFG.jagdScamPct;
+      if (scam) betrug++;
+      else if (p >= CFG.jagdMinPct) treffer++;
+
       out.push({
-        id: 'cam:' + ad.id,
-        src: 'cam',
+        id: 'jagd:' + ad.id,
+        src: 'jagd',
         name: ad.title,
         shop: 'Kleinanzeigen',
         url: 'https://www.kleinanzeigen.de' + ad.href,
@@ -506,22 +540,31 @@ async function collectCams() {
         vb: ad.vb,
         match: m.name,
         typ: m.typ,
-        sensor: m.sensor,
-        blende: m.blende,
+        specs: m.specs || null,
         warum: m.warum,
         neu: m.neu,
         // Woher der Vergleichspreis kommt – das gehoert sichtbar dazu,
         // sonst weiss man nicht, wie ernst man die Prozentzahl nehmen darf
         refArt: median ? 'Median aus ' + prices.length + ' Anzeigen' : 'geschätzter Marktpreis',
-        sus: p >= CFG.suspiciousPct,
+        sus: scam,
       });
     }
 
-    const treffer = out.filter((o) => o.match === m.name && o.pct >= CFG.camMinPct).length;
+    // --zeige="RTX 4060" listet alle zugeordneten Anzeigen auf. Zum Nachjustieren
+    // der Filter unverzichtbar: ein schiefer Median hat immer einen Grund.
+    if (ZEIGE && m.name.toLowerCase().includes(String(ZEIGE).toLowerCase())) {
+      console.log(`  --- alle Treffer für ${m.name} ---`);
+      for (const ad of found.slice().sort((a, b) => a.price - b.price)) {
+        console.log(`     ${String(ad.price).padStart(5)} €  ${ad.title.slice(0, 70)}`);
+      }
+      console.log('  ---');
+    }
+
     console.log(
-      `  ${m.name.padEnd(22)} ${String(found.length).padStart(3)} Anzeigen · ` +
-        `Vergleich ${eur(ref)} (${median ? 'Median' : 'geschätzt'})` +
-        (treffer ? ` · ${treffer} unter −${CFG.camMinPct}%` : '')
+      `  ${m.name.padEnd(18)} ${String(found.length).padStart(3)} Anzeigen · ` +
+        `Median ${eur(ref).padStart(10)} ${median ? '        ' : '(geschätzt)'}` +
+        (treffer ? ` · ${treffer} Fund${treffer > 1 ? 'e' : ''}` : '') +
+        (betrug ? ` · ${betrug} Betrugsverdacht` : '')
     );
   }
   return out;
@@ -580,7 +623,7 @@ const norm = (s) =>
 function updateHistory(hist, items) {
   const d = today();
   for (const it of items) {
-    if (it.cur == null || it.src === 'ka' || it.src === 'cam') continue; // Einzelstücke, kein Preisverlauf
+    if (it.cur == null || it.src === 'ka' || it.src === 'jagd') continue; // Einzelstücke, kein Preisverlauf
     // Nicht neu geprüfte Produkte behalten ihren alten Stand – sonst würde der
     // Verlauf Tagespunkte erfinden, die nie gemessen wurden.
     if (it.stale) continue;
@@ -692,15 +735,18 @@ async function main() {
   if (!ONLY || ONLY === 'ka') {
     items.push(...(await collectKleinanzeigen(catalog)));
   }
-  if (!ONLY || ONLY === 'cam') {
-    items.push(...(await collectCams()));
+  if (!ONLY || ONLY === 'jagd') {
+    items.push(...(await collectJagd()));
   }
 
   // Im Schnelllauf nicht geprüfte Produkte behalten ihren letzten Stand,
   // sonst wäre die App nach jedem Lauf halb leer.
   const fresh = new Set(items.map((i) => i.id));
   for (const p of prev.items || []) {
-    if (!fresh.has(p.id) && p.src !== 'ka' && p.src !== 'cam') items.push({ ...p, stale: true });
+    // Nur Shop-Produkte behalten ihren letzten Stand. Anzeigen-basierte Quellen
+    // (Kleinanzeigen, Jagd) sind Einzelstücke – die sind entweder im aktuellen
+    // Lauf dabei oder weg. Das räumt nebenbei alte Quellen selbst auf.
+    if (!fresh.has(p.id) && (p.src === 'elgato' || p.src === 'watch')) items.push({ ...p, stale: true });
   }
 
   updateHistory(hist, items);
@@ -725,7 +771,7 @@ async function main() {
   // Free-Plan 10 ms CPU – 500 Produkte zu parsen wäre Verschwendung.
   const deals = items.filter(
     (i) => i.pct >= CFG.dealFloorPct || i.atLow || i.status === 'blocked' || i.simulated ||
-         (i.src === 'cam' && i.pct >= CFG.camMinPct)
+         (i.src === 'jagd' && i.pct >= CFG.jagdMinPct)
   );
   const dealFile = { at: prices.at, mode: MODE, count: deals.length, items: deals };
 

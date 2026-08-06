@@ -8,7 +8,7 @@ Vier Quellen:
 
 | Quelle | Was sie liefert |
 |---|---|
-| **Cam-Jagd** | Kameras, die besser sind als die OBSBOT Meet 2 — verglichen mit dem Median vergleichbarer Anzeigen. **Der Hauptzweck**, siehe [CAMS.md](CAMS.md) |
+| **Jagd** | Gezielte Modelle (aktuell **Grafikkarten**) — verglichen mit dem Median vergleichbarer Anzeigen, mit Betrugsschutz. **Der Hauptzweck**, siehe [JAGD.md](JAGD.md) |
 | **Kleinanzeigen** | Elgato-Gebrauchtangebote, automatisch gegen den Neupreis gerechnet |
 | **Elgato-Shop DE** | kompletter Katalog (578 Produkte) mit UVP, aktuellem Preis und Lagerstatus |
 | **Watchlist** | beliebige Produkt-Links anderer Shops, die du selbst einträgst |
@@ -43,7 +43,8 @@ node collector.mjs --mode=fast --dry-run
 |---|---|
 | `--mode=fast` | Watchlist + Kleinanzeigen + rotierender 60er-Block aus dem Katalog (~2 Min) |
 | `--mode=full` | kompletter Elgato-Katalog (~10 Min) |
-| `--only=elgato\|watch\|ka\|cam` | nur eine Quelle |
+| `--only=elgato\|watch\|ka\|jagd` | nur eine Quelle |
+| `--zeige="RTX 4070"` | listet alle zugeordneten Anzeigen eines Jagd-Modells |
 | `--dry-run` | nichts schreiben |
 | `--simulate-deal=SKU` | künstlichen 60-%-Rabatt setzen, um den Alarm zu testen |
 
@@ -103,7 +104,8 @@ Alle Schwellen stehen als Konstanten oben in `worker.js`:
 |---|---|---|
 | `ALARM_MIN_PCT` | 50 | % Rabatt auf UVP im Shop |
 | `ALARM_USED_PCT` | 50 | % unter Neupreis bei Kleinanzeigen |
-| `ALARM_CAM_PCT` | 30 | % unter dem Median vergleichbarer Kamera-Anzeigen |
+| `ALARM_JAGD_PCT` | 25 | % unter dem Median vergleichbarer Anzeigen (Jagd) |
+| `jagdScamPct` (config) | 55 | darüber gilt es als Betrug: sichtbar, aber **kein** Alarm |
 | `ALARM_HISTLOW_PCT` | 25 | reicht, wenn es zugleich ein Allzeittief ist |
 | `ALARM_SUS_PCT` | 85 | darüber: als Betrugsverdacht markiert |
 | `ALARM_REDROP_PCT` | 10 | erneut melden erst bei weiterem Preissturz |
@@ -159,6 +161,14 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 - **`lastRun: null` bei `/api/health` heißt fast immer: KV fehlt.** Ohne das
   Binding landet der Zustand in einem flüchtigen Zwischenspeicher. Deshalb
   meldet `/api/health` jetzt `kvGebunden` mit.
+- **Eine reine Grafikkarten-Anzeige nennt nie eine CPU.** Der Median der
+  RTX 4060 lag zuerst bei 849 € statt 280, weil Gaming-Notebooks („Lenovo
+  Legion", „Dell Inspiron") mitgerechnet wurden – ohne das Wort „Laptop" im
+  Titel. Wer „Ryzen 7" oder „i9-13900H" schreibt, verkauft einen Rechner.
+  Achtung: „Strix", „TUF", „Nitro" und „Pulse" heißen auch Grafikkarten und
+  dürfen nicht auf die Ausschlussliste.
+- **Betrugsverdacht wird angezeigt, aber nicht gemeldet.** Wer auf eine 4090
+  für 400 € gepingt wird, gewöhnt sich an, Alarme zu ignorieren.
 - **Der Tagespunkt im Preisverlauf kommt nur vom Nachtlauf.** Sonst änderte
   sich `history.json` 48-mal täglich und würde das Repo mit Commits zumüllen.
 
@@ -166,7 +176,7 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 
 - `collector.mjs` – der Sammler, **die Hauptdatei** für die Datenbeschaffung
 - `worker.js` – Oberfläche, `/api/deals`, `/api/health` und der Discord-Alarm
-- `cams.json` – die Kamera-Datenbank der Cam-Jagd, siehe [CAMS.md](CAMS.md)
+- `jagd.json` – die Modell-Datenbank der Jagd, siehe [JAGD.md](JAGD.md)
 - `config.json` – Schwellen, Suchbegriffe, Tempo
 - `watchlist.json` – deine eigenen Produkt-Links
 - `prices.json` / `deals.json` / `history.json` – erzeugt der Sammler
