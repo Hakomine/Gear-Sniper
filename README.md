@@ -70,6 +70,24 @@ damit die erste `prices.json` entsteht.
 
 ### 2. Cloudflare Worker
 
+**Empfohlen: per Wrangler.** Ein Befehl, aus dem Projektordner:
+
+```bash
+npx wrangler deploy
+```
+
+Der setzt Code, KV-Bindung, `DATA_BASE` und den Cron-Takt gemeinsam – alles
+steht in `wrangler.toml`. Einmalig davor `npx wrangler login` und
+`npx wrangler secret put DISCORD_WEBHOOK`.
+
+Zwei Stolpersteine: der Befehl muss **aus dem Projektordner** laufen (im
+Home-Verzeichnis stolpert wrangler über die gesperrte Windows-Verknüpfung
+`Anwendungsdaten`), und das Dashboard darf danach nicht mehr zum Deployen
+benutzt werden – siehe unten.
+
+<details>
+<summary>Alternativ über das Dashboard (nicht empfohlen)</summary>
+
 1. Kostenloser Account: <https://dash.cloudflare.com>
 2. **Workers & Pages → Create → Workers** → Name `gear-sniper` → Deploy
 3. **Edit code** → gesamten Inhalt von `worker.js` einfügen → **Deploy**
@@ -85,10 +103,12 @@ damit die erste `prices.json` entsteht.
    Ohne KV läuft es auch, meldet dann aber gelegentlich Deals doppelt.
 6. **Settings → Trigger Events → Cron Trigger**: `*/15 * * * *`
 
-Worker-URL öffnen – fertig. Die Seite funktioniert auch am Handy.
+**Achtung:** Nach jedem Deploy über den Editor muss Schritt 5 wiederholt
+werden – Cloudflare wirft die KV-Bindung dabei raus.
 
-Alternativ per CLI: `npm i -g wrangler`, dann `wrangler deploy` und
-`wrangler secret put DISCORD_WEBHOOK`.
+</details>
+
+Worker-URL öffnen – fertig. Die Seite funktioniert auch am Handy.
 
 ### 3. Discord-Webhook
 

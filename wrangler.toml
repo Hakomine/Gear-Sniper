@@ -1,5 +1,11 @@
-# Nur nötig, wenn du per CLI (wrangler) deployen willst.
-# Einfacher Weg ist das Cloudflare-Dashboard (siehe README).
+# Der empfohlene Weg zum Einspielen:  npx wrangler deploy
+#
+# Nicht über "Edit code" im Dashboard deployen – das wirft die KV-Bindung jedes
+# Mal raus (zweimal passiert, siehe README). Hier stehen Code, Bindung,
+# Variable und Cron-Takt zusammen und werden gemeinsam gesetzt.
+#
+# Muss aus DIESEM Ordner laufen: im Home-Verzeichnis stolpert wrangler über
+# die gesperrte Windows-Verknüpfung C:\Users\<name>\Anwendungsdaten.
 name = "gear-sniper"
 main = "worker.js"
 compatibility_date = "2024-11-01"
