@@ -8,10 +8,13 @@ compatibility_date = "2024-11-01"
 [vars]
 DATA_BASE = "https://raw.githubusercontent.com/Hakomine/Gear-Sniper/main"
 
-# KV-Namespace danach binden (id aus: wrangler kv namespace create GEAR_KV)
-# [[kv_namespaces]]
-# binding = "GEAR_KV"
-# id = "..."
+# KV-Speicher: merkt sich, welche Funde schon gemeldet wurden.
+# WICHTIG: Diese Bindung muss hier stehen. Wird der Worker stattdessen über
+# "Edit code" im Dashboard eingespielt, wirft Cloudflare sie jedes Mal raus
+# (zweimal passiert). Mit "wrangler deploy" kommt sie automatisch mit.
+[[kv_namespaces]]
+binding = "GEAR_KV"
+id = "3a474b4e690e4b8395c90d8fe4f41806"
 
 [triggers]
 crons = ["*/15 * * * *"]
