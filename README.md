@@ -70,7 +70,9 @@ damit die erste `prices.json` entsteht.
 
 ### 2. Cloudflare Worker
 
-**Empfohlen: per Wrangler.** Ein Befehl, aus dem Projektordner:
+**Empfohlen: `deploy.bat` doppelklicken.** Die schiebt den Code zu GitHub und
+deployt den Worker zu Cloudflare – und wechselt vorher ins richtige
+Verzeichnis, was der eigentliche Punkt ist (siehe unten). Von Hand geht auch:
 
 ```bash
 npx wrangler deploy
@@ -179,6 +181,11 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   Die Warnschwelle steht deshalb auf 4 Stunden – mit 90 Minuten meldete der
   Wächter GitHubs Trödelei statt echter Probleme. Der Nachtlauf um 3 Uhr kam
   entsprechend erst um 6 Uhr.
+- **wrangler muss aus dem Projektordner laufen.** Im Home-Verzeichnis liegt
+  unter deutschem Windows die versteckte Verknüpfung `Anwendungsdaten` (Verweis
+  auf `AppData\Roaming`, mit Zugriffssperre). wrangler durchsucht das
+  Verzeichnis und bricht mit einem Berechtigungsfehler ab. Dagegen gibt es
+  `deploy.bat`.
 - **„Edit code" im Cloudflare-Dashboard wirft die KV-Bindung raus.** Zweimal
   reproduziert: nach jedem Einspielen über den Online-Editor stand
   `kvGebunden: false`. Der Editor lädt den Worker mit seinem eigenen, leeren
@@ -207,4 +214,5 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 - `watchlist.json` – deine eigenen Produkt-Links
 - `prices.json` / `deals.json` / `history.json` – erzeugt der Sammler
 - `.github/workflows/collect.yml` – der Cloud-Job
-- `run.bat` – lokaler Start per Doppelklick
+- `run.bat` – lokaler Sammellauf per Doppelklick
+- `deploy.bat` – veröffentlichen per Doppelklick (GitHub + Cloudflare)
