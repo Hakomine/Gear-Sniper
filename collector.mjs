@@ -523,6 +523,11 @@ async function collectJagd() {
       // Zu gut, um wahr zu sein. Bei Grafikkarten ist das die Regel, nicht die
       // Ausnahme: eine 4090 fuer 300 € ist nie ein Schnaeppchen.
       const scam = p >= CFG.jagdScamPct;
+      // Graubereich dazwischen: gut genug, um gemeldet zu werden, aber
+      // ungewoehnlich genug, um vorher genau hinzuschauen. Ohne diese Stufe
+      // kaeme eine RTX 5070 Ti fuer 450 € (Median 950 €) als ganz normaler
+      // Treffer rein - dabei ist das entweder ein Traumfund oder eine Masche.
+      const warn = !scam && p >= CFG.jagdWarnPct;
       if (scam) betrug++;
       else if (p >= CFG.jagdMinPct) treffer++;
 
@@ -547,6 +552,7 @@ async function collectJagd() {
         // sonst weiss man nicht, wie ernst man die Prozentzahl nehmen darf
         refArt: median ? 'Median aus ' + prices.length + ' Anzeigen' : 'geschätzter Marktpreis',
         sus: scam,
+        warn,
       });
     }
 

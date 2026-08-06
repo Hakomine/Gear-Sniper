@@ -71,7 +71,8 @@ Drei Ebenen:
 3. Jede Meldung trägt die Kaufregeln mit: Abholung mit Test im laufenden
    Rechner, kein Vorkasse-Versand, keine Zahlung per Freunde-Funktion.
 
-Alarm gibt es nur im Fenster zwischen 25 % und 55 % unter Median.
+Drei Stufen: 25–40 % normaler Fund, 40–55 % gemeldet aber orange markiert
+(„entweder ein echter Fund oder eine Masche"), ab 55 % kein Alarm mehr.
 
 ## Snipe-Logik
 - **Jagd (Grafikkarten)**: Alarm zwischen **25 %** und **55 %** unter dem Median

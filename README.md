@@ -125,6 +125,7 @@ Alle Schwellen stehen als Konstanten oben in `worker.js`:
 | `ALARM_MIN_PCT` | 50 | % Rabatt auf UVP im Shop |
 | `ALARM_USED_PCT` | 50 | % unter Neupreis bei Kleinanzeigen |
 | `ALARM_JAGD_PCT` | 25 | % unter dem Median vergleichbarer Anzeigen (Jagd) |
+| `jagdWarnPct` (config) | 40 | darüber: gemeldet, aber als „genau prüfen" markiert |
 | `jagdScamPct` (config) | 55 | darüber gilt es als Betrug: sichtbar, aber **kein** Alarm |
 | `ALARM_HISTLOW_PCT` | 25 | reicht, wenn es zugleich ein Allzeittief ist |
 | `ALARM_SUS_PCT` | 85 | darüber: als Betrugsverdacht markiert |

@@ -43,8 +43,13 @@ gepingt wird, gewöhnt sich an, Alarme zu ignorieren.
 **3. Jede Meldung trägt die Kaufregeln mit sich:** Abholung mit Test im
 laufenden Rechner, kein Vorkasse-Versand, keine Zahlung per Freunde-Funktion.
 
-Alarm gibt es also nur im Fenster zwischen `jagdMinPct` (25 %) und
-`jagdScamPct` (55 %). Beide Werte stehen in `config.json`.
+Konkret drei Stufen, alle in `config.json`:
+
+| Abstand zum Median | Was passiert |
+|---|---|
+| 25–40 % (`jagdMinPct`) | normaler Fund, wird gemeldet |
+| 40–55 % (`jagdWarnPct`) | wird gemeldet, aber orange markiert: „ungewöhnlich günstig – entweder ein echter Fund oder eine Masche" |
+| ab 55 % (`jagdScamPct`) | Betrugsverdacht, sichtbar in der App, **kein** Alarm |
 
 ## Ein Modell ergänzen
 

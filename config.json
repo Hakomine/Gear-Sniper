@@ -2,6 +2,7 @@
   "usedMinPct": 50,
   "suspiciousPct": 85,
   "jagdMinPct": 25,
+  "jagdWarnPct": 40,
   "jagdScamPct": 55,
   "jagdMinListings": 5,
   "jagdPages": 2,

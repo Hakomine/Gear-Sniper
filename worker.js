@@ -255,6 +255,12 @@ async function sendDiscord(env, hits) {
       lines.push(`${h.match}${h.specs ? ' · ' + h.specs : ''}`);
       lines.push(`Vergleich: ${h.refArt}${h.neu ? ' · neu ' + eurTxt(h.neu) : ''}`);
       if (h.warum) lines.push('> ' + String(h.warum).slice(0, 300));
+      if (h.warn) {
+        lines.push(
+          '🟡 **Ungewöhnlich günstig** – deutlich unter dem, was alle anderen ' +
+            'verlangen. Entweder ein echter Fund oder eine Masche.'
+        );
+      }
       lines.push(
         '🔍 Vor dem Kauf: Abholung mit Test im laufenden Rechner, kein ' +
           'Vorkasse-Versand, keine Zahlung per Freunde-Funktion.'
@@ -263,7 +269,7 @@ async function sendDiscord(env, hits) {
         title: '🎮 ' + String(h.name).slice(0, 240),
         url: h.url || undefined,
         description: lines.join('\n'),
-        color: 5814783,
+        color: h.warn ? 16755200 : 5814783,
         thumbnail: h.img ? { url: h.img } : undefined,
         footer: { text: 'Jagd · Median vergleichbarer Anzeigen' },
       };
@@ -409,6 +415,7 @@ const HTML = `<!doctype html>
   .meta { font-size:11.5px; color:var(--dim); margin-top:5px; display:flex; gap:8px; flex-wrap:wrap; }
   .tag-low { color:var(--accent); font-weight:700; }
   .tag-cam { color:var(--cam); font-weight:700; }
+  .tag-warn { color:var(--hot); font-weight:700; }
   .tag-sus { color:var(--warn); font-weight:700; }
   .tag-out { color:var(--warn); }
   .empty { text-align:center; color:var(--dim); padding:50px 20px; font-size:14px; line-height:1.6; }
@@ -525,6 +532,7 @@ function card(i) {
   if (i.src === 'ka') tags.push('♻️ gebraucht' + (i.vb ? ' · VB' : ''));
   if (i.atLow) tags.push('<span class="tag-low">📉 Allzeittief</span>');
   if (i.sus) tags.push('<span class="tag-sus">⚠️ Betrugsverdacht</span>');
+  else if (i.warn) tags.push('<span class="tag-warn">🟡 genau prüfen</span>');
   if (i.stock === 'OUT_OF_STOCK') tags.push('<span class="tag-out">ausverkauft</span>');
   if (i.status === 'blocked') tags.push('<span class="tag-out">Shop nicht abrufbar</span>');
   if (i.stale) tags.push('älterer Stand');
