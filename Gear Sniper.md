@@ -32,7 +32,7 @@ da nie rein. Also sammelt GitHub, und der Worker liest nur die fertige Datei.
 
 | Quelle | Was sie bringt |
 |---|---|
-| **Cam-Jagd** | Kameras, die besser sind als Hakans OBSBOT Meet 2 — **der Hauptzweck** |
+| **Jagd** | Gezielte Modelle, aktuell Grafikkarten — **der Hauptzweck** |
 | **Kleinanzeigen** | Elgato-Gebrauchtangebote gegen den Neupreis gerechnet |
 | **Elgato-Shop DE** | 578 Produkte mit UVP, aktuellem Preis und Lagerstatus |
 | **Watchlist** | eigene Produkt-Links, beliebiger Shop, beliebige Marke |
@@ -41,25 +41,37 @@ Der Gebrauchtmarkt ist der wichtige Teil. Im offiziellen Shop gibt es 50 %
 praktisch nie, auf Kleinanzeigen laufend. Beim ersten Testlauf stand dort direkt
 eine „Elgato Premium Facecam" für 50 €.
 
-## Cam-Jagd (der eigentliche Zweck)
+## Die Jagd (der eigentliche Zweck)
 
-Hakan streamt mit einer **OBSBOT Meet 2** (1/2″ Sensor, f/1.8). Die App jagt
-gezielt Kameras, die die beim Bild schlagen — Details in `CAMS.md`, Datenbank
-in `cams.json`.
+Gezielt auf bestimmte Modelle lauern — seit 06.08.2026 **Grafikkarten**
+(vorher Kameras, umgestellt weil der Kamera-Bedarf erledigt war).
+Details in `JAGD.md`, Datenbank in `jagd.json`.
 
 **Der Kniff: verglichen wird gegen den Median vergleichbarer Anzeigen, nicht
-gegen den Neupreis.** Eine gebrauchte A6000 für 250 € ist gegen 549 € Neupreis
-„−55 %" — aber das ist einfach der normale Gebrauchtpreis. Gegen den Median von
-400 € ist sie ein müder −38 %, und *das* stimmt. Der erste echte Fund im Test:
-eine **Sony Alpha 6400 für 300 € bei einem Median von 800 €** aus 63 Anzeigen.
+gegen den Neupreis.** Eine gebrauchte RTX 3070 für 220 € ist gegen 519 €
+Neupreis „−58 %" — aber das ist einfach der normale Gebrauchtpreis. Der Median
+bildet außerdem den *echten* Markt ab: eine RTX 5090 mit 2329 € Listenpreis
+wird auf Kleinanzeigen real um 3900 € gehandelt. Gegen die UVP gerechnet gäbe
+es dort nie einen Fund.
 
-Im Bestand sind aktuell: Razer Kiyo Pro Ultra (1/1.2″), Elgato Facecam Pro
-(1/1.8″), OBSBOT Tiny 2 (1/1.5″), Facecam 4K (1/1.8″, aber nur f/4.0 — mit
-Warnhinweis), dazu Sony ZV-E10 / A6400 / A6000, Canon EOS M50 und Lumix G7
-fürs Cam-Link-Setup.
+Erster Lauf: 211 GPU-Anzeigen, davon 10 echte Funde — u.a. eine
+**RTX 5070 Ti für 450 € bei einem Median von 950 €**.
 
-Bewusst **nicht** drin, weil kein Upgrade: Insta360 Link 2 (auch 1/2″) und
-Logitech MX Brio (1/2.8″, kleiner).
+Im Bestand: RTX 5090 bis 5060 Ti, RTX 4090 bis 4060, RTX 3080/3070/3060,
+RX 9070 XT, 7900 XTX, 7800 XT.
+
+### Betrugsschutz (der Grund, warum das hier heikel ist)
+
+Drei Ebenen:
+1. **Struktureller Müll fliegt raus**: Wasserkühler, leere Kartons („nur OVP"),
+   Attrappen, Suchanzeigen, Defekte, Reservierte.
+2. **Zu gut, um wahr zu sein** (ab 55 % unter Median) wird markiert, ist in der
+   App standardmäßig ausgeblendet — und löst **keinen Alarm** aus. Wer auf eine
+   4090 für 400 € gepingt wird, gewöhnt sich an, Alarme zu ignorieren.
+3. Jede Meldung trägt die Kaufregeln mit: Abholung mit Test im laufenden
+   Rechner, kein Vorkasse-Versand, keine Zahlung per Freunde-Funktion.
+
+Alarm gibt es nur im Fenster zwischen 25 % und 55 % unter Median.
 
 ## Snipe-Logik
 - **Rabatt auf UVP**: Alarm ab **50 %** (`ALARM_MIN_PCT` in `worker.js`).
@@ -122,7 +134,7 @@ GitHub-Job ab, meldet der sich selbst.
   ist kein Stream Deck). Bündel taugen nicht als Referenzpreis.
 - **Der allererste Alarm ist laut.** Im Test waren es 54 Funde auf einmal, weil
   für den Sniper alles neu ist. Danach kommt nur noch Neues.
-- **Bei der Cam-Jagd ist der Neupreis als Referenz wertlos.** Jede normale
+- **Bei der Jagd ist der Neupreis als Referenz wertlos.** Jede normale
   Gebrauchtanzeige sähe wie ein Schnäppchen aus. Der Median vergleichbarer
   Anzeigen ist die richtige Messlatte — und pflegt sich von selbst.
 - **Zubehör erkennt man an der Wortstellung, nicht am Wort.** Steht das Modell
@@ -132,6 +144,18 @@ GitHub-Job ab, meldet der sich selbst.
   echtes Angebot, „Griff für A6400" nicht.
 - **Eine Kia-Stahlfelge matchte auf die Sony Alpha 6000** — Teilenummer
   `52910-A6000`. Seitdem muss auch die Marke im Titel stehen.
+- **Eine reine Grafikkarten-Anzeige nennt nie eine CPU.** Der Median der
+  RTX 4060 lag zuerst bei 849 € statt 280, weil Gaming-Notebooks („Lenovo
+  Legion", „Dell Inspiron", „Asus Vivobook") mitgerechnet wurden — keins davon
+  hat „Laptop" im Titel. Wer „Ryzen 7" oder „i9-13900H" schreibt, verkauft
+  einen Rechner. Aber Vorsicht: „Strix", „TUF", „Nitro" und „Pulse" heißen auch
+  Grafikkarten und dürfen nicht auf die Ausschlussliste.
+- **GitHub hält sich nicht an den Zeitplan.** `*/30` läuft real alle 17 bis 190
+  Minuten. Die Warnschwelle steht deshalb auf 4 Stunden, sonst meldet der
+  Wächter GitHubs Trödelei statt echter Probleme.
+- **Umbenennen im Worker ist gefährlich.** Beim Wechsel von `cam` auf `jagd`
+  blieb eine Variable stehen; der Alarm brach mit „cam is not defined" ab. Der
+  Testaufbau in `scratchpad/test-worker.mjs` hat es gefangen, bevor es live ging.
 - **Umlaute im Normalisierer müssen zu ae/oe/ue werden.** Mit ä→a wurde aus
   „für" ein „fur", und sämtliche Filter liefen ins Leere, ohne zu meckern.
 - **Kein Regex mit Schrägstrich in die Worker-Oberfläche.** Die steckt in einem
