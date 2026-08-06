@@ -158,6 +158,11 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   Die Warnschwelle steht deshalb auf 4 Stunden – mit 90 Minuten meldete der
   Wächter GitHubs Trödelei statt echter Probleme. Der Nachtlauf um 3 Uhr kam
   entsprechend erst um 6 Uhr.
+- **„Edit code" im Cloudflare-Dashboard wirft die KV-Bindung raus.** Zweimal
+  reproduziert: nach jedem Einspielen über den Online-Editor stand
+  `kvGebunden: false`. Der Editor lädt den Worker mit seinem eigenen, leeren
+  Binding-Satz hoch. Entweder nach JEDEM Deploy das Binding neu setzen – oder
+  `wrangler deploy` nehmen, dann kommt die Bindung aus `wrangler.toml` mit.
 - **`lastRun: null` bei `/api/health` heißt fast immer: KV fehlt.** Ohne das
   Binding landet der Zustand in einem flüchtigen Zwischenspeicher. Deshalb
   meldet `/api/health` jetzt `kvGebunden` mit.

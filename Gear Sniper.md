@@ -152,6 +152,11 @@ GitHub-Job ab, meldet der sich selbst.
   hat „Laptop" im Titel. Wer „Ryzen 7" oder „i9-13900H" schreibt, verkauft
   einen Rechner. Aber Vorsicht: „Strix", „TUF", „Nitro" und „Pulse" heißen auch
   Grafikkarten und dürfen nicht auf die Ausschlussliste.
+- **„Edit code" im Cloudflare-Dashboard wirft die KV-Bindung raus.** Zweimal
+  reproduziert: nach jedem Einspielen über den Online-Editor stand
+  `kvGebunden: false`. Der Editor lädt den Worker mit seinem eigenen, leeren
+  Binding-Satz hoch. Entweder nach JEDEM Deploy das Binding neu setzen – oder
+  `wrangler deploy` nehmen, dann kommt die Bindung aus `wrangler.toml` mit.
 - **GitHub hält sich nicht an den Zeitplan.** `*/30` läuft real alle 17 bis 190
   Minuten. Die Warnschwelle steht deshalb auf 4 Stunden, sonst meldet der
   Wächter GitHubs Trödelei statt echter Probleme.
