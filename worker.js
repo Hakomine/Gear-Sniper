@@ -36,7 +36,10 @@ const ALARM_MAX_EMBEDS = 10;       // Discord erlaubt max. 10 Embeds pro Nachric
 const CACHE_SECONDS = 300;
 const HEALTH_TTL = 7 * 24 * 3600;
 const ERROR_COOLDOWN = 3600;   // Fehler höchstens 1x pro Stunde melden
-const REPORT_HOUR_UTC = 7;     // Tagesbericht ab dieser UTC-Stunde (~9 Uhr DE)
+// Lebenszeichen zu festen Uhrzeiten (UTC) = 9, 15 und 21 Uhr deutscher Zeit.
+// Bewusst nichts nachts: eine Meldung, die um 3 Uhr klingelt, wird weggewischt
+// statt gelesen - und dann ist der Waechter nur noch Rauschen.
+const REPORT_HOURS_UTC = [7, 13, 19];
 // Gemessen: GitHub führt den `*/30`-Zeitplan auf kostenlosen Konten in
 // Wirklichkeit alle 17 bis 190 Minuten aus. Mit 90 Minuten meldete der
 // Wächter deshalb GitHubs Trödelei statt echter Probleme. 240 liegt über
@@ -329,10 +332,13 @@ async function reportError(env, errors) {
 // gerade wirklich nichts reduziert ist.
 async function dailyReport(env, checked, alerts) {
   const now = new Date();
-  if (now.getUTCHours() < REPORT_HOUR_UTC) return;
-  const today = now.toISOString().slice(0, 10);
-  if ((await store.get(env, 'daily_report')) === today) return;
-  await store.put(env, 'daily_report', today, 3 * 24 * 3600);
+  // Der zuletzt erreichte Zeitpunkt aus der Liste. Pro Zeitpunkt genau eine
+  // Meldung - egal wie oft der Cron dazwischen laeuft.
+  const faellig = REPORT_HOURS_UTC.filter((h) => now.getUTCHours() >= h).pop();
+  if (faellig === undefined) return;
+  const slot = now.toISOString().slice(0, 10) + '-' + faellig;
+  if ((await store.get(env, 'daily_report')) === slot) return;
+  await store.put(env, 'daily_report', slot, 3 * 24 * 3600);
   await sendDiscordRaw(env, {
     username: 'Gear Sniper',
     embeds: [
@@ -342,7 +348,7 @@ async function dailyReport(env, checked, alerts) {
           `Zuletzt ${checked} Kandidaten geprüft.` +
           (alerts ? ` ${alerts} neue Funde dabei.` : ' Aktuell nichts Neues.'),
         color: 4906624,
-        footer: { text: 'Tägliches Lebenszeichen' },
+        footer: { text: 'Lebenszeichen · 9, 15 und 21 Uhr' },
       },
     ],
   });
