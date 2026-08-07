@@ -34,6 +34,7 @@ const DRY = !!arg('dry-run');
 const SIMULATE = arg('simulate-deal', null);
 const ONLY = arg('only', null); // elgato | watch | ka | jagd
 const ZEIGE = arg('zeige', null); // Modellname: listet alle zugeordneten Anzeigen
+const BUILDID = arg('buildid', null); // nur zum Testen: veraltete Elgato-buildId erzwingen
 
 // Ehrlicher User-Agent statt Browser-Tarnung. Getestet: Elgato und
 // Kleinanzeigen antworten damit genauso wie einem echten Browser.
@@ -129,7 +130,8 @@ async function elgatoProduct(buildId, slug) {
 
 async function collectElgato(mode, prevItems, state) {
   console.log('\n[1/4] Elgato-Shop');
-  const buildId = await elgatoBuildId();
+  // --buildid=kaputt erzwingt eine veraltete ID, um die Selbstheilung unten zu testen
+  let buildId = BUILDID || (await elgatoBuildId());
   console.log('  buildId: ' + buildId);
 
   const all = await elgatoCatalog();
@@ -154,7 +156,10 @@ async function collectElgato(mode, prevItems, state) {
   }
 
   const out = [];
+  const nachzuegler = [];
   let fails = 0;
+  let neueId = 0; // wie oft die buildId schon nachgeholt wurde
+
   for (let i = 0; i < slugs.length; i++) {
     try {
       const p = await elgatoProduct(buildId, slugs[i]);
@@ -162,11 +167,56 @@ async function collectElgato(mode, prevItems, state) {
       fails = 0;
     } catch (e) {
       fails++;
-      if (fails >= 20) throw new Error('20 Fehler in Folge bei Elgato – Abbruch (' + e.message + ')');
+      nachzuegler.push(slugs[i]);
       console.log(`    ! ${slugs[i]}: ${e.message}`);
+
+      // Häufen sich die Fehler, hat Elgato vermutlich mitten im Lauf etwas
+      // veröffentlicht – dann stimmt die buildId nicht mehr und ALLE weiteren
+      // Abrufe laufen auf 404. Genau daran ist der Nachtlauf am 07.08.2026
+      // gescheitert. Also neue holen und weitermachen statt abzubrechen.
+      // Ein Schnelllauf trifft das kaum, ein 25-Minuten-Volllauf schon.
+      if (fails >= 5 && neueId < 3) {
+        neueId++;
+        try {
+          const frisch = await elgatoBuildId();
+          if (frisch !== buildId) {
+            console.log(`  buildId hat sich geändert: ${buildId} -> ${frisch}, mache weiter`);
+            buildId = frisch;
+            i--; // denselben Slug gleich nochmal, diesmal mit der neuen ID
+          }
+          fails = 0;
+          continue;
+        } catch (e2) {
+          console.log('    buildId nicht erneuerbar: ' + e2.message);
+        }
+      }
+
+      if (fails >= 20) throw new Error('20 Fehler in Folge bei Elgato – Abbruch (' + e.message + ')');
     }
     if ((i + 1) % 50 === 0) console.log(`  ... ${i + 1}/${slugs.length}`);
   }
+
+  // Zweiter Anlauf für die Gescheiterten. Lohnt vor allem nach einem
+  // buildId-Wechsel: die ersten paar Produkte fallen durch, bevor der Wechsel
+  // überhaupt auffällt – die wären sonst für diesen Lauf verloren.
+  const offen = [...new Set(nachzuegler)].filter((s) => !out.some((p) => slugOf(p.url) === s));
+  if (offen.length) {
+    console.log(`  Zweiter Anlauf für ${offen.length} Nachzügler ...`);
+    let geholt = 0;
+    for (const slug of offen) {
+      try {
+        const p = await elgatoProduct(buildId, slug);
+        if (p) {
+          out.push(p);
+          geholt++;
+        }
+      } catch {
+        // beim zweiten Mal endgültig – kommt beim nächsten Lauf wieder dran
+      }
+    }
+    console.log(`  ${geholt} davon nachgeholt`);
+  }
+
   console.log('  ' + out.length + ' Preise geholt');
   return out;
 }

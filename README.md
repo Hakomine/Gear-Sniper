@@ -202,6 +202,13 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   dürfen nicht auf die Ausschlussliste.
 - **Betrugsverdacht wird angezeigt, aber nicht gemeldet.** Wer auf eine 4090
   für 400 € gepingt wird, gewöhnt sich an, Alarme zu ignorieren.
+- **Elgatos `buildId` ändert sich mitten im Lauf.** Am 07.08.2026 scheiterte
+  der Nachtlauf nach 3 Minuten: Elgato hatte während des Sammelns neu
+  veröffentlicht, danach lief jeder Abruf auf 404 und die Notbremse griff.
+  Schnellläufe (2 Min) trifft das kaum, ein Volllauf (25 Min) schon. Der
+  Sammler holt jetzt nach 5 Fehlern in Folge selbst eine frische `buildId` und
+  macht weiter; die davor durchgefallenen Produkte holt ein zweiter Anlauf am
+  Ende nach. Testbar mit `--buildid=<alte-id>`.
 - **Der Tagespunkt im Preisverlauf kommt nur vom Nachtlauf.** Sonst änderte
   sich `history.json` 48-mal täglich und würde das Repo mit Commits zumüllen.
 
