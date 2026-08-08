@@ -170,6 +170,11 @@ GitHub-Job ab, meldet der sich selbst.
   Template-String — aus `/^f\//` wird beim Einbetten `/^f//` und die ganze
   Seite bleibt tot. `startsWith` nehmen.
 
+- **Ein fehlender `DISCORD_WEBHOOK` fällt sonst nirgends auf.** Der Worker
+  sendet dann klaglos ins Nichts: Cron grün, `ok: true`, aber nie eine
+  Nachricht. Am 08.08.2026 war das Secret beim Gear Sniper verschwunden –
+  vermutlich beim Umstieg vom Dashboard auf `wrangler deploy`. Gegenprobe:
+  `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
 ## Notizen
 - Region steht auf DE/EUR.
 - Suchbegriffe für Kleinanzeigen stehen in `config.json` unter `kleinanzeigen.queries`

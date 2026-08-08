@@ -144,6 +144,10 @@ async function handleHealth(env) {
     // gleich wieder weg. Das steht hier, damit man von außen sieht, ob das
     // Binding wirklich greift, statt es aus fehlenden Werten zu erraten.
     kvGebunden: !!env.GEAR_KV,
+    // Fehlt der Webhook, sendet der Worker klaglos ins Nichts – alles sieht
+    // gruen aus, nur ankommen tut nie etwas. Genau das ist am 08.08.2026
+    // passiert. Deshalb steht es hier sichtbar.
+    webhookGesetzt: !!env.DISCORD_WEBHOOK,
     lastRun: h?.at || null,
     ageMinutes: age,
     checked: h?.checked ?? null,

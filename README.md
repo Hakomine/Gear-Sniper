@@ -209,6 +209,11 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   Sammler holt jetzt nach 5 Fehlern in Folge selbst eine frische `buildId` und
   macht weiter; die davor durchgefallenen Produkte holt ein zweiter Anlauf am
   Ende nach. Testbar mit `--buildid=<alte-id>`.
+- **Ein fehlender `DISCORD_WEBHOOK` fällt sonst nirgends auf.** Der Worker
+  sendet dann klaglos ins Nichts: Cron grün, `ok: true`, aber nie eine
+  Nachricht. Am 08.08.2026 war das Secret beim Gear Sniper verschwunden –
+  vermutlich beim Umstieg vom Dashboard auf `wrangler deploy`. Gegenprobe:
+  `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
 - **Der Tagespunkt im Preisverlauf kommt nur vom Nachtlauf.** Sonst änderte
   sich `history.json` 48-mal täglich und würde das Repo mit Commits zumüllen.
 
