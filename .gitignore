@@ -7,9 +7,6 @@ webhook.txt
 gesehen.json
 latenz.csv
 
-# Zugangsdaten
-ebay.txt
-
 # Wo abgeholt wird. PLZ plus Radius grenzt einen Menschen stark ein,
 # und dieses Repo ist oeffentlich. In GitHub Actions kommen dieselben
 # Werte aus den Repo-Secrets SNIPER_ORT_ID / SNIPER_PLZ / SNIPER_ORT.

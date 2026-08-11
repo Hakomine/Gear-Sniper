@@ -150,7 +150,6 @@ Mindest-Rabatt, Filter für „nur reduziert", „nur gebraucht", „nur Allzeit
 | GitHub Setting | Workflow: Read and write | damit der Job Preise zurückschreiben darf |
 | lokal | `standort.json` | derselbe Ort für den Live-Poller, gitignored |
 | lokal | `webhook.txt` | Discord-Webhook des Live-Pollers, gitignored |
-| lokal | `ebay.txt` | `AppID:CertID` für `verkauf.mjs`, gitignored |
 
 **Kein API-Key nötig** – keine der vier Quellen verlangt einen.
 
@@ -222,40 +221,6 @@ GitHub-Job ab, meldet der sich selbst.
   Nachricht. Am 08.08.2026 war das Secret beim Gear Sniper verschwunden –
   vermutlich beim Umstieg vom Dashboard auf `wrangler deploy`. Gegenprobe:
   `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
-### Erkenntnisse aus der eBay-Anbindung (11.08.2026)
-- **eBay-Preise sind Forderungen, keine Abschlüsse — und zwar drastisch.**
-  Bei **9 von 18** Grafikkarten lag das eBay-p25 über dem *Neupreis*: RTX 5060 Ti
-  621,75 € gegen 449 € neu, RTX 5080 1910 € gegen 1169 €. Wucherangebote, die
-  nie jemand kauft, stehen ewig online und ziehen die Verteilung hoch.
-  Ungedeckelt hat der Sniper daraus prompt einen Fund mit 134 € Gewinn
-  gemacht, den es nicht gibt.
-- **Deckel: der Kleinanzeigen-Median, nicht der Neupreis.** Auf den Neupreis zu
-  deckeln wäre auch falsch — die RTX 5090 wird real über UVP gehandelt
-  (2329 € Liste, ~3850 € Markt), da würde der Deckel echte Fälle kaputtrechnen.
-  eBay darf die Schätzung also **senken**, aber nicht über das anheben, was der
-  breite Gebrauchtmarkt hergibt. Der strittige Fund fiel damit von 134 € auf
-  65 € (17 %) und wird korrekt verworfen.
-- **Die eBay-Suche braucht dieselben Filter wie Kleinanzeigen.** Ohne sie stand
-  die RTX 4090 bei p25 **68 €**: Kühler, „NUR OVP OHNE GRAFIKKARTE", dazu am
-  oberen Ende komplette Dell-Workstations und ein MSI-Titan-Notebook. Mit
-  `passtZumModell` fliegen je Modell 30–89 Treffer raus, danach 2399 €.
-- **Zwei Reihenfolge-Fehler, die still falsch rechnen.** Erstens überschrieb
-  jeder Sammellauf die eBay-Zahlen (der Job läuft in GitHub Actions, sie wären
-  binnen einer Stunde weg gewesen). Zweitens wurden sie erst *nach* der
-  Modell-Schleife zusammengeführt — die Margenrechnung sah sie also gar nicht
-  und rechnete weiter gegen Kleinanzeigen. Beides fiel nur auf, weil im
-  Ergebnis `woher: Kleinanzeigen` stand, wo `eBay` stehen musste.
-- **Kein Partner-Network-Antrag nötig.** `item_summary/search` gehört nicht zu
-  den Limited-Release-Methoden. Das Entwicklerkonto ist eine eigene
-  Registrierung, nicht das normale eBay-Konto. Freie Stufe: 5.000 Abrufe/Tag,
-  `verkauf.mjs` braucht ~35 pro Lauf.
-- **Ein frisches Production-Keyset ist stillgelegt** („Non Compliant"), bis man
-  sich zur Marketplace Account Deletion äußert. Freistellung mit Begründung
-  *„I do not persist eBay data"* — korrekt, weil aus jeder Antwort nur
-  `price.value` gelesen und daraus nur p25/Median/p75/Anzahl gespeichert wird.
-  Titel werden zum Filtern benutzt und sofort verworfen. **Wer das ändert und
-  Angebote, Verkäufer oder Item-IDs mitspeichert, macht die Freistellung
-  ungültig.**
 
 ### Erkenntnisse aus dem Flip-Umbau (09.08.2026)
 - **Kleinanzeigens Umkreis ist nur ein Vorschlag.** Nachgemessen über alle 18
@@ -279,10 +244,6 @@ GitHub-Job ab, meldet der sich selbst.
   „Elgato Stream Deck für 80 €" sah gegen 149,99 € UVP nach −47 % aus. Gegen
   den *Gebraucht*markt (Median 80 €) sind es **0 %**. Genau dieselbe Falle wie
   bei den Grafikkarten, nur eine Kategorie später bemerkt.
-- **eBay lässt sich nicht auslesen** (HTTP 403, getestet 09.08.2026) — wie
-  Geizhals und Idealo. Echte Verkaufspreise gäbe es nur über die
-  Marketplace-Insights-API, die man bei eBay beantragen muss. `verkauf.mjs`
-  kann die Browse-API, die liefert aber auch nur laufende Angebote.
 - **Ausschlusslisten gehören zur Kategorie, nicht ins Programm.** „key" auf die
   Ausschlussliste zu setzen (gemeint waren Steam-Keys) hätte jedes **Key Light**
   aussortiert. Deshalb pro Kategorie eine eigene Datei — die GPU-Filter für

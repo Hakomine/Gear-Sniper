@@ -24,43 +24,13 @@ export function erwarteterErloes(markt, cfg) {
   const m = cfg.marge || {};
   const mk = typeof markt === 'number' ? { ref: markt } : markt || {};
 
-  const kaP25 = mk.p25 ?? mk.median ?? mk.ref;
-  const kaMedian = mk.median ?? mk.ref;
-  const ebayP25 = mk.ebay?.p25;
-
-  // Ohne eBay-Daten: das untere Viertel des Kleinanzeigen-Marktes.
-  if (!ebayP25) {
-    if (!kaP25 || kaP25 <= 0) return null;
-    return { erloes: kaP25 * (m.realFaktor ?? 0.95), basis: kaP25, basisArt: 'p25', woher: 'Kleinanzeigen' };
-  }
-
-  // Mit eBay-Daten: verkauft wird dort, also ist eBay der richtige Massstab –
-  // ABER GEDECKELT auf den Kleinanzeigen-Median.
-  //
-  // Warum der Deckel: die Browse-API liefert LAUFENDE Angebote, keine
-  // Abschluesse. Wucherangebote, die nie jemand kauft, stehen ewig online und
-  // ziehen die Verteilung hoch. Gemessen am 11.08.2026 lag bei 9 von 18
-  // Grafikkarten das eBay-p25 UEBER dem Neupreis – bei der RTX 5060 Ti
-  // 621,75 € gegen 449 € neu. Ungedeckelt hat der Sniper daraus einen Fund mit
-  // 134 € Gewinn gemacht, den es nicht gibt.
-  //
-  // Warum nicht einfach auf den Neupreis deckeln: das waere auch falsch. Eine
-  // RTX 5090 wird real ueber UVP gehandelt (2329 € Liste, ~3850 € Markt) –
-  // ein Neupreis-Deckel wuerde genau die Modelle kaputtrechnen, bei denen der
-  // Gebrauchtmarkt ehrlich teurer ist.
-  //
-  // Der Kleinanzeigen-Median ist die bessere Grenze: breit erhoben, und er
-  // bildet den echten Markt ab statt einer Liste. eBay darf die Schaetzung
-  // also senken (Warnung ernst nehmen), aber nicht ueber das hinaus anheben,
-  // was der Gebrauchtmarkt sonst hergibt.
-  const gedeckelt = kaMedian ? Math.min(ebayP25, kaMedian) : ebayP25;
-  if (!gedeckelt || gedeckelt <= 0) return null;
+  const basis = m.verkaufsBasis === 'median' ? (mk.median ?? mk.ref) : (mk.p25 ?? mk.median ?? mk.ref);
+  if (!basis || basis <= 0) return null;
 
   return {
-    erloes: gedeckelt * (m.realFaktor ?? 0.95),
-    basis: gedeckelt,
-    basisArt: 'p25',
-    woher: gedeckelt < ebayP25 ? 'eBay, gedeckelt auf KA-Median' : 'eBay',
+    erloes: basis * (m.realFaktor ?? 0.95),
+    basis,
+    basisArt: m.verkaufsBasis === 'median' ? 'median' : 'p25',
   };
 }
 
@@ -83,7 +53,6 @@ export function rechneMarge(einkauf, markt, km, cfg) {
     erloes: r2(e.erloes),
     basis: r2(e.basis),
     basisArt: e.basisArt,
-    woher: e.woher,
     gebuehr: r2(gebuehr),
     versand: r2(versand),
     fahrt: r2(fahrt),
@@ -110,8 +79,7 @@ export function lohntSich(marge, cfg) {
 export function margeText(marge) {
   if (!marge) return 'Marge unbekannt – kein Marktwert vorhanden';
   const teile = [
-    `Verkauf ~${e(marge.erloes)} (${marge.basisArt === 'p25' ? 'unteres Viertel' : 'Median'} ` +
-      `${e(marge.basis)} auf ${marge.woher || 'Kleinanzeigen'})`,
+    `Verkauf ~${e(marge.erloes)} (${marge.basisArt === 'p25' ? 'unteres Viertel' : 'Median'} ${e(marge.basis)})`,
     `Gebühr ${e(marge.gebuehr)}`,
   ];
   if (marge.versand) teile.push(`Versand ${e(marge.versand)}`);

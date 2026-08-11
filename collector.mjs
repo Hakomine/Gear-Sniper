@@ -694,12 +694,6 @@ async function collectJagd() {
   const st = STANDORT;
   const out = [];
   const markt = {};
-  // Die eBay-Zahlen aus verkauf.mjs GLEICH ZU BEGINN holen, nicht erst beim
-  // Schreiben. Sonst rechnet rechneMarge() weiter unten noch gegen den
-  // Kleinanzeigen-Markt, obwohl eBay-Preise vorliegen – und genau der
-  // Marktplatz, auf dem verkauft wird, bliebe unberuecksichtigt.
-  const altMarkt = readJson('markt.json', { modelle: {} }).modelle || {};
-  const ebayStand = readJson('markt.json', {}).ebayAt || null;
   console.log(`\n[4/4] Jagd: ${dbs.map((d) => d.db.label || d.datei).join(', ')}`);
   if (st) console.log(`  Umkreis: ${st.radiusKm} km um ${st.plz} ${st.ort}`);
 
@@ -749,8 +743,6 @@ async function collectJagd() {
       max: prices.length ? round2(prices[prices.length - 1]) : null,
       anzeigen: prices.length,
       refArt,
-      // Bleibt weg, wenn es sie nicht gibt – JSON.stringify wirft undefined raus
-      ebay: altMarkt[m.name]?.ebay,
     };
 
     // Schritt 2 – IM UMKREIS: das sind die Funde, zu denen Hakan hinkommt.
@@ -869,12 +861,7 @@ async function collectJagd() {
 
   // Marktpreise getrennt ablegen. Winzige Datei, die der Live-Poller bei jedem
   // Lauf liest – prices.json waere dafuer viel zu gross.
-  //
-  // Die eBay-Zahlen haengen schon an den Eintraegen (oben aus der alten Datei
-  // uebernommen) – ohne das wuerde jeder Sammellauf sie loeschen, und weil der
-  // in GitHub Actions laeuft, waeren sie nach spaetestens einer Stunde weg,
-  // ohne dass es jemandem auffaellt.
-  writeJson('markt.json', { at: new Date().toISOString(), ebayAt: ebayStand, modelle: markt });
+  writeJson('markt.json', { at: new Date().toISOString(), modelle: markt });
   return out;
 }
 

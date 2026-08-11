@@ -97,12 +97,8 @@ Der **Erlös** wird gegen das untere Viertel (`p25`) der laufenden Angebote
 geschätzt, nicht gegen den Median. Grund: der Median ist, was alle *verlangen* —
 wer selbst schnell verkaufen will, steht in derselben Liste und muss unterbieten.
 
-Liegen eBay-Preise vor (`verkauf.mjs`), gilt eBay als Verkaufsmarkt — **aber
-gedeckelt auf den Kleinanzeigen-Median.** Die Browse-API liefert laufende
-Angebote, keine Abschlüsse, und bei 9 von 18 Grafikkarten lag das eBay-p25
-über dem Neupreis. eBay darf die Schätzung deshalb senken, aber nicht über das
-anheben, was der breite Gebrauchtmarkt hergibt. Ohne diesen Deckel meldet der
-Sniper Funde, die es nicht gibt.
+Wie gut die Schätzung wirklich ist, weiß erst das Flip-Buch — nach etwa zehn
+echten Verkäufen steht der passende `realFaktor`.
 
 Nachgerechnet: eine Karte 33 % unter Median lässt **5 %** Verzinsung übrig.
 Prozente zu melden hieße also, zu Fahrten zu pingen, die sich nicht lohnen.
@@ -260,8 +256,6 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 - **Der Median darf nicht aus dem Umkreis kommen.** Aus zwölf lokalen Anzeigen
   wackelt er mit jedem Angebot. Deshalb: Median bundesweit rechnen, Funde lokal
   suchen. Verkauft wird ohnehin bundesweit.
-- **eBay.de gibt 403** (getestet 09.08.2026), wie Geizhals und Idealo. Echte
-  Verkaufspreise nur über die Marketplace-Insights-API auf Antrag.
 - **Amazon.de geht nicht.** Liefert eine Captcha-Seite statt Preisen, auch vom
   eigenen PC aus. Zuverlässige Amazon-Preise gäbe es nur über die
   [Keepa-API ab 49 €/Monat](https://keepa.com/api-docs/).
@@ -332,7 +326,6 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 - `sniper-live.mjs` – der Live-Poller (60 s, Umkreis, sofortiger Alarm)
 - `marge.mjs` – die Margenrechnung, von Sammler und Poller gemeinsam benutzt
 - `flip.mjs` – das Flip-Buch
-- `verkauf.mjs` – eBay-Verkaufspreise (optional, braucht `ebay.txt`)
 - `worker.js` – Oberfläche, `/api/deals`, `/api/health` und der Discord-Alarm
 - `jagd.json` / `jagd-streaming.json` – die Jagd-Kategorien, siehe [JAGD.md](JAGD.md).
   Der Sammler liest **alle** `jagd*.json`; eine neue Kategorie braucht keinen Code
@@ -345,5 +338,5 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 - `live.cmd` – Live-Poller per Doppelklick
 - `deploy.bat` – veröffentlichen per Doppelklick (GitHub + Cloudflare)
 
-Nur lokal, nie im Repo (`.gitignore`): `webhook.txt`, `ebay.txt`, `gesehen.json`,
-`latenz.csv`, `flips.json`.
+Nur lokal, nie im Repo (`.gitignore`): `webhook.txt`, `standort.json`,
+`gesehen.json`, `latenz.csv`, `flips.json`.
