@@ -44,14 +44,21 @@ jobs:
             echo "value=${{ inputs.mode || 'fast' }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Der Abholort steht nicht im Repo - das hier ist oeffentlich. Er kommt
+      # aus Repo-Secrets. Fehlen sie, sucht der Sammler bundesweit statt
+      # abzubrechen; dann stehen im Cloud-Alarm eben auch unerreichbare Funde.
       - name: Sammeln
+        env:
+          SNIPER_ORT_ID: ${{ secrets.SNIPER_ORT_ID }}
+          SNIPER_PLZ: ${{ secrets.SNIPER_PLZ }}
+          SNIPER_ORT: ${{ secrets.SNIPER_ORT }}
         run: node collector.mjs --mode=${{ steps.mode.outputs.value }}
 
       - name: Ergebnis committen
         run: |
           git config user.name  "gear-sniper-bot"
           git config user.email "actions@github.com"
-          git add prices.json deals.json history.json
+          git add prices.json deals.json history.json markt.json
           if git diff --staged --quiet; then
             echo "Keine Preisaenderung"
           else

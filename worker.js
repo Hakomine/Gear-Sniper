@@ -26,6 +26,12 @@ const ALARM_USED_PCT = 50;     // % unter Neupreis bei Gebraucht-Angeboten
 // vergleichbarer Anzeigen gerechnet, nicht gegen den Neupreis. 25% unter dem,
 // was alle anderen verlangen, ist deshalb schon ein echter Fund.
 const ALARM_JAGD_PCT = 25;
+// Der eigentliche Massstab bei der Jagd ist nicht mehr der Rabatt, sondern
+// was nach Verkaufsgebuehr, Versand und Sprit uebrig bleibt – nachgerechnet
+// waren 33 % unter Median ganze 5 % Verzinsung. Die Schwellen dafuer stehen
+// in config.json (marge.minEuro/minPct) und koennen je Kategorie in
+// jagd*.json ueberschrieben werden; entschieden wird im Sammler, der das
+// Ergebnis als "lohnt" mitschickt. Hier steht deshalb bewusst keine Zahl.
 // Die Betrugs-Markierung setzt der Collector (suspiciousPct in config.json) –
 // hier wird sie nur noch angezeigt, damit es nur eine Quelle der Wahrheit gibt.
 const ALARM_TTL = 14 * 24 * 3600;  // so lange gilt ein Treffer als "schon gemeldet"
@@ -217,7 +223,19 @@ function isHit(i) {
   // Betrugsverdacht wird NICHT gemeldet. Bei Grafikkarten ist "zu gut, um wahr
   // zu sein" der Normalfall – wer da pingt, trainiert einen darauf, Alarme zu
   // ignorieren. In der App sind die Anzeigen weiterhin sichtbar, markiert.
-  if (i.src === 'jagd') return i.pct >= ALARM_JAGD_PCT && !i.sus;
+  // Jagd-Funde entscheidet die Marge, nicht der Rabatt. Gemessen am
+  // 09.08.2026: eine Karte 33 % unter Median liess nach Gebuehr, Versand und
+  // Sprit ganze 5 % Verzinsung uebrig. Prozente melden heisst also, zu Fahrten
+  // zu pingen, die sich nicht lohnen.
+  if (i.src === 'jagd') {
+    if (i.sus) return false;
+    // "lohnt" hat der Sammler entschieden, mit den Schwellen der jeweiligen
+    // Kategorie. Hier nichts nachrechnen: sonst haetten Sammler und Worker
+    // zwei Meinungen darueber, was ein Fund ist.
+    if (i.marge) return !!i.lohnt;
+    // Ohne Marktverteilung (zu wenige Anzeigen) bleibt nur der alte Weg.
+    return i.pct >= ALARM_JAGD_PCT;
+  }
   if (i.src === 'ka') return i.pct >= ALARM_USED_PCT;
   if (i.stock === 'OUT_OF_STOCK') return false; // ausverkauft ist kein Deal
   if (i.pct >= ALARM_MIN_PCT) return true;
@@ -260,6 +278,22 @@ async function sendDiscord(env, hits) {
 
     if (jagd) {
       lines.push(`${h.match}${h.specs ? ' · ' + h.specs : ''}`);
+      // Kein Ort und keine Entfernung: die stehen bewusst nicht in den
+      // veroeffentlichten Dateien, weil alle Funde im eigenen Umkreis liegen
+      // und die Ortsnamen zusammen die Wohngegend verraten wuerden. Wo es
+      // steht, sagt der Klick auf die Anzeige – und der Live-Poller, der
+      // lokal laeuft, schickt Ort und Kilometer sowieso mit.
+      // Die Zahl, auf die es ankommt: was am Ende uebrig bleibt.
+      if (h.marge) {
+        lines.push(
+          `Verkauf ~${eurTxt(h.marge.erloes)} · Gebühr ${eurTxt(h.marge.gebuehr)}` +
+            (h.marge.versand ? ` · Versand ${eurTxt(h.marge.versand)}` : '') +
+            (h.marge.fahrt ? ` · Fahrt ${eurTxt(h.marge.fahrt)}` : '')
+        );
+        lines.push(
+          `**netto ${h.marge.netto >= 0 ? '+' : ''}${eurTxt(h.marge.netto)}** (${h.marge.pct} % auf den Einsatz)`
+        );
+      }
       lines.push(`Vergleich: ${h.refArt}${h.neu ? ' · neu ' + eurTxt(h.neu) : ''}`);
       if (h.warum) lines.push('> ' + String(h.warum).slice(0, 300));
       if (h.warn) {

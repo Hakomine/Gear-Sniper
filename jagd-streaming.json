@@ -1,0 +1,198 @@
+{
+  "label": "Streaming-Gear",
+  "emoji": "🎙️",
+  "hinweis": "Zweite Jagd-Kategorie neben den Grafikkarten. Kleinere Betraege, dafuer planbarer: weniger Betrug, gut versendbar, und Hakan kann den Zustand selbst beurteilen. Der Vergleichspreis ist auch hier der Median vergleichbarer GEBRAUCHT-Anzeigen, nicht die UVP.",
+
+  "marge": {
+    "_warum": "Eigene Schwellen, weil hier alles eine Nummer kleiner ist. 40 € Mindestgewinn wie bei Grafikkarten koennte ein Stream Deck Mini nie schaffen - dessen kompletter Marktwert liegt bei 42 €. Dafuer muss die Verzinsung hoeher sein, sonst lohnt der Aufwand pro Stueck nicht.",
+    "minEuro": 20,
+    "minPct": 35,
+    "versandEuro": 6
+  },
+
+  "ausschluss": [
+    "halterung",
+    "halter",
+    "standfuss",
+    "tischklemme",
+    "wandhalterung",
+    "schutzfolie",
+    "displayschutz",
+    "tastenkappen",
+    "keycaps",
+    "faceplate",
+    "wechselblende",
+    "skin",
+    "aufkleber",
+    "tasche",
+    "hardcase",
+    "netzteil",
+    "ersatzteil",
+    "defekt",
+    "reserviert",
+    "verkauft",
+    "leerkarton",
+    "nur ovp",
+    "attrappe",
+    "lizenz",
+    "gutschein",
+    "software"
+  ],
+  "_hinweisAusschluss": "Kein 'key' in dieser Liste! Der Ausschluss prueft ganze Woerter, und 'Key Light' enthaelt genau eines. Steam-Keys fangen die Muster unten ab.",
+
+  "ausschlussMuster": [
+    "\\b(nur|ohne) (das |die |den )?(kabel|netzteil|software|ovp|karton|verpackung)\\b",
+    "\\bleere?r?s? \\w*(ovp|karton|verpackung|box)\\b",
+    "\\b(3d ?druck|selbst ?gedruckt|nachbau)\\b",
+    "\\b(steam|produkt|aktivierungs)[ -]?key\\b",
+    "\\bgaming ?(pc|rechner|setup|system)\\b",
+    "\\b(streaming|gaming)[ -]?(pc|rechner|komplett)\\b"
+  ],
+
+  "modelle": [
+    {
+      "name": "Stream Deck MK.2",
+      "typ": "controller",
+      "specs": "15 Tasten",
+      "warum": "Das meistverkaufte Stream Deck. Gebraucht staendig verfuegbar, Preise stabil, kaum Betrug.",
+      "neu": 149.99,
+      "markt": 90,
+      "_hinweis": "Beide Schreibweisen noetig: 'MK.2' wird beim Normalisieren zu 'mk 2', 'MK2' bleibt 'mk2'. Mit nur einer Variante faellt die Haelfte der Anzeigen durch.",
+      "queries": ["stream deck mk 2", "stream deck mk2"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Stream Deck",
+      "typ": "controller",
+      "specs": "15 Tasten, erste Generation",
+      "warum": "Das urspruengliche Modell. Wird oft einfach als 'Stream Deck' inseriert und ist gebraucht am haeufigsten.",
+      "neu": 149.99,
+      "markt": 80,
+      "queries": ["stream deck"],
+      "marke": ["elgato"],
+      "nicht": ["xl", "mini", "plus", "mk", "mk2", "studio", "neo", "pedal"]
+    },
+    {
+      "name": "Stream Deck XL",
+      "typ": "controller",
+      "specs": "32 Tasten",
+      "warum": "Grosses Modell, hoehere Marge pro Stueck als das MK.2.",
+      "neu": 279.99,
+      "markt": 165,
+      "queries": ["stream deck xl"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Stream Deck Mini",
+      "typ": "controller",
+      "specs": "6 Tasten",
+      "warum": "Guenstiger Einstieg, dreht schnell. Kleine absolute Marge.",
+      "neu": 89.99,
+      "markt": 55,
+      "queries": ["stream deck mini"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Stream Deck Plus",
+      "typ": "controller",
+      "specs": "8 Tasten + 4 Drehregler",
+      "warum": "Mit Drehreglern, beliebt bei Musik- und Videoleuten.",
+      "neu": 269.99,
+      "markt": 160,
+      "queries": ["stream deck plus"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Cam Link 4K",
+      "typ": "capture",
+      "specs": "HDMI auf USB",
+      "warum": "Klein, leicht zu verschicken, konstante Nachfrage von Kameraleuten.",
+      "neu": 129.99,
+      "markt": 70,
+      "queries": ["cam link 4k"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "HD60 X",
+      "typ": "capture",
+      "specs": "externe Capture Card",
+      "warum": "Der Standard fuer Konsolen-Aufnahme. Sehr liquider Gebrauchtmarkt.",
+      "neu": 179.99,
+      "markt": 105,
+      "queries": ["hd60 x"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Wave XLR",
+      "typ": "audio",
+      "specs": "XLR-Interface mit Vorverstaerker",
+      "warum": "Wer ein XLR-Mikro kauft, braucht das dazu. Verkauft sich fast von allein.",
+      "neu": 159.99,
+      "markt": 95,
+      "queries": ["wave xlr"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Wave 3",
+      "typ": "audio",
+      "specs": "USB-Mikrofon",
+      "warum": "Einsteiger-Mikro mit bekanntem Namen, geht gebraucht schnell weg.",
+      "neu": 169.99,
+      "markt": 95,
+      "queries": ["wave 3"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Key Light",
+      "typ": "licht",
+      "specs": "LED-Panel, App-steuerbar",
+      "warum": "Teuer neu, gebraucht deutlich guenstiger. Sperrig zu verschicken, also eher Abholung.",
+      "neu": 199.99,
+      "markt": 110,
+      "queries": ["key light"],
+      "marke": ["elgato"],
+      "nicht": ["air", "mini", "neo"]
+    },
+    {
+      "name": "Key Light Air",
+      "typ": "licht",
+      "specs": "kleineres LED-Panel",
+      "warum": "Die haeufigere Variante, oft im Doppelpack angeboten.",
+      "neu": 149.99,
+      "markt": 85,
+      "queries": ["key light air"],
+      "marke": ["elgato"],
+      "nicht": []
+    },
+    {
+      "name": "Facecam",
+      "typ": "kamera",
+      "specs": "1080p60 Webcam",
+      "warum": "Bekannter Name, klein, gut versendbar.",
+      "neu": 149.99,
+      "markt": 75,
+      "queries": ["facecam"],
+      "marke": ["elgato"],
+      "nicht": ["pro", "mk", "neo"]
+    },
+    {
+      "name": "Facecam Pro",
+      "typ": "kamera",
+      "specs": "4K60 Webcam",
+      "warum": "Teuerstes Kamera-Modell, entsprechend groesste absolute Marge.",
+      "neu": 349.99,
+      "markt": 190,
+      "queries": ["facecam pro"],
+      "marke": ["elgato"],
+      "nicht": []
+    }
+  ]
+}

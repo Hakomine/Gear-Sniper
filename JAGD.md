@@ -116,8 +116,41 @@ Bildwiederholraten wie „240 Hz". Danach stimmte der Median.
 *Grafikkarten*. Die dürfen nicht auf die Notebook-Ausschlussliste, sonst
 verschwinden echte Karten.
 
+## Mehrere Kategorien gleichzeitig
+
+Der Sammler liest **alle** Dateien, die auf `jagd*.json` passen. Aktuell:
+
+| Datei | Kategorie | Mindestgewinn | Mindestverzinsung |
+|---|---|---|---|
+| `jagd.json` | Grafikkarten | 40 € | 25 % |
+| `jagd-streaming.json` | Streaming-Gear (Elgato) | 20 € | 35 % |
+
+Eine neue Kategorie ist also eine neue Datei, kein Codeeingriff.
+
+**Warum getrennte Dateien statt einer großen:** die Ausschlusslisten gehören zur
+Kategorie. Die CPU- und Notebook-Filter der Grafikkarten haben bei einem Stream
+Deck nichts zu suchen — und umgekehrt hätte `key` auf der gemeinsamen Liste
+(gemeint waren Steam-Keys) jedes **Key Light** aussortiert.
+
+Ebenso die Margenschwellen: 40 € Mindestgewinn sind bei einer Grafikkarte
+richtig und bei einem Stream Deck Mini unmöglich, dessen kompletter Marktwert
+liegt bei 42 €. Jede Datei kann deshalb einen eigenen `marge`-Block tragen, der
+die Werte aus `config.json` überschreibt.
+
+### Fallstricke beim Anlegen
+
+- **Ausschlusswörter gegen die eigenen Modellnamen prüfen.** Der Ausschluss
+  greift auf ganze Wörter — steht eins davon im Modellnamen, verschwindet das
+  Modell lautlos.
+- **Schreibvarianten gehören in `queries`.** Aus `MK.2` wird beim Normalisieren
+  `mk 2`, aus `MK2` bleibt `mk2`. Wer nur eine Variante einträgt, verliert die
+  Hälfte der Anzeigen.
+- **Der Vergleichspreis ist immer der Gebrauchtmarkt, nie die UVP.** Ein Elgato
+  Stream Deck für 80 € sieht gegen 149,99 € UVP nach −47 % aus. Gegen den
+  Gebrauchtmedian von 80 € sind es 0 %.
+
 ## Umbauen auf etwas anderes
 
 Die Maschinerie ist nicht auf Grafikkarten festgelegt — sie kannte vorher
-Kameras. Zum Wechseln reicht `jagd.json`: `label`, `emoji`, `ausschluss`,
+Kameras. Zum Wechseln reicht die jeweilige Datei: `label`, `emoji`, `ausschluss`,
 `ausschlussMuster` und `modelle` austauschen. Der Code bleibt unangetastet.

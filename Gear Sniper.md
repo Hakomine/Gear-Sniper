@@ -23,6 +23,8 @@ Getrennt vom [[Kontrollzentrum]] – ist ein eigenes Tool.
 - **Cloud-App**: Cloudflare Worker. Zeigt alles im Browser (auch am Handy) und
   schickt den Discord-Alarm.
 - **Lokal**: `run.bat` für einen Sammellauf am eigenen PC, z.B. zum Testen.
+- **Live-Poller**: `live.cmd` — Dauerlaufer auf dem eigenen PC, 60-Sekunden-Takt.
+  Seit dem Flip-Umbau der eigentliche Alarmweg, siehe unten.
 
 Warum getrennt: ein Elgato-Produkt-JSON ist ~500 KB. Der Cloudflare-Free-Plan
 gibt einem Cron-Lauf 10 ms CPU und 50 Subrequests – der komplette Katalog passt
@@ -74,6 +76,45 @@ Drei Ebenen:
 Drei Stufen: 25–40 % normaler Fund, 40–55 % gemeldet aber orange markiert
 („entweder ein echter Fund oder eine Masche"), ab 55 % kein Alarm mehr.
 
+## Flip-Umbau (09.08.2026)
+
+Bis dahin war der Sniper ein **Rabatt-Finder**. Umgebaut zum **Geldverdiener**,
+weil vier Sachen fehlten, die den Unterschied ausmachen:
+
+**1. Er suchte bundesweit.** Die meisten Funde lagen in Bayern oder Sachsen und
+waren damit nicht erreichbar. Jetzt 15 km um den eigenen Wohnort — der steht
+in `standort.json` bzw. als GitHub-Secret, **nicht** im öffentlichen Repo.
+
+**2. Er war zu langsam.** GitHub Actions läuft real alle 17–190 Minuten, eine
+unterbewertete Karte ist in 5–15 Minuten weg. Dagegen `sniper-live.mjs`:
+60-Sekunden-Takt auf dem eigenen PC, nur der Umkreis, nur Seite 1, Dedup über
+`gesehen.json`. GitHub macht weiter die langsame Arbeit (Marktpreise, Historie),
+der Poller die Geschwindigkeit.
+
+**3. Er verglich gegen Wunschpreise.** Der Median ist, was Leute *verlangen*.
+Wer selbst schnell verkaufen will, muss unterbieten — gerechnet wird deshalb
+gegen das **untere Viertel** (`p25`) der laufenden Angebote, nicht die Mitte.
+
+**4. Er meldete Prozente statt Euro.** Jetzt zählt nur:
+`Erlös − Einkauf − 11 % Gebühr − Versand − Sprit`. Schwellen pro Kategorie.
+
+Dazu das **Flip-Buch** (`flip.mjs`): jeder Kauf und Verkauf wird eingetragen,
+daraus kommen echter Gewinn, gebundenes Kapital und Liegezeit — und vor allem
+die Kalibrierung des `realFaktor`, der bis dahin geraten ist.
+
+### Zwei Jagd-Kategorien
+`jagd.json` (Grafikkarten) und `jagd-streaming.json` (Elgato-Gear). Der Sammler
+liest **alle** `jagd*.json`, jede mit eigenen Ausschlüssen und eigenen
+Margenschwellen. Neue Kategorie = neue Datei, kein Code.
+
+| Kategorie | Mindestgewinn | Mindestverzinsung |
+|---|---|---|
+| Grafikkarten | 40 € | 25 % |
+| Streaming-Gear | 20 € | 35 % |
+
+Warum unterschiedlich: 40 € kann ein Stream Deck Mini nie schaffen, dessen
+ganzer Marktwert liegt bei 42 €.
+
 ## Snipe-Logik
 - **Jagd (Grafikkarten)**: Alarm zwischen **25 %** und **55 %** unter dem Median
   vergleichbarer Anzeigen. Darüber gilt es als Betrug und wird nicht gemeldet.
@@ -103,7 +144,13 @@ Mindest-Rabatt, Filter für „nur reduziert", „nur gebraucht", „nur Allzeit
 | Cloudflare Binding | `GEAR_KV` | merkt sich Gemeldetes |
 | Cloudflare Trigger | `*/15 * * * *` | Alarm-Takt |
 | GitHub Secret | `DISCORD_WEBHOOK` | Meldung wenn der Sammler abbricht |
+| GitHub Secret | `SNIPER_ORT_ID` | Abholort — steht bewusst nicht im öffentlichen Repo |
+| GitHub Secret | `SNIPER_PLZ` | dito, nur für die Anzeige im Alarm |
+| GitHub Secret | `SNIPER_ORT` | dito |
 | GitHub Setting | Workflow: Read and write | damit der Job Preise zurückschreiben darf |
+| lokal | `standort.json` | derselbe Ort für den Live-Poller, gitignored |
+| lokal | `webhook.txt` | Discord-Webhook des Live-Pollers, gitignored |
+| lokal | `ebay.txt` | `AppID:CertID` für `verkauf.mjs`, gitignored |
 
 **Kein API-Key nötig** – keine der vier Quellen verlangt einen.
 
@@ -175,6 +222,79 @@ GitHub-Job ab, meldet der sich selbst.
   Nachricht. Am 08.08.2026 war das Secret beim Gear Sniper verschwunden –
   vermutlich beim Umstieg vom Dashboard auf `wrangler deploy`. Gegenprobe:
   `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
+### Erkenntnisse aus der eBay-Anbindung (11.08.2026)
+- **eBay-Preise sind Forderungen, keine Abschlüsse — und zwar drastisch.**
+  Bei **9 von 18** Grafikkarten lag das eBay-p25 über dem *Neupreis*: RTX 5060 Ti
+  621,75 € gegen 449 € neu, RTX 5080 1910 € gegen 1169 €. Wucherangebote, die
+  nie jemand kauft, stehen ewig online und ziehen die Verteilung hoch.
+  Ungedeckelt hat der Sniper daraus prompt einen Fund mit 134 € Gewinn
+  gemacht, den es nicht gibt.
+- **Deckel: der Kleinanzeigen-Median, nicht der Neupreis.** Auf den Neupreis zu
+  deckeln wäre auch falsch — die RTX 5090 wird real über UVP gehandelt
+  (2329 € Liste, ~3850 € Markt), da würde der Deckel echte Fälle kaputtrechnen.
+  eBay darf die Schätzung also **senken**, aber nicht über das anheben, was der
+  breite Gebrauchtmarkt hergibt. Der strittige Fund fiel damit von 134 € auf
+  65 € (17 %) und wird korrekt verworfen.
+- **Die eBay-Suche braucht dieselben Filter wie Kleinanzeigen.** Ohne sie stand
+  die RTX 4090 bei p25 **68 €**: Kühler, „NUR OVP OHNE GRAFIKKARTE", dazu am
+  oberen Ende komplette Dell-Workstations und ein MSI-Titan-Notebook. Mit
+  `passtZumModell` fliegen je Modell 30–89 Treffer raus, danach 2399 €.
+- **Zwei Reihenfolge-Fehler, die still falsch rechnen.** Erstens überschrieb
+  jeder Sammellauf die eBay-Zahlen (der Job läuft in GitHub Actions, sie wären
+  binnen einer Stunde weg gewesen). Zweitens wurden sie erst *nach* der
+  Modell-Schleife zusammengeführt — die Margenrechnung sah sie also gar nicht
+  und rechnete weiter gegen Kleinanzeigen. Beides fiel nur auf, weil im
+  Ergebnis `woher: Kleinanzeigen` stand, wo `eBay` stehen musste.
+- **Kein Partner-Network-Antrag nötig.** `item_summary/search` gehört nicht zu
+  den Limited-Release-Methoden. Das Entwicklerkonto ist eine eigene
+  Registrierung, nicht das normale eBay-Konto. Freie Stufe: 5.000 Abrufe/Tag,
+  `verkauf.mjs` braucht ~35 pro Lauf.
+- **Ein frisches Production-Keyset ist stillgelegt** („Non Compliant"), bis man
+  sich zur Marketplace Account Deletion äußert. Freistellung mit Begründung
+  *„I do not persist eBay data"* — korrekt, weil aus jeder Antwort nur
+  `price.value` gelesen und daraus nur p25/Median/p75/Anzahl gespeichert wird.
+  Titel werden zum Filtern benutzt und sofort verworfen. **Wer das ändert und
+  Angebote, Verkäufer oder Item-IDs mitspeichert, macht die Freistellung
+  ungültig.**
+
+### Erkenntnisse aus dem Flip-Umbau (09.08.2026)
+- **Kleinanzeigens Umkreis ist nur ein Vorschlag.** Nachgemessen über alle 18
+  GPU-Modelle: von 310 Treffern einer 15-km-Suche lagen **110 weiter weg**, der
+  äußerste 50 km (Dülmen). Die Suche weitet still auf, wenn sonst zu wenig
+  übrig bliebe. Deshalb wird die Entfernung selbst nachgefiltert.
+- **Anzeigen ohne km-Angabe sind die nächsten, nicht die unbekannten.** Alle
+  nachgeprüften standen im Suchort selbst — Kleinanzeigen lässt die Angabe bei
+  Entfernung null weg. Die dürfen also nicht rausgefiltert werden.
+- **„(ca. 50 km)" statt „(50 km)".** Bei ungenau hinterlegten Orten schreibt
+  Kleinanzeigen ein „ca." davor. Ohne das im Regex blieb die Entfernung leer
+  und eine 50-km-Anzeige stand in der 15-km-Liste.
+- **`sortierung:neueste` in der URL wird ignoriert.** Egal, weil im engen
+  Umkreis der ganze lokale Markt eines Modells auf Seite 1 passt und die
+  Dedup-Liste die Reihenfolge unwichtig macht.
+- **Prozente lügen, und zwar heftig.** Eine Karte 33 % unter Median lässt nach
+  Gebühr, Versand und Sprit **5 % Verzinsung** übrig. Für 25 % netto braucht es
+  etwa −45 % — und ab −55 % greift der Betrugsfilter. Das Fenster für
+  GPU-Flips ist also schmal, und genau deshalb braucht es den 60-Sekunden-Takt.
+- **Der Neupreis-Vergleich beim Elgato-Gebrauchtmarkt war irreführend.** Ein
+  „Elgato Stream Deck für 80 €" sah gegen 149,99 € UVP nach −47 % aus. Gegen
+  den *Gebraucht*markt (Median 80 €) sind es **0 %**. Genau dieselbe Falle wie
+  bei den Grafikkarten, nur eine Kategorie später bemerkt.
+- **eBay lässt sich nicht auslesen** (HTTP 403, getestet 09.08.2026) — wie
+  Geizhals und Idealo. Echte Verkaufspreise gäbe es nur über die
+  Marketplace-Insights-API, die man bei eBay beantragen muss. `verkauf.mjs`
+  kann die Browse-API, die liefert aber auch nur laufende Angebote.
+- **Ausschlusslisten gehören zur Kategorie, nicht ins Programm.** „key" auf die
+  Ausschlussliste zu setzen (gemeint waren Steam-Keys) hätte jedes **Key Light**
+  aussortiert. Deshalb pro Kategorie eine eigene Datei — die GPU-Filter für
+  CPUs und Notebooks haben bei Elgato ohnehin nichts verloren.
+- **„MK.2" und „MK2" sind für den Normalisierer zwei verschiedene Dinge.**
+  Aus `MK.2` wird `mk 2`, aus `MK2` bleibt `mk2`. Beide Schreibweisen müssen in
+  `queries`, sonst fällt die Hälfte der Anzeigen durch.
+- **Aktueller Stand: 0 Funde.** Bei 243 geprüften Anzeigen im Umkreis schafft
+  gerade keine beide Schwellen. Das ist kein Fehler, das ist der Markt — der
+  beste Kandidat lag bei 17,51 € netto. `node sniper-live.mjs --once --warum`
+  zeigt die Knappgescheiterten mit Zahlen.
+
 ## Notizen
 - Region steht auf DE/EUR.
 - Suchbegriffe für Kleinanzeigen stehen in `config.json` unter `kleinanzeigen.queries`

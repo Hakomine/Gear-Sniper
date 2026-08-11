@@ -21,8 +21,10 @@ if errorlevel 1 (
   REM kollidiert nichts, den fasst der Bot nie an.
   echo.
   echo   Datendateien kollidiert - nehme die Version vom Sammel-Job.
-  git checkout --theirs prices.json deals.json history.json
-  git add prices.json deals.json history.json
+  REM markt.json gehoert seit dem Flip-Umbau dazu: der Sammel-Job schreibt es
+  REM mit, es kollidiert also genauso wie die anderen drei.
+  git checkout --theirs prices.json deals.json history.json markt.json
+  git add prices.json deals.json history.json markt.json
   git commit --no-edit
   if errorlevel 1 goto :fehler
 )

@@ -9,6 +9,21 @@
   "jagdMaxPrice": 4000,
   "throttleMs": 1000,
   "historyDays": 90,
+  "standort": {
+    "_hinweis": "Wo du wohnst steht NICHT hier - dieses Repo ist oeffentlich. Der Ort kommt aus standort.json (lokal, gitignored) oder aus den Umgebungsvariablen SNIPER_ORT_ID / SNIPER_PLZ / SNIPER_ORT (in GitHub Actions als Repo-Secrets). Hier stehen nur die Einstellungen, die niemanden verraten.",
+    "radiusKm": 15,
+    "hartFiltern": true
+  },
+  "marge": {
+    "minEuro": 40,
+    "minPct": 25,
+    "gebuehrPct": 11,
+    "versandEuro": 7,
+    "kmKosten": 0.3,
+    "verkaufsBasis": "p25",
+    "realFaktor": 0.95
+  },
+  "marktUrl": "https://raw.githubusercontent.com/Hakomine/Gear-Sniper/main/markt.json",
   "minHistoryDays": 7,
   "fastBlock": 60,
   "dealFloorPct": 20,
@@ -19,6 +34,7 @@
   },
   "kleinanzeigen": {
     "enabled": true,
+    "umkreis": true,
     "queries": [
       "elgato",
       "stream deck",

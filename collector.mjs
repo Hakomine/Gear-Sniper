@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
+import { rechneMarge, lohntSich } from './marge.mjs';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
@@ -397,15 +398,61 @@ function phrasePos(words, phrases) {
   return best;
 }
 
+// Wo gesucht wird – bewusst NICHT in config.json, weil das Repo oeffentlich ist.
+// Eine Postleitzahl plus Abholradius sagt mehr ueber jemanden aus, als es
+// aussieht. Gelesen wird in dieser Reihenfolge:
+//
+//   1. Umgebungsvariablen SNIPER_ORT_ID / SNIPER_PLZ / SNIPER_ORT
+//      -> so kommt der Ort in GitHub Actions rein, als Repo-Secrets
+//   2. standort.json daneben (lokal, per .gitignore geschuetzt)
+//   3. config.json, falls es doch jemand dort eintraegt
+//
+// Ohne Orts-ID kommt null zurueck und alles sucht bundesweit wie frueher.
+export function ladeStandort(dir, cfg) {
+  const basis = cfg.standort || {};
+  let datei = {};
+  try {
+    datei = JSON.parse(fs.readFileSync(path.join(dir, 'standort.json'), 'utf8'));
+  } catch {
+    /* gibt es nicht, kein Problem */
+  }
+
+  const ortId = Number(process.env.SNIPER_ORT_ID || datei.ortId || basis.ortId) || null;
+  if (!ortId) return null;
+
+  return {
+    ...basis,
+    ortId,
+    plz: process.env.SNIPER_PLZ || datei.plz || basis.plz || '',
+    ort: process.env.SNIPER_ORT || datei.ort || basis.ort || '',
+    radiusKm: Number(process.env.SNIPER_RADIUS_KM || datei.radiusKm || basis.radiusKm) || 15,
+  };
+}
+
+const STANDORT = ladeStandort(__dirname, CFG);
+
+// Der Ortsteil der Such-URL. Kleinanzeigen haengt Ort und Umkreis an das "k0":
+// k0l<ortId>r<km>, also z.B. k0l1234r15 = Ort 1234, 15 km Umkreis. Die Orts-ID
+// liefert https://www.kleinanzeigen.de/s-ort-empfehlungen.json?query=<PLZ>
+function ortSuffix(standort) {
+  if (!standort?.ortId) return 'k0';
+  return 'k0l' + standort.ortId + (standort.radiusKm ? 'r' + standort.radiusKm : '');
+}
+
 // Eine Kleinanzeigen-Suche abrufen. Seite 6+ sperrt deren robots.txt.
-async function kleinanzeigenAds(query, pages, minPrice, maxPrice) {
+//
+// standort ist optional – ohne ihn sucht die Funktion bundesweit wie bisher.
+// Das ist wichtig, weil die Elgato- und Watchlist-Quellen den Umkreis nicht
+// wollen: dort geht es um Shop-Preise, nicht ums Abholen.
+export async function kleinanzeigenAds(query, pages, minPrice, maxPrice, standort = null) {
   const slug = query.trim().toLowerCase().replace(/\s+/g, '-');
+  const suffix = ortSuffix(standort);
   const out = [];
   for (let page = 1; page <= Math.min(pages, 5); page++) {
     const u =
       page === 1
-        ? `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/${slug}/k0`
-        : `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/seite:${page}/${slug}/k0`;
+        ? `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/${slug}/${suffix}`
+        : `https://www.kleinanzeigen.de/s-preis:${minPrice}:${maxPrice}/seite:${page}/${slug}/${suffix}`;
     let ads;
     try {
       ads = parseKleinanzeigen(await get(u));
@@ -416,13 +463,51 @@ async function kleinanzeigenAds(query, pages, minPrice, maxPrice) {
     if (!ads.length) break;
     out.push(...ads);
   }
+
+  // Kleinanzeigen nimmt den Umkreis nur als Wunsch. Gemessen am 09.08.2026 ueber
+  // alle 18 Jagd-Modelle: von 310 Treffern einer r15-Suche lagen 110 weiter weg
+  // als 15 km, der aeusserste 50 km (Duelmen). Die Suche weitet still auf, wenn
+  // sonst zu wenig uebrig bliebe. Wer nicht hinfahren kann, hat davon nichts,
+  // also wird hier hart nachgeschnitten.
+  //
+  // Anzeigen OHNE Entfernungsangabe bleiben absichtlich drin: nachgemessen
+  // standen die ausnahmslos im Suchort selbst. Kleinanzeigen laesst die Angabe
+  // weg, wenn die Entfernung null ist – das sind also die naechsten Anzeigen
+  // ueberhaupt und nicht etwa welche mit unbekanntem Ort.
+  if (standort?.ortId && standort.hartFiltern && standort.radiusKm) {
+    return out.filter((a) => a.km == null || a.km <= standort.radiusKm);
+  }
   return out;
 }
 
 // Anzeigen, die generell nicht als Kauf zählen
 const isJunk = (ad) => !ad.price || WANTED.test(ad.title) || RENTAL.test(ad.title) || DEFECT.test(norm(ad.title));
 
-export function parseKleinanzeigen(html) {
+// Wie alt ist die Anzeige? Kleinanzeigen schreibt "Heute, 14:32",
+// "Gestern, 09:05" oder ein Datum. Nur der Heute-Fall ist minutengenau – und
+// genau der zaehlt, denn ein Fund von gestern ist ohnehin weg.
+export function adAlterMin(zeitTxt, jetzt = new Date()) {
+  if (!zeitTxt) return null;
+  const uhr = zeitTxt.match(/(\d{1,2}):(\d{2})/);
+  if (/heute/i.test(zeitTxt) && uhr) {
+    const t = new Date(jetzt);
+    t.setHours(+uhr[1], +uhr[2], 0, 0);
+    // Anzeige "spaeter" als jetzt = Uhrzeit von gestern kurz vor Mitternacht
+    const min = Math.round((jetzt - t) / 60000);
+    return min >= 0 ? min : min + 1440;
+  }
+  if (/gestern/i.test(zeitTxt) && uhr) {
+    const t = new Date(jetzt);
+    t.setDate(t.getDate() - 1);
+    t.setHours(+uhr[1], +uhr[2], 0, 0);
+    return Math.round((jetzt - t) / 60000);
+  }
+  const d = zeitTxt.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (d) return Math.round((jetzt - new Date(+d[3], +d[2] - 1, +d[1])) / 60000);
+  return null;
+}
+
+export function parseKleinanzeigen(html, jetzt = new Date()) {
   const out = [];
   for (const block of html.split(/(?=<article[^>]*class="aditem)/).slice(1)) {
     const id = block.match(/data-adid="(\d+)"/)?.[1];
@@ -434,7 +519,32 @@ export function parseKleinanzeigen(html) {
 
     // "1.250 € VB" / "50 €" / "Zu verschenken"
     const price = num((priceTxt || '').replace(/\./g, '').replace(/\s*€.*$/, ''));
-    out.push({ id, href, title, price, img, vb: /VB/i.test(priceTxt || '') });
+
+    // Bei einer Umkreissuche steht die Entfernung im Ort mit drin:
+    // "47441 Moers (13 km)". Geschenkt – die muss niemand selbst ausrechnen.
+    //
+    // Achtung: bei ungenau hinterlegten Orten schreibt Kleinanzeigen
+    // "48249 Dülmen (ca. 50 km)". Ohne das optionale "ca." blieb km null,
+    // und weil der Umkreisfilter unbekannte Entfernungen durchlaesst, stand
+    // prompt ein 50-km-Fund in der 15-km-Liste.
+    const ortTxt = clean(block.match(/aditem-main--top--left"[^>]*>([\s\S]*?)<\/div>/)?.[1]);
+    const km = num(ortTxt.match(/\(\s*(?:ca\.?\s*)?(\d+(?:[.,]\d+)?)\s*km\s*\)/i)?.[1]);
+    const ort = ortTxt.replace(/\s*\(\s*(?:ca\.?\s*)?[\d.,]+\s*km\s*\)\s*$/i, '').trim() || null;
+
+    const zeit = clean(block.match(/aditem-main--top--right"[^>]*>([\s\S]*?)<\/div>/)?.[1]) || null;
+
+    out.push({
+      id,
+      href,
+      title,
+      price,
+      img,
+      vb: /VB/i.test(priceTxt || ''),
+      ort,
+      km,
+      zeit,
+      alterMin: adAlterMin(zeit, jetzt),
+    });
   }
   return out;
 }
@@ -448,9 +558,12 @@ async function collectKleinanzeigen(catalog) {
   const ka = CFG.kleinanzeigen;
   const seen = new Set();
   const out = [];
+  // Gebrauchtes Streaming-Gear ist klein und wird oft verschickt – deshalb ist
+  // der Umkreis hier abschaltbar, anders als bei der Jagd auf Grafikkarten.
+  const st = ka.umkreis ? STANDORT : null;
 
   for (const q of ka.queries) {
-    const ads = await kleinanzeigenAds(q, ka.pages, ka.minPrice, ka.maxPrice);
+    const ads = await kleinanzeigenAds(q, ka.pages, ka.minPrice, ka.maxPrice, st);
     for (const ad of ads) {
       if (seen.has(ad.id)) continue;
       seen.add(ad.id);
@@ -473,6 +586,9 @@ async function collectKleinanzeigen(catalog) {
         stock: 'USED',
         match: match.name,
         vb: ad.vb,
+        ort: ad.ort,
+        km: ad.km,
+        alterMin: ad.alterMin,
         // Auffällig weit unter Neupreis: eher Betrugsmasche oder defekt.
         // Nicht wegwerfen, aber markieren – die Entscheidung trifft Hakan.
         sus: p >= CFG.suspiciousPct,
@@ -500,75 +616,163 @@ async function collectKleinanzeigen(catalog) {
 // Grenze nach unten: was zu gut ist, um wahr zu sein, wird als Betrugsverdacht
 // markiert und ausdruecklich NICHT als Fund gemeldet.
 
+// Kategorie-weite Ausschluesse einmal vorbereiten: bei Grafikkarten vor allem
+// Komplett-PCs und Notebooks. Die wuerden den Median nach oben ziehen und sind
+// ohnehin ein anderes Produkt.
+export function jagdAusschluss(db) {
+  return {
+    ausschluss: (db.ausschluss || []).map(norm).filter(Boolean),
+    muster: (db.ausschlussMuster || []).map((r) => new RegExp(r)),
+  };
+}
+
+// Passt eine Anzeige zum gesuchten Modell?
+//
+// Bewusst eine eigene, exportierte Funktion: der Live-Poller muss exakt
+// dieselben Filter benutzen. Baut er sie nach, driftet er ab und meldet wieder
+// Notebooks und Luefter – die Arbeit, die hier drinsteckt, gibt es nur einmal.
+export function passtZumModell(ad, m, { ausschluss = [], muster = [] } = {}) {
+  if (isJunk(ad)) return false;
+
+  const phrases = (m.queries || []).map(norm).filter(Boolean);
+  const marken = (m.marke || []).map(norm).filter(Boolean);
+  const nicht = (m.nicht || []).map(norm).filter(Boolean);
+
+  const words = norm(ad.title).split(' ');
+  const t = ' ' + words.join(' ') + ' ';
+
+  // Modellname muss am Stueck UND weit vorne im Titel stehen
+  const hit = phrasePos(words, phrases);
+  if (hit.pos < 0 || hit.pos > 5) return false;
+
+  // Direkt hinter dem Modellnamen darf keine groessere Variante stehen:
+  // "RTX 4070 Ti" ist nicht die "RTX 4070" und kostet deutlich mehr.
+  // Bewusst nur die zwei Woerter danach pruefen – sonst fiele eine echte
+  // 4070-Anzeige raus, die im Text eine 4060 Ti erwaehnt.
+  const danach = words.slice(hit.pos + hit.len, hit.pos + hit.len + 2);
+  if (nicht.some((w) => danach.includes(w))) return false;
+
+  if (!marken.some((b) => t.includes(' ' + b))) return false;
+  if (ausschluss.some((w) => t.includes(' ' + w + ' '))) return false;
+  if (muster.some((r) => r.test(t))) return false;
+  if (isAccessoryAd(t)) return false;
+
+  // "<Irgendwas> für <Modell>" ist Zubehör, "<Modell> für <Zweck>" nicht.
+  // Entscheidet allein die Reihenfolge – das braucht keine Wortliste.
+  const fuer = words.indexOf('fuer');
+  if (fuer !== -1 && fuer < hit.pos) return false;
+
+  return true;
+}
+
+// Alle Jagd-Dateien einlesen: jagd.json, jagd-streaming.json, ...
+//
+// Eine Datei pro Kategorie statt einer grossen. Grund: label, emoji und vor
+// allem die Ausschlusslisten gehoeren zur Kategorie. Die Notebook- und
+// CPU-Filter der Grafikkarten haben bei Elgato-Geraeten nichts verloren, und
+// umgekehrt. So kommt eine neue Kategorie ohne Codeaenderung dazu.
+export function ladeJagdDbs(dir) {
+  return fs
+    .readdirSync(dir)
+    .filter((f) => /^jagd.*\.json$/i.test(f))
+    .sort()
+    .map((f) => {
+      const db = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      return { datei: f, db, filter: jagdAusschluss(db) };
+    })
+    .filter((x) => Array.isArray(x.db.modelle) && x.db.modelle.length);
+}
+
 async function collectJagd() {
-  const file = path.join(__dirname, 'jagd.json');
-  if (!fs.existsSync(file)) {
-    console.log('\n[4/4] Jagd – keine jagd.json, übersprungen');
+  const dbs = ladeJagdDbs(__dirname);
+  if (!dbs.length) {
+    console.log('\n[4/4] Jagd – keine jagd*.json, übersprungen');
     return [];
   }
-  const db = JSON.parse(fs.readFileSync(file, 'utf8'));
-  console.log(`\n[4/4] Jagd: ${db.label || 'Modelle'}`);
 
   const ka = CFG.kleinanzeigen;
+  const st = STANDORT;
   const out = [];
+  const markt = {};
+  // Die eBay-Zahlen aus verkauf.mjs GLEICH ZU BEGINN holen, nicht erst beim
+  // Schreiben. Sonst rechnet rechneMarge() weiter unten noch gegen den
+  // Kleinanzeigen-Markt, obwohl eBay-Preise vorliegen – und genau der
+  // Marktplatz, auf dem verkauft wird, bliebe unberuecksichtigt.
+  const altMarkt = readJson('markt.json', { modelle: {} }).modelle || {};
+  const ebayStand = readJson('markt.json', {}).ebayAt || null;
+  console.log(`\n[4/4] Jagd: ${dbs.map((d) => d.db.label || d.datei).join(', ')}`);
+  if (st) console.log(`  Umkreis: ${st.radiusKm} km um ${st.plz} ${st.ort}`);
 
-  // Kategorie-weite Ausschluesse: bei Grafikkarten vor allem Komplett-PCs und
-  // Notebooks. Die wuerden den Median nach oben ziehen und sind ohnehin ein
-  // anderes Produkt.
-  const ausschluss = (db.ausschluss || []).map(norm).filter(Boolean);
-  const muster = (db.ausschlussMuster || []).map((r) => new RegExp(r));
-
-  for (const m of db.modelle) {
-    const phrases = (m.queries || []).map(norm).filter(Boolean);
-    const marken = (m.marke || []).map(norm).filter(Boolean);
-    const nicht = (m.nicht || []).map(norm).filter(Boolean);
-    const found = [];
-    const seen = new Set();
-
+  for (const { db, filter: filterOpt } of dbs) {
+   if (dbs.length > 1) console.log(`  --- ${db.emoji || ''} ${db.label || ''} ---`);
+   // Schwellen pro Kategorie. 40 € Mindestgewinn sind bei einer Grafikkarte
+   // richtig und bei einem Stream Deck Mini unmoeglich – dessen ganzer
+   // Marktwert liegt bei 42 €. Was die Kategorie nicht selbst setzt, kommt
+   // aus config.json.
+   const cfgK = { ...CFG, marge: { ...CFG.marge, ...(db.marge || {}) } };
+   for (const m of db.modelle) {
+    // Schritt 1 – BUNDESWEIT, nur fuer den Median.
+    //
+    // Der Median braucht Masse. Aus den zwoelf Anzeigen im 15-km-Umkreis
+    // gerechnet wackelt er mit jedem einzelnen Angebot, und ein schiefer
+    // Median macht aus jedem Normalpreis einen Fund. Verkaufen kann Hakan
+    // ohnehin bundesweit – der bundesweite Preis ist also der ehrlichere
+    // Vergleich, auch wenn gekauft nur lokal wird.
+    const bundesweit = [];
+    const gesehen = new Set();
     for (const q of m.queries) {
       for (const ad of await kleinanzeigenAds(q, CFG.jagdPages, ka.minPrice, CFG.jagdMaxPrice)) {
-        if (seen.has(ad.id)) continue;
-        seen.add(ad.id);
-        if (isJunk(ad)) continue;
-
-        const words = norm(ad.title).split(' ');
-        const t = ' ' + words.join(' ') + ' ';
-
-        // Modellname muss am Stueck UND weit vorne im Titel stehen
-        const hit = phrasePos(words, phrases);
-        if (hit.pos < 0 || hit.pos > 5) continue;
-
-        // Direkt hinter dem Modellnamen darf keine groessere Variante stehen:
-        // "RTX 4070 Ti" ist nicht die "RTX 4070" und kostet deutlich mehr.
-        // Bewusst nur die zwei Woerter danach pruefen – sonst fiele eine echte
-        // 4070-Anzeige raus, die im Text eine 4060 Ti erwaehnt.
-        const danach = words.slice(hit.pos + hit.len, hit.pos + hit.len + 2);
-        if (nicht.some((w) => danach.includes(w))) continue;
-
-        if (!marken.some((b) => t.includes(' ' + b))) continue;
-        if (ausschluss.some((w) => t.includes(' ' + w + ' '))) continue;
-        if (muster.some((r) => r.test(t))) continue;
-        if (isAccessoryAd(t)) continue;
-
-        // "<Irgendwas> für <Modell>" ist Zubehör, "<Modell> für <Zweck>" nicht.
-        // Entscheidet allein die Reihenfolge – das braucht keine Wortliste.
-        const fuer = words.indexOf('fuer');
-        if (fuer !== -1 && fuer < hit.pos) continue;
-
-        found.push(ad);
+        if (gesehen.has(ad.id)) continue;
+        gesehen.add(ad.id);
+        if (passtZumModell(ad, m, filterOpt)) bundesweit.push(ad);
       }
     }
 
     // Median der eigenen Anzeigen – erst ab genug Datenpunkten belastbar
-    const prices = found.map((a) => a.price).sort((a, b) => a - b);
+    const prices = bundesweit.map((a) => a.price).sort((a, b) => a - b);
     const genug = prices.length >= CFG.jagdMinListings;
     const median = genug ? prices[Math.floor(prices.length / 2)] : null;
     const ref = median ?? m.markt;
+    const refArt = median ? 'Median aus ' + prices.length + ' Anzeigen' : 'geschätzter Marktpreis';
+
+    // Nicht nur der Median, sondern die ganze Verteilung. Grund: der Median
+    // sagt, was die Leute VERLANGEN. Wer selbst schnell verkaufen will, muss
+    // die anderen unterbieten – der realistische Erloes liegt also im unteren
+    // Viertel, nicht in der Mitte. Ohne p25 muesste man diesen Abschlag raten,
+    // und geraten war er bisher (realFaktor 0,85).
+    markt[m.name] = {
+      ref: round2(ref),
+      median: median ? round2(median) : null,
+      p25: genug ? round2(quantil(prices, 0.25)) : null,
+      p75: genug ? round2(quantil(prices, 0.75)) : null,
+      min: prices.length ? round2(prices[0]) : null,
+      max: prices.length ? round2(prices[prices.length - 1]) : null,
+      anzeigen: prices.length,
+      refArt,
+      // Bleibt weg, wenn es sie nicht gibt – JSON.stringify wirft undefined raus
+      ebay: altMarkt[m.name]?.ebay,
+    };
+
+    // Schritt 2 – IM UMKREIS: das sind die Funde, zu denen Hakan hinkommt.
+    // Eine Seite reicht; gemessen liefert der 15-km-Radius pro Modell rund ein
+    // Dutzend Anzeigen, und die passen alle auf Seite 1.
+    let funde = bundesweit;
+    if (st) {
+      funde = [];
+      const lokal = new Set();
+      for (const q of m.queries) {
+        for (const ad of await kleinanzeigenAds(q, 1, ka.minPrice, CFG.jagdMaxPrice, st)) {
+          if (lokal.has(ad.id)) continue;
+          lokal.add(ad.id);
+          if (passtZumModell(ad, m, filterOpt)) funde.push(ad);
+        }
+      }
+    }
 
     let treffer = 0;
     let betrug = 0;
 
-    for (const ad of found) {
+    for (const ad of funde) {
       const p = pct(ref, ad.price);
       // Zu gut, um wahr zu sein. Bei Grafikkarten ist das die Regel, nicht die
       // Ausnahme: eine 4090 fuer 300 € ist nie ein Schnaeppchen.
@@ -578,8 +782,19 @@ async function collectJagd() {
       // kaeme eine RTX 5070 Ti fuer 450 € (Median 950 €) als ganz normaler
       // Treffer rein - dabei ist das entweder ein Traumfund oder eine Masche.
       const warn = !scam && p >= CFG.jagdWarnPct;
+      // Mit der PAUSCHALE rechnen, nicht mit der echten Entfernung.
+      //
+      // prices.json und deals.json landen im oeffentlichen Repo, weil der
+      // Worker sie von dort holt. Aus einer echten Fahrtkostenzahl liesse sich
+      // km exakt zurueckrechnen (fahrt / 2 / kmKosten), und zusammen mit den
+      // Anzeigen-Links waere der Mittelpunkt per Dreiecksmessung bestimmbar.
+      // Deshalb hier immer der schlechteste Fall im Umkreis: gleich fuer alle,
+      // verraet nichts, und schaetzt eher zu vorsichtig als zu optimistisch.
+      // Der Live-Poller laeuft lokal und rechnet mit der echten Entfernung.
+      const fahrtKm = st?.radiusKm ?? ad.km;
+      const margeK = rechneMarge(ad.price, markt[m.name], fahrtKm, cfgK);
       if (scam) betrug++;
-      else if (p >= CFG.jagdMinPct) treffer++;
+      else if (lohntSich(margeK, cfgK)) treffer++;
 
       out.push({
         id: 'jagd:' + ad.id,
@@ -593,14 +808,29 @@ async function collectJagd() {
         pct: p,
         stock: 'USED',
         vb: ad.vb,
+        // Ort, Entfernung und Alter kommen aus der Trefferliste mit. Die
+        // Entfernung rechnet Kleinanzeigen bei einer Umkreissuche selbst aus
+        // und schreibt sie in den Ort: "47441 Moers (13 km)".
+        ort: ad.ort,
+        km: ad.km,
+        alterMin: ad.alterMin,
         match: m.name,
         typ: m.typ,
+        kategorie: db.label || null,
+        emoji: db.emoji || null,
         specs: m.specs || null,
         warum: m.warum,
         neu: m.neu,
         // Woher der Vergleichspreis kommt – das gehoert sichtbar dazu,
         // sonst weiss man nicht, wie ernst man die Prozentzahl nehmen darf
-        refArt: median ? 'Median aus ' + prices.length + ' Anzeigen' : 'geschätzter Marktpreis',
+        refArt,
+        // Die Marge hier ausrechnen und mitschreiben, statt sie im Worker
+        // nachzubauen: der Worker haette dann zwei Kopien derselben Formel,
+        // die frueher oder spaeter auseinanderlaufen. Aus demselben Grund
+        // faellt hier auch schon die Entscheidung – der Worker vergleicht
+        // dann nur noch ein Ja/Nein und kennt gar keine Schwellen mehr.
+        marge: margeK,
+        lohnt: !scam && lohntSich(margeK, cfgK),
         sus: scam,
         warn,
       });
@@ -608,21 +838,43 @@ async function collectJagd() {
 
     // --zeige="RTX 4060" listet alle zugeordneten Anzeigen auf. Zum Nachjustieren
     // der Filter unverzichtbar: ein schiefer Median hat immer einen Grund.
+    // Zeigt beide Listen, weil sich sonst nicht erkennen laesst, ob ein
+    // fehlender Fund am Filter liegt oder schlicht am Umkreis.
     if (ZEIGE && m.name.toLowerCase().includes(String(ZEIGE).toLowerCase())) {
-      console.log(`  --- alle Treffer für ${m.name} ---`);
-      for (const ad of found.slice().sort((a, b) => a.price - b.price)) {
-        console.log(`     ${String(ad.price).padStart(5)} €  ${ad.title.slice(0, 70)}`);
+      console.log(`  --- ${bundesweit.length} bundesweit (Median-Grundlage) ---`);
+      for (const ad of bundesweit.slice().sort((a, b) => a.price - b.price)) {
+        console.log(`     ${String(ad.price).padStart(5)} €  ${ad.title.slice(0, 60)}`);
+      }
+      if (st) {
+        console.log(`  --- ${funde.length} im Umkreis (erreichbar) ---`);
+        for (const ad of funde.slice().sort((a, b) => a.price - b.price)) {
+          console.log(
+            `     ${String(ad.price).padStart(5)} € ${String(ad.km ?? '?').padStart(3)} km  ` +
+              `${(ad.ort || '').padEnd(24).slice(0, 24)} ${ad.title.slice(0, 45)}`
+          );
+        }
       }
       console.log('  ---');
     }
 
     console.log(
-      `  ${m.name.padEnd(18)} ${String(found.length).padStart(3)} Anzeigen · ` +
+      `  ${m.name.padEnd(18)} ${String(bundesweit.length).padStart(3)} bundesweit · ` +
+        (st ? `${String(funde.length).padStart(2)} im Umkreis · ` : '') +
         `Median ${eur(ref).padStart(10)} ${median ? '        ' : '(geschätzt)'}` +
         (treffer ? ` · ${treffer} Fund${treffer > 1 ? 'e' : ''}` : '') +
         (betrug ? ` · ${betrug} Betrugsverdacht` : '')
     );
+   }
   }
+
+  // Marktpreise getrennt ablegen. Winzige Datei, die der Live-Poller bei jedem
+  // Lauf liest – prices.json waere dafuer viel zu gross.
+  //
+  // Die eBay-Zahlen haengen schon an den Eintraegen (oben aus der alten Datei
+  // uebernommen) – ohne das wuerde jeder Sammellauf sie loeschen, und weil der
+  // in GitHub Actions laeuft, waeren sie nach spaetestens einer Stunde weg,
+  // ohne dass es jemandem auffaellt.
+  writeJson('markt.json', { at: new Date().toISOString(), ebayAt: ebayStand, modelle: markt });
   return out;
 }
 
@@ -726,11 +978,24 @@ function updateHistory(hist, items) {
 // --- Hilfsmittel -------------------------------------------------------
 
 const round2 = (n) => Math.round(n * 100) / 100;
+// Quantil einer bereits sortierten Preisliste, lineare Interpolation.
+const quantil = (sortiert, q) => {
+  if (!sortiert.length) return null;
+  const i = (sortiert.length - 1) * q;
+  const u = Math.floor(i);
+  const o = Math.ceil(i);
+  return u === o ? sortiert[u] : sortiert[u] + (sortiert[o] - sortiert[u]) * (i - u);
+};
 const pct = (ref, cur) => (!ref || ref <= 0 || cur == null ? 0 : Math.max(0, Math.round(((ref - cur) / ref) * 100)));
 const clean = (s) =>
   (s || '')
     .replace(/<[^>]*>/g, '')
     .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ')
+    // Kleinanzeigen setzt in Ortsnamen ein breitenloses Leerzeichen als
+    // Trennhilfe: "Essen-&#8203;Katernberg". Bleibt es stehen, steht es
+    // spaeter im Discord-Alarm. Als Escape geschrieben, weil das Zeichen im
+    // Quelltext sonst unsichtbar waere und beim naechsten Editieren verschwindet.
+    .replace(/&#8203;?/g, '').replace(/[\u200B\uFEFF]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 const num = (v) => {
@@ -750,6 +1015,19 @@ const hash = (s) => {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 };
+
+// Was in die veroeffentlichten Dateien darf.
+//
+// prices.json und deals.json liegen im oeffentlichen Repo – der Worker holt
+// sie ueber raw.githubusercontent.com, sie MUESSEN also lesbar sein. Ortsnamen
+// der Funde stehen damit aber auch drin, und weil alle im eigenen Umkreis
+// liegen, verraten sie die Wohngegend. Deshalb fliegen ort und km hier raus.
+//
+// Die Fahrtkosten in der Marge sind schon vorher pauschal gerechnet (siehe
+// collectJagd), aus ihnen laesst sich die Entfernung also nicht rekonstruieren.
+function ohneOrtsdaten(items) {
+  return items.map(({ ort, km, ...rest }) => rest);
+}
 
 const readJson = (name, fallback) => {
   try {
@@ -831,8 +1109,10 @@ async function main() {
   );
   const dealFile = { at: prices.at, mode: MODE, count: deals.length, items: deals };
 
-  writeJson('prices.json', prices);
-  writeJson('deals.json', dealFile);
+  // Erst hier die Ortsdaten entfernen, nicht frueher: die Konsolenausgabe und
+  // --zeige brauchen sie, und die Marge ist ohnehin schon pauschal gerechnet.
+  writeJson('prices.json', { ...prices, items: ohneOrtsdaten(prices.items) });
+  writeJson('deals.json', { ...dealFile, items: ohneOrtsdaten(dealFile.items) });
   writeJson('history.json', hist);
 
   const top = items.filter((i) => i.pct > 0).slice(0, 10);

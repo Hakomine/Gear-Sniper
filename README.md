@@ -8,7 +8,7 @@ Vier Quellen:
 
 | Quelle | Was sie liefert |
 |---|---|
-| **Jagd** | Gezielte Modelle (aktuell **Grafikkarten**) — verglichen mit dem Median vergleichbarer Anzeigen, mit Betrugsschutz. **Der Hauptzweck**, siehe [JAGD.md](JAGD.md) |
+| **Jagd** | Gezielte Modelle (**Grafikkarten** und **Streaming-Gear**) — verglichen mit vergleichbaren Anzeigen, mit Betrugsschutz. **Der Hauptzweck**, siehe [JAGD.md](JAGD.md) |
 | **Kleinanzeigen** | Elgato-Gebrauchtangebote, automatisch gegen den Neupreis gerechnet |
 | **Elgato-Shop DE** | kompletter Katalog (578 Produkte) mit UVP, aktuellem Preis und Lagerstatus |
 | **Watchlist** | beliebige Produkt-Links anderer Shops, die du selbst einträgst |
@@ -19,15 +19,111 @@ ständig vor, im offiziellen Shop praktisch nie.
 ## Wie es aufgebaut ist
 
 ```
-GitHub Actions  ──sammelt──►  prices.json / deals.json / history.json
-                                        │
-Cloudflare Worker  ──liest──────────────┘  ──►  Oberfläche + Discord-Alarm
+GitHub Actions  ──sammelt──►  prices.json / deals.json / history.json / markt.json
+                                        │              │
+Cloudflare Worker  ──liest──────────────┘              │  Oberfläche + Discord
+                                                       │
+Live-Poller (eigener PC, 60 s)  ──liest markt.json─────┘  ──►  Discord sofort
 ```
 
 Das Sammeln läuft **nicht** im Worker. Ein Elgato-Produkt-JSON ist rund 500 KB,
 und der Cloudflare-Free-Plan gibt einem Cron-Lauf nur 10 ms CPU und 50
 Subrequests. Deshalb macht die schwere Arbeit GitHub Actions, und der Worker
 holt sich pro Alarm-Lauf genau **eine** kleine Datei.
+
+Der **Live-Poller** kam dazu, weil GitHub Actions real alle 17–190 Minuten
+läuft. Zum Sniping ist das zu langsam: ein deutlich unterbewertetes Angebot ist
+nach 5–15 Minuten weg. Arbeitsteilung seitdem: GitHub rechnet die Marktpreise
+(braucht bundesweite Daten, darf langsam sein), der Poller sucht im Umkreis und
+schlägt sofort Alarm.
+
+## Abholort einstellen
+
+Der Ort steht **nicht** in `config.json` — dieses Repo ist öffentlich, und eine
+Postleitzahl plus Abholradius grenzt einen Menschen stark ein. Gelesen wird in
+dieser Reihenfolge: Umgebungsvariablen → `standort.json` → `config.json`.
+
+**Lokal:** eine Datei `standort.json` daneben (per `.gitignore` geschützt):
+
+```json
+{ "ortId": 1234, "plz": "DEINE-PLZ", "ort": "Dein Ort", "radiusKm": 15 }
+```
+
+Die `ortId` liefert Kleinanzeigen selbst: `https://www.kleinanzeigen.de/s-ort-empfehlungen.json?query=DEINE-PLZ`
+antwortet mit `{"_1234":"DEINE-PLZ Dein Ort"}` — die Zahl hinter dem Unterstrich ist es.
+
+**In GitHub Actions:** Settings → Secrets and variables → Actions, drei Stück:
+`SNIPER_ORT_ID`, `SNIPER_PLZ`, `SNIPER_ORT`. Fehlen sie, sucht der Sammler
+bundesweit statt abzubrechen — dann stehen im Cloud-Alarm eben auch Funde, zu
+denen niemand hinkommt.
+
+`radiusKm` und `hartFiltern` bleiben in `config.json`: das sind Einstellungen,
+die niemanden verraten.
+
+## Live-Poller
+
+```bash
+node sniper-live.mjs --once --dry-run --warum
+```
+
+| Schalter | Wirkung |
+|---|---|
+| `--once` | ein Durchlauf statt Dauerbetrieb |
+| `--dry-run` | kein Discord, nichts gespeichert |
+| `--warum` | zeigt die knapp Gescheiterten mit Zahlen — **das Tuning-Werkzeug** |
+| `--takt=120` | Sekunden zwischen den Durchläufen (Standard 60) |
+
+Im Dauerbetrieb: `live.cmd` doppelklicken. Beenden mit Strg+C.
+
+Discord-Webhook in eine Datei `webhook.txt` legen (eine Zeile, per `.gitignore`
+geschützt) oder als Umgebungsvariable `DISCORD_WEBHOOK` setzen.
+
+Der allererste Start macht eine **stille Einlaufrunde**: er merkt sich alle
+vorhandenen Anzeigen, ohne sie zu melden. Ohne das käme sofort eine Flut zu
+Angeboten, die seit Wochen stehen.
+
+`--warum` ist wichtiger als es klingt: „0 Funde" sieht identisch aus, wenn
+gerade nichts da ist und wenn eine Schwelle zu hart steht.
+
+## Was zählt als Fund
+
+Nicht der Rabatt, sondern was übrig bleibt:
+
+```
+Erlös − Einkauf − 11 % Verkaufsgebühr − Versand − (km × 2 × 0,30 €)
+```
+
+Der **Erlös** wird gegen das untere Viertel (`p25`) der laufenden Angebote
+geschätzt, nicht gegen den Median. Grund: der Median ist, was alle *verlangen* —
+wer selbst schnell verkaufen will, steht in derselben Liste und muss unterbieten.
+
+Liegen eBay-Preise vor (`verkauf.mjs`), gilt eBay als Verkaufsmarkt — **aber
+gedeckelt auf den Kleinanzeigen-Median.** Die Browse-API liefert laufende
+Angebote, keine Abschlüsse, und bei 9 von 18 Grafikkarten lag das eBay-p25
+über dem Neupreis. eBay darf die Schätzung deshalb senken, aber nicht über das
+anheben, was der breite Gebrauchtmarkt hergibt. Ohne diesen Deckel meldet der
+Sniper Funde, die es nicht gibt.
+
+Nachgerechnet: eine Karte 33 % unter Median lässt **5 %** Verzinsung übrig.
+Prozente zu melden hieße also, zu Fahrten zu pingen, die sich nicht lohnen.
+
+Schwellen stehen in `config.json` unter `marge` und lassen sich pro Kategorie in
+der jeweiligen `jagd*.json` überschreiben.
+
+## Flip-Buch
+
+Ohne das weiß man nach drei Monaten nicht, ob sich das Ganze gelohnt hat — und
+der `realFaktor` in der Erlösschätzung bleibt geraten.
+
+```bash
+node flip.mjs kauf "RTX 4070" 260 --ort=Moers --km=13 --erwartet=430
+```
+
+Dazu `node flip.mjs verkauf <nr> <erlös> --gebuehr=43 --versand=7`,
+`node flip.mjs offen` (was liegt, wieviel Kapital gebunden) und
+`node flip.mjs bilanz`. Ab drei Verkäufen mit `--erwartet=` vergleicht die
+Bilanz Schätzung und Wirklichkeit, ab zehn schlägt sie einen konkreten neuen
+`realFaktor` vor. `flips.json` ist per `.gitignore` geschützt.
 
 ## Lokal ausprobieren
 
@@ -153,6 +249,19 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 
 ## Erkenntnisse (nicht nochmal reinlaufen)
 
+- **Kleinanzeigens Umkreis ist unverbindlich.** Von 310 Treffern einer
+  15-km-Suche lagen 110 weiter weg, der äußerste 50 km. Die Entfernung steht im
+  Ort mit drin ("47441 Moers (13 km)") und wird selbst nachgefiltert. Achtung:
+  bei ungenauen Orten steht dort "(ca. 50 km)" — das "ca." muss der Regex kennen.
+- **Fehlt die km-Angabe, ist die Anzeige am nächsten**, nicht am unbekanntesten:
+  Kleinanzeigen lässt sie bei Entfernung null weg. Nicht wegfiltern.
+- **`sortierung:neueste` in der URL bewirkt nichts.** Spielt keine Rolle, weil im
+  engen Umkreis der lokale Markt eines Modells auf Seite 1 passt.
+- **Der Median darf nicht aus dem Umkreis kommen.** Aus zwölf lokalen Anzeigen
+  wackelt er mit jedem Angebot. Deshalb: Median bundesweit rechnen, Funde lokal
+  suchen. Verkauft wird ohnehin bundesweit.
+- **eBay.de gibt 403** (getestet 09.08.2026), wie Geizhals und Idealo. Echte
+  Verkaufspreise nur über die Marketplace-Insights-API auf Antrag.
 - **Amazon.de geht nicht.** Liefert eine Captcha-Seite statt Preisen, auch vom
   eigenen PC aus. Zuverlässige Amazon-Preise gäbe es nur über die
   [Keepa-API ab 49 €/Monat](https://keepa.com/api-docs/).
@@ -220,11 +329,21 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
 ## Dateien
 
 - `collector.mjs` – der Sammler, **die Hauptdatei** für die Datenbeschaffung
+- `sniper-live.mjs` – der Live-Poller (60 s, Umkreis, sofortiger Alarm)
+- `marge.mjs` – die Margenrechnung, von Sammler und Poller gemeinsam benutzt
+- `flip.mjs` – das Flip-Buch
+- `verkauf.mjs` – eBay-Verkaufspreise (optional, braucht `ebay.txt`)
 - `worker.js` – Oberfläche, `/api/deals`, `/api/health` und der Discord-Alarm
-- `jagd.json` – die Modell-Datenbank der Jagd, siehe [JAGD.md](JAGD.md)
-- `config.json` – Schwellen, Suchbegriffe, Tempo
+- `jagd.json` / `jagd-streaming.json` – die Jagd-Kategorien, siehe [JAGD.md](JAGD.md).
+  Der Sammler liest **alle** `jagd*.json`; eine neue Kategorie braucht keinen Code
+- `config.json` – Standort, Margenschwellen, Suchbegriffe, Tempo
 - `watchlist.json` – deine eigenen Produkt-Links
 - `prices.json` / `deals.json` / `history.json` – erzeugt der Sammler
+- `markt.json` – Preisverteilung je Modell, die Brücke zum Live-Poller
 - `.github/workflows/collect.yml` – der Cloud-Job
 - `run.bat` – lokaler Sammellauf per Doppelklick
+- `live.cmd` – Live-Poller per Doppelklick
 - `deploy.bat` – veröffentlichen per Doppelklick (GitHub + Cloudflare)
+
+Nur lokal, nie im Repo (`.gitignore`): `webhook.txt`, `ebay.txt`, `gesehen.json`,
+`latenz.csv`, `flips.json`.
