@@ -319,6 +319,15 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
 - **Der Tagespunkt im Preisverlauf kommt nur vom Nachtlauf.** Sonst änderte
   sich `history.json` 48-mal täglich und würde das Repo mit Commits zumüllen.
+- **Ein 429 hat den ganzen Sammler umgeworfen.** Der Rate-Limit-Zweig in `get`
+  wartete brav 15/30/45 s, setzte dabei aber nie `lastErr` – nach dem dritten
+  Versuch flog ein nacktes `null`. Der catch in `kleinanzeigenAds`, der genau
+  solche Ausfälle wegstecken soll, las `e.message` und kippte selbst um: aus
+  einer übersprungenen Seite wurde ein Totalabbruch. Am 14.08.2026 traf das vier
+  Läufe in Folge, während derselbe Code lokal sauber durchlief – Kleinanzeigen
+  drosselt Rechenzentrums-IPs wie die von GitHub Actions, einen Heimanschluss
+  nicht. **Ein Fehlerpfad, der selbst fehlschlägt, ist schlimmer als keiner.**
+  Nachstellbar mit einem `fetch`-Stub, der stur 429 liefert.
 
 ## Dateien
 

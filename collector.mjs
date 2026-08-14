@@ -67,6 +67,10 @@ async function get(target, { accept = 'text/html', tries = 3 } = {}) {
       if (res.status === 429 || res.status === 503) {
         const back = (i + 1) * 15000;
         console.log(`    Rate-Limit (${res.status}), warte ${back / 1000}s ...`);
+        // Muss gesetzt werden, sonst fliegt nach dem letzten Versuch ein
+        // nacktes null – und jeder catch, der e.message liest, kippt selbst um.
+        lastErr = new Error('HTTP ' + res.status);
+        lastErr.status = res.status;
         await sleep(back);
         continue;
       }
@@ -83,7 +87,7 @@ async function get(target, { accept = 'text/html', tries = 3 } = {}) {
       if (i < tries - 1) await sleep(2000 * (i + 1));
     }
   }
-  throw lastErr;
+  throw lastErr || new Error('kein Erfolg und kein Fehler bei ' + target);
 }
 
 // --- Quelle 1: Elgato-Shop DE ------------------------------------------

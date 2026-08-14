@@ -15,7 +15,7 @@ Auslöser war die Frage nach einem Sniper für Elgato-Cams – plus der Hinweis,
 ein Kollege eine Elgato Cam Link 4K auf Kleinanzeigen für 50 € geschossen hat.
 Genau dieses Muster sucht die App: **Gebraucht-Angebot deutlich unter Neupreis.**
 
-Getrennt vom [[Kontrollzentrum]] – ist ein eigenes Tool.
+Eigenständiges Tool, läuft unabhängig von allem anderen.
 
 ## Wo es läuft
 - **Sammler**: GitHub Actions. Alle 30 Min ein Schnelllauf, nachts um 3 der
@@ -221,6 +221,14 @@ GitHub-Job ab, meldet der sich selbst.
   Nachricht. Am 08.08.2026 war das Secret beim Gear Sniper verschwunden –
   vermutlich beim Umstieg vom Dashboard auf `wrangler deploy`. Gegenprobe:
   `npx wrangler secret list`, und `/api/health` zeigt jetzt `webhookGesetzt`.
+- **Ein 429 von Kleinanzeigen hat den ganzen Sammler umgeworfen (14.08.2026).**
+  Der Rate-Limit-Zweig in `get` wartete 15/30/45 s, setzte aber nie `lastErr` –
+  danach flog ein nacktes `null`, und der catch, der den Ausfall wegstecken
+  sollte, kippte beim Lesen von `e.message` selbst um. Vier Fehlschläge in
+  Folge, während lokal alles lief: Kleinanzeigen drosselt Rechenzentrums-IPs
+  wie die von GitHub Actions, den eigenen Anschluss nicht. Seitdem übersprungene
+  Seite statt Abbruch. **Merksatz: ein Fehlerpfad, der selbst fehlschlägt, ist
+  schlimmer als keiner.**
 
 ### Erkenntnisse aus dem Flip-Umbau (09.08.2026)
 - **Kleinanzeigens Umkreis ist nur ein Vorschlag.** Nachgemessen über alle 18
