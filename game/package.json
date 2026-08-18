@@ -1,0 +1,24 @@
+{
+  "name": "scherbenfeld",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Survivor-like Prototyp - geometrisch, ohne Assets",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "perf": "tsx test/perf.ts",
+    "smoke": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}
