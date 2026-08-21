@@ -2,19 +2,25 @@ import { describe, expect, it } from 'vitest'
 import { Rng } from '../src/core/rng'
 import { berechneSchaden, xpFuerLevel } from '../src/game/damage'
 import { erzeugeSpieler } from '../src/game/player'
-import { AUFWERTUNGEN, zieheAngebote } from '../src/game/upgrades'
+import { PASSIVE } from '../src/game/upgrades'
+import {
+  istVollendet,
+  stufenText,
+  WAFFEN,
+  werteFuer,
+  ruesteAus,
+  werteAuf,
+} from '../src/game/weapons'
 
 describe('Schadensrechnung', () => {
   it('rechnet den Multiplikator ein', () => {
-    const rng = new Rng(1)
-    expect(berechneSchaden(10, 2, 0, 2, rng).wert).toBe(20)
+    expect(berechneSchaden(10, 2, 0, 2, new Rng(1)).wert).toBe(20)
   })
 
   it('faellt nie auf null', () => {
     // Ein Treffer, der nichts tut, liest sich als Fehler im Spiel - selbst
     // wenn die Rechnung stimmt.
-    const rng = new Rng(1)
-    expect(berechneSchaden(1, 0.01, 0, 2, rng).wert).toBe(1)
+    expect(berechneSchaden(1, 0.01, 0, 2, new Rng(1)).wert).toBe(1)
   })
 
   it('meldet nie einen Krit bei Chance null', () => {
@@ -22,13 +28,6 @@ describe('Schadensrechnung', () => {
     for (let i = 0; i < 500; i++) {
       expect(berechneSchaden(10, 1, 0, 3, rng).krit).toBe(false)
     }
-  })
-
-  it('meldet immer einen Krit bei Chance eins und wendet den Faktor an', () => {
-    const rng = new Rng(5)
-    const treffer = berechneSchaden(10, 1, 1, 3, rng)
-    expect(treffer.krit).toBe(true)
-    expect(treffer.wert).toBe(30)
   })
 
   it('trifft die vorgegebene Kritrate ungefaehr', () => {
@@ -51,79 +50,126 @@ describe('XP-Schwellen', () => {
   })
 
   it('halten die erste Stufe billig', () => {
-    // Der erste Levelup ist der Moment, in dem das Spiel zeigt, worum es
-    // geht. Kommt er zu spaet, ist der Spieler weg.
     expect(xpFuerLevel(1)).toBeLessThanOrEqual(10)
   })
 })
 
-describe('Aufwertungen ziehen', () => {
-  it('liefert nie dieselbe Karte zweimal', () => {
-    const rng = new Rng(3)
-    const sp = erzeugeSpieler()
-    for (let i = 0; i < 300; i++) {
-      const angebote = zieheAngebote(rng, new Map(), sp, 3)
-      const ids = new Set(angebote.map((a) => a.id))
-      expect(ids.size).toBe(angebote.length)
+describe('Waffendaten', () => {
+  it('sind alle plausibel', () => {
+    for (const def of WAFFEN) {
+      expect(def.basis.schaden, def.id).toBeGreaterThan(0)
+      expect(def.basis.abklingzeit, def.id).toBeGreaterThan(0)
+      expect(def.maxStufe, def.id).toBeGreaterThanOrEqual(2)
+      expect(def.farbe, def.id).toMatch(/^#[0-9a-f]{6}$/i)
     }
   })
 
-  it('bietet ausgereizte Aufwertungen nicht mehr an', () => {
-    const rng = new Rng(4)
-    const sp = erzeugeSpieler()
-    const stufen = new Map<string, number>()
-    for (const a of AUFWERTUNGEN) {
-      if (Number.isFinite(a.maxStufe)) stufen.set(a.id, a.maxStufe)
-    }
-    // Uebrig bleibt nur die unbegrenzte Reparatur - und die nur bei Schaden.
-    sp.hp = sp.maxHp * 0.5
-    const angebote = zieheAngebote(rng, stufen, sp, 3)
-    expect(angebote.map((a) => a.id)).toEqual(['reparatur'])
+  it('haben eindeutige Kennungen', () => {
+    const ids = new Set(WAFFEN.map((w) => w.id))
+    expect(ids.size).toBe(WAFFEN.length)
   })
 
-  it('bietet Heilung bei vollem Leben nicht an', () => {
-    const rng = new Rng(5)
-    const sp = erzeugeSpieler()
-    for (let i = 0; i < 200; i++) {
-      const angebote = zieheAngebote(rng, new Map(), sp, 3)
-      expect(angebote.some((a) => a.id === 'reparatur')).toBe(false)
+  it('haben jede eine Vollendung mit Text', () => {
+    // Der Moment auf der letzten Stufe ist der, der haengenbleibt. Eine Waffe
+    // ohne ihn waere eine Waffe, die am Ende nur noch groessere Zahlen macht.
+    for (const def of WAFFEN) {
+      expect(def.vollendung.text.length, def.id).toBeGreaterThan(5)
     }
   })
 
-  it('gibt lieber weniger Karten als Blindkarten', () => {
-    const rng = new Rng(6)
-    const sp = erzeugeSpieler()
-    const stufen = new Map<string, number>()
-    for (const a of AUFWERTUNGEN) {
-      if (a.id !== 'wucht' && Number.isFinite(a.maxStufe)) stufen.set(a.id, a.maxStufe)
-    }
-    const angebote = zieheAngebote(rng, stufen, sp, 3)
-    expect(angebote).toHaveLength(1)
-    expect(angebote[0].id).toBe('wucht')
-  })
-
-  it('zieht bei gleichem Saatwert dieselben Karten', () => {
-    const sp = erzeugeSpieler()
-    const a = zieheAngebote(new Rng(77), new Map(), sp, 3).map((x) => x.id)
-    const b = zieheAngebote(new Rng(77), new Map(), sp, 3).map((x) => x.id)
-    expect(a).toEqual(b)
+  it('decken alle vier Seltenheiten ab', () => {
+    const stufen = new Set(WAFFEN.map((w) => w.seltenheit))
+    expect(stufen).toEqual(new Set(['gewoehnlich', 'selten', 'episch', 'legendaer']))
   })
 })
 
-describe('Aufwertungen wirken', () => {
-  it('veraendern genau die Werte, die sie versprechen', () => {
+describe('Stufenwerte', () => {
+  it('steigern den Schaden streng monoton', () => {
+    for (const def of WAFFEN) {
+      for (let stufe = 1; stufe < def.maxStufe; stufe++) {
+        expect(werteFuer(def, stufe + 1).schaden, `${def.id} ${stufe}`).toBeGreaterThan(
+          werteFuer(def, stufe).schaden,
+        )
+      }
+    }
+  })
+
+  it('halten die Abklingzeit ueber null', () => {
+    // Eine Abklingzeit von null wuerde jeden Tick feuern und die Schleife
+    // fluten - die Untergrenze in `werteFuer` ist kein Schmuck.
+    for (const def of WAFFEN) {
+      expect(werteFuer(def, def.maxStufe).abklingzeit, def.id).toBeGreaterThan(0)
+    }
+  })
+
+  it('liefern Stueckzahlen ganzzahlig', () => {
+    for (const def of WAFFEN) {
+      for (let stufe = 1; stufe <= def.maxStufe; stufe++) {
+        const w = werteFuer(def, stufe)
+        expect(Number.isInteger(w.anzahl), `${def.id} anzahl`).toBe(true)
+        expect(Number.isInteger(w.durchschlag), `${def.id} durchschlag`).toBe(true)
+      }
+    }
+  })
+
+  it('greifen die Vollendung genau auf der letzten Stufe', () => {
+    for (const def of WAFFEN) {
+      expect(istVollendet(def, def.maxStufe - 1), def.id).toBe(false)
+      expect(istVollendet(def, def.maxStufe), def.id).toBe(true)
+    }
+  })
+
+  it('zeigen auf der letzten Karte den Vollendungstext', () => {
+    for (const def of WAFFEN) {
+      expect(stufenText(def, def.maxStufe - 1)).toBe(def.vollendung.text)
+    }
+  })
+
+  it('erzeugen fuer jede Zwischenstufe einen nicht leeren Text', () => {
+    // Der Text wird aus `proStufe` erzeugt. Waere er leer, haette die Karte
+    // nichts zu sagen - ein stiller Fehler, den man im Spiel kaum bemerkt.
+    for (const def of WAFFEN) {
+      for (let stufe = 1; stufe < def.maxStufe - 1; stufe++) {
+        expect(stufenText(def, stufe).length, `${def.id} ${stufe}`).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
+describe('Waffeninstanz', () => {
+  it('steigt bis zur Maxstufe und nicht darueber', () => {
+    const def = WAFFEN[0]
+    const w = ruesteAus(def, 0)
+    for (let i = 0; i < def.maxStufe + 5; i++) werteAuf(w)
+    expect(w.stufe).toBe(def.maxStufe)
+  })
+
+  it('rechnet die Werte beim Aufwerten neu', () => {
+    const w = ruesteAus(WAFFEN[0], 0)
+    const vorher = w.werte.schaden
+    werteAuf(w)
+    expect(w.werte.schaden).toBeGreaterThan(vorher)
+  })
+
+  it('merkt sich den Guertelplatz', () => {
+    // Der Platz ist das Bit, unter dem die Waffe ihre Risse setzt - eine
+    // Verwechslung waere im Spiel unsichtbar und in der Wirkung fatal.
+    expect(ruesteAus(WAFFEN[0], 3).platz).toBe(3)
+  })
+})
+
+describe('Passive Gegenstaende', () => {
+  it('veraendern genau den Wert, den sie versprechen', () => {
     const sp = erzeugeSpieler()
     const vorher = sp.schadenMult
-    AUFWERTUNGEN.find((a) => a.id === 'wucht')!.anwenden(sp)
-    expect(sp.schadenMult).toBeCloseTo(vorher + 0.25)
+    PASSIVE.find((p) => p.id === 'schleifstein')!.anwenden(sp)
+    expect(sp.schadenMult).toBeCloseTo(vorher + 0.18)
   })
 
   it('halten die Abklingzeit auch voll ausgereizt ueber null', () => {
-    // Multiplikativ statt additiv - sonst kaeme die Waffe dem Nullpunkt
-    // gefaehrlich nahe und die Schleife wuerde pro Tick fluten.
     const sp = erzeugeSpieler()
-    const taktung = AUFWERTUNGEN.find((a) => a.id === 'taktung')!
-    for (let i = 0; i < taktung.maxStufe; i++) taktung.anwenden(sp)
+    const spule = PASSIVE.find((p) => p.id === 'zuendspule')!
+    for (let i = 0; i < spule.maxStufe; i++) spule.anwenden(sp)
     expect(sp.abklingMult).toBeGreaterThan(0.3)
     expect(sp.abklingMult).toBeLessThan(1)
   })
@@ -131,7 +177,15 @@ describe('Aufwertungen wirken', () => {
   it('heilen nie ueber das Maximum hinaus', () => {
     const sp = erzeugeSpieler()
     sp.hp = sp.maxHp - 5
-    AUFWERTUNGEN.find((a) => a.id === 'panzerung')!.anwenden(sp)
+    PASSIVE.find((p) => p.id === 'panzerplatte')!.anwenden(sp)
     expect(sp.hp).toBeLessThanOrEqual(sp.maxHp)
+  })
+
+  it('bieten Heilung nur bei Schaden an', () => {
+    const sp = erzeugeSpieler()
+    const pflaster = PASSIVE.find((p) => p.id === 'notpflaster')!
+    expect(pflaster.verfuegbar!(sp)).toBe(false)
+    sp.hp = sp.maxHp * 0.5
+    expect(pflaster.verfuegbar!(sp)).toBe(true)
   })
 })

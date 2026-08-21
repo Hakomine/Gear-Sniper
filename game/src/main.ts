@@ -2,6 +2,7 @@ import { Eingabe } from './core/input'
 import { Schleife } from './core/loop'
 import type { Befehle } from './game/state'
 import { erzeugeSpielstand, tick } from './game/state'
+import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
 import { SICHT_RADIUS, Zeichner } from './render/draw'
 
 /**
@@ -69,11 +70,19 @@ zeichner.passeAn()
 window.addEventListener('resize', () => zeichner.passeAn())
 schleife.start()
 
-// Griff fuer den Playwright-Test: Er startet den Lauf und liest den Zustand
-// aus, statt sich auf Screenshots allein zu verlassen.
+// Griff fuer den Playwright-Test: Er startet den Lauf, liest den Zustand aus
+// und kann Waffen ausruesten, statt sich auf Screenshots allein zu verlassen.
+// Ohne den Zugriff auf `WAFFEN` liesse sich kein Bild von einem fertigen Bau
+// machen - man muesste zehn Minuten spielen, um eine Vollendung zu sehen.
 declare global {
   interface Window {
-    __scherbenfeld?: { spiel: typeof spiel; schleife: Schleife }
+    __scherbenfeld?: {
+      spiel: typeof spiel
+      schleife: Schleife
+      waffen: typeof WAFFEN
+      ruesteAus: typeof ruesteAus
+      werteAuf: typeof werteAuf
+    }
   }
 }
-window.__scherbenfeld = { spiel, schleife }
+window.__scherbenfeld = { spiel, schleife, waffen: WAFFEN, ruesteAus, werteAuf }

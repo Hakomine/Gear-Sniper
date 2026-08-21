@@ -1,6 +1,7 @@
 import type { Spielstand } from '../game/state'
+import { istVollendet } from '../game/weapons'
 import { TEXTE, zahlText, zeitText } from '../ui/strings'
-import { FARBEN, mitAlpha, SCHRIFT } from './palette'
+import { FARBEN, mitAlpha, SCHRIFT, SELTENHEIT_FARBE } from './palette'
 
 /**
  * Die Anzeige.
@@ -109,6 +110,8 @@ export function zeichneHud(
   ctx.fillStyle = FARBEN.grund
   ctx.fillText(`${Math.ceil(sp.hp)} / ${Math.ceil(sp.maxHp)}`, breite / 2, by + bh / 2 + 1)
 
+  zeichneWaffenLeiste(ctx, s, hoehe)
+
   // --- Warnschleier bei wenig Leben ----------------------------------------
   if (lebenAnteil < 0.34) {
     zeichneRandWarnung(ctx, breite, hoehe, (0.34 - lebenAnteil) / 0.34)
@@ -151,4 +154,57 @@ function zeichneRandWarnung(
   ctx.fillStyle = randVerlauf
   ctx.fillRect(0, 0, breite, hoehe)
   ctx.restore()
+}
+
+/**
+ * Die getragenen Waffen, unten links.
+ *
+ * Nach zehn Minuten weiss niemand mehr auswendig, was im Guertel steckt - und
+ * genau das braucht man, um zu entscheiden, ob die naechste Karte passt. Ohne
+ * diese Leiste waere das Riss-System nicht spielbar, sondern Glueckssache.
+ */
+function zeichneWaffenLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, hoehe: number): void {
+  const waffen = s.spieler.waffen
+  const kasten = 38
+  const luecke = 8
+  const x0 = 26
+  const y = hoehe - 62
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  for (let i = 0; i < waffen.length; i++) {
+    const w = waffen[i]
+    const x = x0 + i * (kasten + luecke)
+    const voll = istVollendet(w.def, w.stufe)
+    const rahmen = voll ? SELTENHEIT_FARBE.legendaer : w.def.farbe
+
+    ctx.beginPath()
+    ctx.roundRect(x, y, kasten, kasten, 8)
+    ctx.fillStyle = mitAlpha(FARBEN.grund, 0.8)
+    ctx.fill()
+    ctx.lineWidth = voll ? 2.5 : 1.5
+    ctx.strokeStyle = mitAlpha(rahmen, voll ? 1 : 0.7)
+    ctx.stroke()
+
+    // Raute in Waffenfarbe - dieselbe Farbe wie ihre Geschosse im Feld,
+    // damit man Anzeige und Wirkung zusammenbringt.
+    const mx = x + kasten / 2
+    const my = y + kasten / 2 - 3
+    const r = 8
+    ctx.beginPath()
+    ctx.moveTo(mx, my - r)
+    ctx.lineTo(mx + r, my)
+    ctx.lineTo(mx, my + r)
+    ctx.lineTo(mx - r, my)
+    ctx.closePath()
+    ctx.fillStyle = w.def.farbe
+    ctx.fill()
+
+    ctx.font = `700 10px ${SCHRIFT.mono}`
+    ctx.fillStyle = voll ? SELTENHEIT_FARBE.legendaer : FARBEN.textSchwach
+    ctx.fillText(voll ? 'MAX' : `${w.stufe}`, mx, y + kasten - 8)
+  }
+
+  ctx.textBaseline = 'alphabetic'
 }

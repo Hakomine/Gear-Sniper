@@ -2,16 +2,19 @@ import { Pool } from '../core/pool'
 import { Rng } from '../core/rng'
 import { RaumGitter } from '../core/spatialHash'
 import { FARBEN } from '../render/palette'
-import { berechneSchaden, xpFuerLevel } from './damage'
-import { funken, legeZahl, zerspringen } from './effects'
+import { xpFuerLevel } from './damage'
+import { zerspringen } from './effects'
 import type { GegnerArt } from './enemies'
 import { aktualisiereKristalle, legeKristall } from './pickups'
 import { bewegeSpieler, erzeugeSpieler, verletzeSpieler } from './player'
+import { risseAblaufen } from './risse'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
 import type { Aufwertung } from './upgrades'
 import { zieheAngebote } from './upgrades'
+import { detoniere, VERHALTEN } from './verhalten'
 import type { WaffenInstanz } from './weapons'
-import { ruesteAus, WAFFEN } from './weapons'
+import { ruesteAus, WAFFE_START } from './weapons'
+import { arbeiteKaskadeAb, gegnerImUmkreis, naechsterGegner, verletzeGegner } from './welt'
 
 /**
  * Der gesamte Laufzustand in einem Objekt - und die Simulation darauf.
@@ -22,9 +25,9 @@ import { ruesteAus, WAFFEN } from './weapons'
  * messen (`npm run perf`), und ein spaeteres Verpacken fuer Steam wird zur
  * Randnotiz statt zum Umbau.
  *
- * Die Import-Richtung ist bewusst sternfoermig: Diese Datei holt sich
- * Funktionen aus den Teilsystemen, die Teilsysteme holen sich von hier nur
- * *Typen*. Dadurch gibt es keine gegenseitigen Importe.
+ * Die Import-Richtung ist sternfoermig: Diese Datei holt sich Funktionen aus
+ * den Teilsystemen, die Teilsysteme holen sich von hier nur *Typen*. Dadurch
+ * gibt es keine gegenseitigen Importe.
  */
 
 export type Phase = 'titel' | 'laufend' | 'levelup' | 'tot'
@@ -42,14 +45,12 @@ export type Spieler = {
   /** Restzeit der Unverwundbarkeit nach einem Treffer. */
   unverwundbar: number
   blitz: number
+  /** Der Guertel. Hoechstens `MAX_WAFFEN` Stueck - siehe `weapons.ts`. */
   waffen: WaffenInstanz[]
-  /** Aufwertungen wirken ausschliesslich ueber diese Werte. */
+  /** Passive Gegenstaende wirken ausschliesslich ueber diese Werte. */
   schadenMult: number
   abklingMult: number
   tempoMult: number
-  geschossTempoMult: number
-  zusatzProjektile: number
-  zusatzDurchschlag: number
   magnetRadius: number
   kritChance: number
   kritFaktor: number
@@ -72,6 +73,14 @@ export type Gegner = {
   stossX: number
   stossY: number
   tot: boolean
+  /**
+   * Risse - ein Bit je Waffenplatz. Siehe `risse.ts`; bewusst eine Zahl und
+   * kein `Set`, weil es davon bis zu 1400 Stueck gibt.
+   */
+  risseMaske: number
+  risse: number
+  risseZeit: number
+  zersplittert: boolean
 }
 
 export type Geschoss = {
@@ -85,8 +94,57 @@ export type Geschoss = {
   leben: number
   rueckstoss: number
   krit: boolean
+  /** Guertelplatz der abfeuernden Waffe - entscheidet ueber den Riss. */
+  platz: number
+  farbe: string
+  /** Wendigkeit im Bogenmass je Sekunde. 0 = fliegt geradeaus. */
+  zielsuche: number
+  ziel: Gegner | null
+  /** Zur Probe, ob `ziel` noch derselbe Gegner ist - Pools recyceln Objekte. */
+  zielId: number
+  /** Groesser als 0: knallt beim Aufschlag. */
+  explosionsRadius: number
+  /** Wie viele kleinere Granaten der Knall nachwirft. */
+  nachwurf: number
+  /** Springt nach einem Treffer weiter, statt zu vergehen. */
+  prallt: boolean
   /** IDs bereits getroffener Gegner - sonst trifft ein Durchschuss denselben mehrfach. */
   getroffen: Set<number>
+}
+
+/** Ein wirksames Feld: Sog des Sternenschluckers, Truemmerfeld nach dem Platzen. */
+export type Zone = {
+  art: 'sog' | 'knall'
+  x: number
+  y: number
+  radius: number
+  maxRadius: number
+  leben: number
+  maxLeben: number
+  schaden: number
+  sogKraft: number
+  /** Restzeit bis zum naechsten Schadenstakt. */
+  tickRest: number
+  platz: number
+  farbe: string
+  /** Laesst beim Platzen ein Truemmerfeld zurueck (vollendeter Schlucker). */
+  truemmer: boolean
+}
+
+/** Rein optisch: Blitzbahn, Hiebbogen, Druckring. */
+export type Effekt = {
+  art: 'strich' | 'bogen' | 'ring'
+  x: number
+  y: number
+  x2: number
+  y2: number
+  radius: number
+  winkel: number
+  spanne: number
+  leben: number
+  maxLeben: number
+  farbe: string
+  breite: number
 }
 
 export type Kristall = {
@@ -143,6 +201,7 @@ export type Statistik = {
   level: number
   zeit: number
   schaden: number
+  zersplittert: number
 }
 
 export type Spielstand = {
@@ -156,6 +215,8 @@ export type Spielstand = {
   spieler: Spieler
   gegner: Pool<Gegner>
   geschosse: Pool<Geschoss>
+  zonen: Pool<Zone>
+  effekte: Pool<Effekt>
   kristalle: Pool<Kristall>
   partikel: Pool<Partikel>
   zahlen: Pool<SchadensZahl>
@@ -172,6 +233,7 @@ export type Spielstand = {
   naechsterSchwarm: number
   angebote: Aufwertung[]
   auswahl: number
+  /** Stufen der passiven Gegenstaende. Waffenstufen stehen an der Waffe. */
   stufen: Map<string, number>
   /** Halber Bildschirmdurchmesser - der Spawner braucht ihn, kennt aber kein Canvas. */
   sichtRadius: number
@@ -185,9 +247,12 @@ const UNVERWUNDBAR = 0.55
 /** Dauer der Zeitlupe, mit der das Levelup-Menue hereinkommt. */
 const LEVELUP_RAMPE = 0.22
 
+/** Der groesste Gegnerradius - so weit muss der Vorfilter greifen. */
+const GROESSTER_GEGNER = 22
+
 export function erzeugeSpielstand(saat: number): Spielstand {
   const spieler = erzeugeSpieler()
-  spieler.waffen = [ruesteAus(WAFFEN.splitter)]
+  spieler.waffen = [ruesteAus(WAFFE_START, 0)]
   return {
     phase: 'titel',
     zeit: 0,
@@ -197,6 +262,8 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     spieler,
     gegner: new Pool<Gegner>(leererGegner, 512),
     geschosse: new Pool<Geschoss>(leeresGeschoss, 128),
+    zonen: new Pool<Zone>(leereZone, 8),
+    effekte: new Pool<Effekt>(leererEffekt, 64),
     kristalle: new Pool<Kristall>(leererKristall, 256),
     partikel: new Pool<Partikel>(leeresPartikel, 512),
     zahlen: new Pool<SchadensZahl>(leereZahl, 64),
@@ -212,7 +279,7 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     auswahl: 0,
     stufen: new Map(),
     sichtRadius: 700,
-    statistik: { kills: 0, level: 1, zeit: 0, schaden: 0 },
+    statistik: { kills: 0, level: 1, zeit: 0, schaden: 0, zersplittert: 0 },
     naechsteId: 1,
   }
 }
@@ -225,9 +292,11 @@ export function starteLauf(s: Spielstand, saat = s.saat): void {
   s.rng = new Rng(saat)
   s.rngOptik = new Rng(saat).fork()
   Object.assign(s.spieler, erzeugeSpieler())
-  s.spieler.waffen = [ruesteAus(WAFFEN.splitter)]
+  s.spieler.waffen = [ruesteAus(WAFFE_START, 0)]
   s.gegner.alleFreigeben()
   s.geschosse.alleFreigeben()
+  s.zonen.alleFreigeben()
+  s.effekte.alleFreigeben()
   s.kristalle.alleFreigeben()
   s.partikel.alleFreigeben()
   s.zahlen.alleFreigeben()
@@ -242,7 +311,7 @@ export function starteLauf(s: Spielstand, saat = s.saat): void {
   s.angebote = []
   s.auswahl = 0
   s.stufen.clear()
-  s.statistik = { kills: 0, level: 1, zeit: 0, schaden: 0 }
+  s.statistik = { kills: 0, level: 1, zeit: 0, schaden: 0, zersplittert: 0 }
   s.naechsteId = 1
   startWelle(s)
 }
@@ -251,17 +320,17 @@ export function starteLauf(s: Spielstand, saat = s.saat): void {
 // Ein Tick
 // ---------------------------------------------------------------------------
 
-/** Wiederverwendetes Ergebnisarray fuer Gitterabfragen - vermeidet Muell pro Tick. */
+/**
+ * Wiederverwendetes Ergebnisarray fuer Gitterabfragen.
+ *
+ * ACHTUNG: Nur fuer Abfragen *dieser* Datei. Wer daraus eine zweite Abfrage
+ * startet, waehrend hier noch iteriert wird, ueberschreibt die Liste unter den
+ * eigenen Fuessen. Deshalb haben `welt.ts` und `verhalten.ts` eigene Arrays.
+ */
 const kandidaten: number[] = []
 
-/**
- * Wie stark sich ueberlappende Gegner auseinanderschieben.
- *
- * Fest und nicht an das eigene Tempo gekoppelt: Vorher hing die Kraft am
- * Lauftempo, wodurch sich ausgerechnet die langsamen, dicken Gegner am
- * schwaechsten trennten - also die, bei denen ein Klumpen am meisten stoert.
- */
-const TRENN_KRAFT = 165
+/** Eigenes Array fuer die Zonen - laeuft ausserhalb der Geschossschleife. */
+const zonenTreffer: Gegner[] = []
 
 export function tick(s: Spielstand, b: Befehle, dt: number): void {
   switch (s.phase) {
@@ -316,8 +385,12 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
   gitterAufbauen(s)
   feuereWaffen(s, sdt)
   bewegeGeschosse(s, sdt)
+  zonenTick(s, sdt)
   spielerKollision(s, sdt)
 
+  // Vor dem Aufraeumen: Zersplitterte Gegner sollen noch ihre Kristalle
+  // fallen lassen und in die Statistik zaehlen.
+  arbeiteKaskadeAb(s)
   raeumeTote(s)
   entferneVerlorene(s)
 
@@ -334,7 +407,13 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
   }
 }
 
-function gitterAufbauen(s: Spielstand): void {
+/**
+ * Exportiert, weil die Kaskade und alle Verhalten darauf angewiesen sind:
+ * Ohne aktuelles Gitter liefert jede Umkreisabfrage eine leere Liste - und
+ * zwar lautlos. Wer die Simulation ausserhalb von `tick` benutzt (Tests,
+ * Messungen), muss es vorher bauen.
+ */
+export function gitterAufbauen(s: Spielstand): void {
   const gitter = s.gitter
   gitter.leeren()
   const liste = s.gegner.aktiv
@@ -343,6 +422,9 @@ function gitterAufbauen(s: Spielstand): void {
   for (let i = 0; i < liste.length; i++) gitter.einfuegen(liste[i].x, liste[i].y, i)
 }
 
+/** Wie stark sich ueberlappende Gegner auseinanderschieben. */
+const TRENN_KRAFT = 165
+
 function bewegeGegner(s: Spielstand, dt: number): void {
   const liste = s.gegner.aktiv
   const px = s.spieler.x
@@ -350,6 +432,7 @@ function bewegeGegner(s: Spielstand, dt: number): void {
 
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
+    risseAblaufen(g, dt)
 
     const dx = px - g.x
     const dy = py - g.y
@@ -359,16 +442,14 @@ function bewegeGegner(s: Spielstand, dt: number): void {
 
     // Auseinanderdruecken. Ohne das laufen alle Gegner exakt uebereinander,
     // und aus tausend Feinden wird optisch einer: Man sieht die Gefahr nicht
-    // mehr und trifft mit einem Schuss alles. Kostet Rechenzeit, ist aber der
-    // Unterschied zwischen einem Schwarm und einem Klumpen.
+    // mehr und trifft mit einem Schuss alles.
     //
     // Reizvoll waere, hier auch die Zahl der *angesehenen* Kandidaten zu
     // deckeln - der Aufwand pro Gegner haenge dann nicht mehr an der Dichte.
     // Gemessen ist das ein klarer Rueckschritt (11,7 statt 4,5 ms pro Tick):
     // Wird die Trennkraft beschnitten, verklumpen die Gegner, und dann
-    // liefert *jede* Gitterabfrage - Geschosse, Zielsuche, Spielerkollision -
-    // riesige Kandidatenlisten. Das Auseinanderdruecken bezahlt seine eigene
-    // Rechenzeit, indem es das Gitter brauchbar haelt. Nicht deckeln.
+    // liefert *jede* Gitterabfrage riesige Kandidatenlisten. Das
+    // Auseinanderdruecken bezahlt seine eigene Rechenzeit. Nicht deckeln.
     const sichtweite = g.radius * 2.1
     s.gitter.abfragen(g.x, g.y, sichtweite, kandidaten)
     let geprueft = 0
@@ -399,76 +480,29 @@ function bewegeGegner(s: Spielstand, dt: number): void {
   }
 }
 
+/**
+ * Waffen ausloesen.
+ *
+ * Diese Funktion weiss nichts mehr darueber, *wie* eine Waffe wirkt - das
+ * steht in `verhalten.ts`. Sie kennt nur den Takt.
+ */
 function feuereWaffen(s: Spielstand, dt: number): void {
   const sp = s.spieler
-  for (const waffe of sp.waffen) {
-    waffe.abkling -= dt
-    if (waffe.abkling > 0) continue
+  for (let i = 0; i < sp.waffen.length; i++) {
+    const w = sp.waffen[i]
+    const v = VERHALTEN[w.def.verhalten]
 
-    const ziel = naechsterGegner(s, sp.x, sp.y, waffe.def.reichweite)
-    if (ziel === null) {
-      // Kein Ziel in Reichweite: nicht feuern, aber auch keinen Vorrat
-      // aufstauen, der sich spaeter auf einen Schlag entlaedt.
-      waffe.abkling = 0
-      continue
-    }
+    v.dauernd?.(s, w, dt)
+    if (v.feuern === undefined) continue
 
-    waffe.abkling = waffe.def.abklingzeit * sp.abklingMult
-    const grundWinkel = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
-    const anzahl = waffe.def.anzahl + sp.zusatzProjektile
+    w.abkling -= dt
+    if (w.abkling > 0) continue
 
-    for (let i = 0; i < anzahl; i++) {
-      // Faecher um die Zielrichtung zentrieren, damit auch gerade Anzahlen
-      // symmetrisch liegen.
-      const versatz = anzahl === 1 ? 0 : (i - (anzahl - 1) / 2) * waffe.def.streuung
-      const winkel = grundWinkel + versatz
-      const tempo = waffe.def.geschossTempo * sp.geschossTempoMult
-      const treffer = berechneSchaden(
-        waffe.def.schaden,
-        sp.schadenMult,
-        sp.kritChance,
-        sp.kritFaktor,
-        s.rng,
-      )
-
-      const geschoss = s.geschosse.nimm()
-      geschoss.x = sp.x
-      geschoss.y = sp.y
-      geschoss.vx = Math.cos(winkel) * tempo
-      geschoss.vy = Math.sin(winkel) * tempo
-      geschoss.schaden = treffer.wert
-      geschoss.krit = treffer.krit
-      geschoss.radius = waffe.def.geschossRadius
-      geschoss.durchschlag = waffe.def.durchschlag + sp.zusatzDurchschlag
-      geschoss.leben = waffe.def.lebensdauer
-      geschoss.rueckstoss = waffe.def.rueckstoss
-      geschoss.getroffen.clear()
-    }
+    // Kein Ziel: nicht feuern, aber auch keinen Vorrat aufstauen, der sich
+    // spaeter auf einen Schlag entlaedt.
+    w.abkling = v.feuern(s, w) ? w.werte.abklingzeit * sp.abklingMult : 0
   }
 }
-
-function naechsterGegner(s: Spielstand, x: number, y: number, reichweite: number): Gegner | null {
-  s.gitter.abfragen(x, y, reichweite, kandidaten)
-  const liste = s.gegner.aktiv
-  let bester: Gegner | null = null
-  let bestD2 = reichweite * reichweite
-
-  for (let k = 0; k < kandidaten.length; k++) {
-    const g = liste[kandidaten[k]]
-    if (g === undefined || g.tot) continue
-    const dx = g.x - x
-    const dy = g.y - y
-    const d2 = dx * dx + dy * dy
-    if (d2 < bestD2) {
-      bestD2 = d2
-      bester = g
-    }
-  }
-  return bester
-}
-
-/** Der groesste Gegnerradius - so weit muss der Vorfilter greifen. */
-const GROESSTER_GEGNER = 22
 
 function bewegeGeschosse(s: Spielstand, dt: number): void {
   const geschosse = s.geschosse.aktiv
@@ -476,10 +510,17 @@ function bewegeGeschosse(s: Spielstand, dt: number): void {
 
   for (let i = geschosse.length - 1; i >= 0; i--) {
     const p = geschosse[i]
+
+    if (p.zielsuche > 0) lenke(s, p, dt)
+
     p.x += p.vx * dt
     p.y += p.vy * dt
     p.leben -= dt
     if (p.leben <= 0) {
+      // Eine Granate, die niemanden trifft, knallt trotzdem.
+      if (p.explosionsRadius > 0) {
+        detoniere(s, p.x, p.y, p.explosionsRadius, p.schaden, p.platz, p.farbe, p.nachwurf)
+      }
       s.geschosse.freigeben(i)
       continue
     }
@@ -496,40 +537,159 @@ function bewegeGeschosse(s: Spielstand, dt: number): void {
       const reichweite = g.radius + p.radius
       if (dx * dx + dy * dy > reichweite * reichweite) continue
 
-      trefferAnGegner(s, g, p)
-      p.getroffen.add(g.id)
-
-      if (p.durchschlag <= 0) {
+      const laenge = Math.hypot(p.vx, p.vy) || 1
+      if (p.explosionsRadius > 0) {
+        // Der Knall verteilt den Schaden - das Geschoss selbst richtet
+        // nichts aus, sonst zaehlte der Treffer doppelt.
+        detoniere(s, p.x, p.y, p.explosionsRadius, p.schaden, p.platz, p.farbe, p.nachwurf)
         verbraucht = true
         break
       }
-      p.durchschlag--
+
+      verletzeGegner(
+        s,
+        g,
+        p.schaden,
+        p.platz,
+        p.krit,
+        (p.vx / laenge) * p.rueckstoss,
+        (p.vy / laenge) * p.rueckstoss,
+      )
+      p.getroffen.add(g.id)
+
+      if (p.durchschlag > 0) {
+        p.durchschlag--
+        continue
+      }
+      // Vollendete Pfeile prallen zum naechsten Gegner weiter, statt zu
+      // vergehen. Klappt das nicht, ist das Geschoss verbraucht.
+      if (p.prallt && prallWeiter(s, p)) break
+      verbraucht = true
+      break
     }
 
     if (verbraucht) s.geschosse.freigeben(i)
   }
 }
 
-function trefferAnGegner(s: Spielstand, g: Gegner, p: Geschoss): void {
-  g.hp -= p.schaden
-  g.blitz = 0.09
-  s.statistik.schaden += p.schaden
+/** Zielsuche: das Geschoss dreht sich hoechstens `zielsuche` je Sekunde. */
+function lenke(s: Spielstand, p: Geschoss, dt: number): void {
+  // Ueber eine oertliche Variable, nicht ueber das Feld: TypeScript kann eine
+  // veraenderliche Eigenschaft nach der Pruefung nicht als "nicht null"
+  // fuehren - jeder Funktionsaufruf koennte sie ja wieder gesetzt haben.
+  let ziel = p.ziel
 
-  const laenge = Math.hypot(p.vx, p.vy) || 1
-  g.stossX += (p.vx / laenge) * (p.rueckstoss / g.masse)
-  g.stossY += (p.vy / laenge) * (p.rueckstoss / g.masse)
-
-  funken(s, p.x, p.y, p.krit ? FARBEN.krit : FARBEN.geschoss)
-
-  if (g.hp <= 0) {
-    g.tot = true
-    return
+  // Pools recyceln Objekte - die ID beweist, dass es noch dasselbe Ziel ist.
+  if (ziel === null || ziel.id !== p.zielId || ziel.tot) {
+    ziel = naechsterGegner(s, p.x, p.y, 420)
+    p.ziel = ziel
+    p.zielId = ziel === null ? -1 : ziel.id
+    if (ziel === null) return
   }
 
-  // Schadenszahlen nur fuer kritische Treffer. Bei tausend Gegnern staende
-  // sonst eine Zahlenwand vor dem Spiel - und ausgerechnet die eine Zahl, auf
-  // die es ankommt, ginge darin unter.
-  if (p.krit) legeZahl(s, g.x, g.y - g.radius, p.schaden, true)
+  const tempo = Math.hypot(p.vx, p.vy) || 1
+  const jetzt = Math.atan2(p.vy, p.vx)
+  let ab = Math.atan2(ziel.y - p.y, ziel.x - p.x) - jetzt
+  while (ab > Math.PI) ab -= Math.PI * 2
+  while (ab < -Math.PI) ab += Math.PI * 2
+
+  const max = p.zielsuche * dt
+  const neuWinkel = jetzt + Math.max(-max, Math.min(max, ab))
+  p.vx = Math.cos(neuWinkel) * tempo
+  p.vy = Math.sin(neuWinkel) * tempo
+}
+
+/** Nach einem Treffer auf den naechsten noch nicht getroffenen Gegner umlenken. */
+function prallWeiter(s: Spielstand, p: Geschoss): boolean {
+  gegnerImUmkreis(s, p.x, p.y, 280, zonenTreffer)
+  let bester: Gegner | null = null
+  let bestD2 = Infinity
+
+  for (let i = 0; i < zonenTreffer.length; i++) {
+    const g = zonenTreffer[i]
+    if (p.getroffen.has(g.id)) continue
+    const d2 = (g.x - p.x) * (g.x - p.x) + (g.y - p.y) * (g.y - p.y)
+    if (d2 < bestD2) {
+      bestD2 = d2
+      bester = g
+    }
+  }
+  if (bester === null) return false
+
+  const tempo = Math.hypot(p.vx, p.vy) || 1
+  const winkel = Math.atan2(bester.y - p.y, bester.x - p.x)
+  p.vx = Math.cos(winkel) * tempo
+  p.vy = Math.sin(winkel) * tempo
+  p.ziel = bester
+  p.zielId = bester.id
+  return true
+}
+
+/**
+ * Sog und Truemmerfelder.
+ *
+ * Laeuft ausserhalb der Geschossschleife und darf deshalb selbst Abfragen
+ * starten - mit eigenem Ergebnisarray.
+ */
+function zonenTick(s: Spielstand, dt: number): void {
+  const liste = s.zonen.aktiv
+
+  for (let i = liste.length - 1; i >= 0; i--) {
+    const z = liste[i]
+    z.leben -= dt
+
+    if (z.leben <= 0) {
+      if (z.art === 'sog') platzeSingularitaet(s, z)
+      s.zonen.freigeben(i)
+      continue
+    }
+
+    z.tickRest -= dt
+    const taktet = z.tickRest <= 0
+    if (taktet) z.tickRest = 0.22
+
+    gegnerImUmkreis(s, z.x, z.y, z.radius, zonenTreffer)
+    for (let k = 0; k < zonenTreffer.length; k++) {
+      const g = zonenTreffer[k]
+
+      if (z.sogKraft > 0) {
+        const dx = z.x - g.x
+        const dy = z.y - g.y
+        const d = Math.hypot(dx, dy) || 1
+        // Naeher am Zentrum zieht es staerker - dadurch entsteht der Klumpen,
+        // der die Detonation danach so lohnend macht.
+        const zug = z.sogKraft * (1 - Math.min(1, d / z.radius) * 0.4)
+        g.stossX += (dx / d) * zug * dt
+        g.stossY += (dy / d) * zug * dt
+      }
+
+      if (taktet) verletzeGegner(s, g, z.schaden, z.platz, false, 0, 0)
+    }
+  }
+}
+
+/** Das Loch platzt: alles im Umkreis bekommt die volle Ladung. */
+function platzeSingularitaet(s: Spielstand, z: Zone): void {
+  detoniere(s, z.x, z.y, z.radius, z.schaden * 6, z.platz, z.farbe)
+  s.trauma = Math.min(1, s.trauma + 0.35)
+  s.blitz = Math.max(s.blitz, 0.45)
+
+  if (!z.truemmer) return
+  // Vollendet bleibt ein Truemmerfeld stehen, das weiter Schaden tickt.
+  const t = s.zonen.nimm()
+  t.art = 'knall'
+  t.x = z.x
+  t.y = z.y
+  t.radius = z.radius * 0.8
+  t.maxRadius = t.radius
+  t.leben = 4
+  t.maxLeben = 4
+  t.schaden = z.schaden * 0.5
+  t.sogKraft = 0
+  t.tickRest = 0
+  t.platz = z.platz
+  t.farbe = z.farbe
+  t.truemmer = false
 }
 
 function raeumeTote(s: Spielstand): void {
@@ -592,6 +752,12 @@ function aktualisiereOptik(s: Spielstand, dt: number): void {
     p.vy *= bremse
   }
 
+  const effekte = s.effekte.aktiv
+  for (let i = effekte.length - 1; i >= 0; i--) {
+    effekte[i].leben -= dt
+    if (effekte[i].leben <= 0) s.effekte.freigeben(i)
+  }
+
   const zahlen = s.zahlen.aktiv
   for (let i = zahlen.length - 1; i >= 0; i--) {
     const z = zahlen[i]
@@ -635,7 +801,7 @@ export function gibXp(s: Spielstand, menge: number): void {
 }
 
 function oeffneLevelup(s: Spielstand): void {
-  s.angebote = zieheAngebote(s.rng, s.stufen, s.spieler, 3)
+  s.angebote = zieheAngebote(s, 3)
   s.auswahl = 0
   s.zeitskala = 0
   s.levelWartet = 0
@@ -659,9 +825,7 @@ function levelupTick(s: Spielstand, b: Befehle, dt: number): void {
   else if (b.bestaetigen) gewaehlt = s.auswahl
   if (gewaehlt < 0) return
 
-  const aufwertung = s.angebote[gewaehlt]
-  aufwertung.anwenden(s.spieler)
-  s.stufen.set(aufwertung.id, (s.stufen.get(aufwertung.id) ?? 0) + 1)
+  s.angebote[gewaehlt].anwenden(s)
   schliesseLevelup(s)
 }
 
@@ -697,6 +861,10 @@ function leererGegner(): Gegner {
     stossX: 0,
     stossY: 0,
     tot: false,
+    risseMaske: 0,
+    risse: 0,
+    risseZeit: 0,
+    zersplittert: false,
   }
 }
 
@@ -712,7 +880,50 @@ function leeresGeschoss(): Geschoss {
     leben: 0,
     rueckstoss: 0,
     krit: false,
+    platz: 0,
+    farbe: FARBEN.geschoss,
+    zielsuche: 0,
+    ziel: null,
+    zielId: -1,
+    explosionsRadius: 0,
+    nachwurf: 0,
+    prallt: false,
     getroffen: new Set<number>(),
+  }
+}
+
+function leereZone(): Zone {
+  return {
+    art: 'sog',
+    x: 0,
+    y: 0,
+    radius: 0,
+    maxRadius: 0,
+    leben: 0,
+    maxLeben: 1,
+    schaden: 0,
+    sogKraft: 0,
+    tickRest: 0,
+    platz: 0,
+    farbe: FARBEN.text,
+    truemmer: false,
+  }
+}
+
+function leererEffekt(): Effekt {
+  return {
+    art: 'ring',
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 0,
+    radius: 0,
+    winkel: 0,
+    spanne: 0,
+    leben: 0,
+    maxLeben: 1,
+    farbe: FARBEN.text,
+    breite: 2,
   }
 }
 

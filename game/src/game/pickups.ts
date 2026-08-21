@@ -17,7 +17,22 @@ const POP = 95
 /** Nach dieser Zeit verschwindet ein liegengebliebener Kristall. */
 const LEBENSDAUER = 26
 
+/**
+ * Wie viele Kristalle hoechstens gleichzeitig liegen.
+ *
+ * Darueber wird der Wert in den naechstgelegenen bestehenden Kristall
+ * eingerechnet, statt einen neuen zu legen. Der Screenshot aus der spaeten
+ * Phase war der Anlass: Bei 1200 Kills lag das Feld unter einem Teppich
+ * blauer Rauten, und man sah die Gegner nicht mehr. Es geht dabei keine
+ * Erfahrung verloren - sie sammelt sich nur in dickeren Brocken.
+ */
+const MAX_KRISTALLE = 200
+
 export function legeKristall(s: Spielstand, x: number, y: number, wert: number): void {
+  if (s.kristalle.anzahl >= MAX_KRISTALLE) {
+    verschmelze(s, x, y, wert)
+    return
+  }
   const k = s.kristalle.nimm()
   // Bewusst `rng` und nicht `rngOptik`: Wo ein Kristall hinspringt, entscheidet
   // mit, wann der Spieler ihn einsammelt - und damit, wann er aufsteigt. Das
@@ -90,4 +105,25 @@ export function aktualisiereKristalle(s: Spielstand, dt: number): number {
   }
 
   return ausbeute
+}
+
+/** Wert in den naechstgelegenen Kristall einrechnen, statt einen neuen zu legen. */
+function verschmelze(s: Spielstand, x: number, y: number, wert: number): void {
+  const liste = s.kristalle.aktiv
+  let bester = liste[0]
+  let bestD2 = Infinity
+
+  for (let i = 0; i < liste.length; i++) {
+    const d2 = (liste[i].x - x) * (liste[i].x - x) + (liste[i].y - y) * (liste[i].y - y)
+    if (d2 < bestD2) {
+      bestD2 = d2
+      bester = liste[i]
+    }
+  }
+  if (bester === undefined) return
+
+  bester.wert += wert
+  // Aufgefrischt: Ein Klumpen, in den staendig nachgelegt wird, soll nicht
+  // mitten im Getuemmel verfallen.
+  bester.leben = LEBENSDAUER
 }

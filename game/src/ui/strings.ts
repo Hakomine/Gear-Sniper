@@ -15,6 +15,9 @@ export const TEXTE = {
 
   levelup: 'STUFE ERREICHT',
   levelupHinweis: 'A / D wählen · LEERTASTE bestätigen · oder 1 2 3',
+  kartenNeu: 'NEU',
+  kartenVollendung: 'VOLLENDUNG',
+  kartenStufe: 'Stufe',
 
   tot: 'ZERBROCHEN',
   totHinweis: 'LEERTASTE für einen neuen Lauf',
@@ -26,6 +29,7 @@ export const TEXTE = {
   ergebnisKills: 'Erledigt',
   ergebnisStufe: 'Stufe',
   ergebnisSchaden: 'Schaden',
+  ergebnisZersplittert: 'Zersplittert',
 } as const
 
 /** Sekunden als `m:ss`. */

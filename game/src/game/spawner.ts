@@ -1,5 +1,12 @@
 import type { GegnerArt } from './enemies'
-import { GEGNER_ARTEN, hpFaktor, tempoFaktor, verfuegbareArten } from './enemies'
+import {
+  GEGNER_ARTEN,
+  gewichtFuer,
+  hpFaktor,
+  schadenFaktor,
+  tempoFaktor,
+  verfuegbareArten,
+} from './enemies'
 import type { Gegner, Spielstand } from './state'
 
 /**
@@ -55,7 +62,7 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.hp = g.maxHp
   g.radius = art.radius
   g.tempo = art.tempo * tempoFaktor(s.zeit)
-  g.schaden = art.schaden
+  g.schaden = art.schaden * schadenFaktor(s.zeit)
   g.xp = art.xp
   g.masse = art.masse
   g.blitz = 0
@@ -68,10 +75,10 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
 function waehleArt(s: Spielstand): GegnerArt {
   const arten = verfuegbareArten(s.zeit)
   let summe = 0
-  for (const a of arten) summe += a.gewicht
+  for (const a of arten) summe += gewichtFuer(a, s.zeit)
   let wurf = s.rng.next() * summe
   for (const a of arten) {
-    wurf -= a.gewicht
+    wurf -= gewichtFuer(a, s.zeit)
     if (wurf <= 0) return a
   }
   return arten[arten.length - 1]

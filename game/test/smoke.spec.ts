@@ -39,14 +39,25 @@ type Spiel = {
     level: number
     hp: number
     maxHp: number
-    zusatzProjektile: number
-    zusatzDurchschlag: number
+    xpNaechste: number
     abklingMult: number
+    waffen: WaffenInstanzLose[]
   }
   gegner: { anzahl: number }
+  zonen: { anzahl: number }
 }
 
-type Fenster = Window & { __scherbenfeld: { spiel: Spiel } }
+type WaffenDefLose = { id: string; maxStufe: number }
+type WaffenInstanzLose = { stufe: number; werte: unknown }
+
+type Fenster = Window & {
+  __scherbenfeld: {
+    spiel: Spiel
+    waffen: readonly WaffenDefLose[]
+    ruesteAus: (def: WaffenDefLose, platz: number) => WaffenInstanzLose
+    werteAuf: (w: WaffenInstanzLose) => void
+  }
+}
 
 async function lies(page: Page): Promise<Griff> {
   return page.evaluate(() => {
@@ -182,10 +193,16 @@ test('Todesbildschirm zeigt das Ergebnis', async ({ page }) => {
   await starte(page)
   await spiele(page, 4)
 
-  // Leben herunterdrehen statt auf den Tod zu warten - geprueft wird der
-  // Bildschirm, nicht die Geduld.
+  // Waffen abnehmen und Leben auf 1: Geprueft wird der Uebergang in den
+  // Todesbildschirm, nicht die Geduld.
+  //
+  // Das Abnehmen ist noetig geworden, seit die Waffen etwas taugen: Ein
+  // stehender Spieler mit zwei Waffen raeumt alles weg, bevor es ihn
+  // beruehrt, und wartet dreissig Sekunden vergeblich auf seinen Tod.
   await page.evaluate(() => {
-    ;(window as unknown as Fenster).__scherbenfeld.spiel.spieler.hp = 1
+    const sp = (window as unknown as Fenster).__scherbenfeld.spiel.spieler
+    sp.waffen.length = 0
+    sp.hp = 1
   })
 
   // Nicht stumpf warten, sondern weiter Levelup-Menues wegraeumen: Steht
@@ -206,4 +223,62 @@ test('Todesbildschirm zeigt das Ergebnis', async ({ page }) => {
   const zustand = await lies(page)
   expect(zustand.phase).toBe('tot')
   expect(zustand.hp).toBe(0)
+})
+
+test('Voller Waffenbau zeigt alle Wirkungen', async ({ page }) => {
+  await starte(page)
+
+  // Fuenf Waffen auf Maxstufe: Trabanten kreisen, der Prismastrahl schneidet
+  // durchs Bild, der Sternenschlucker zieht einen Klumpen zusammen, und die
+  // angerissenen Gegner tragen ihre Bruchlinien. Zehn Minuten zu spielen, um
+  // dieses eine Bild zu bekommen, waere im Test nicht vertretbar.
+  //
+  // Gewaehlt sind bewusst die optisch verschiedensten: Hieb, Knall, Bahn,
+  // Strahl und Sog. Fuenf Varianten derselben Kugel saehen aus wie eine.
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    // Spaet genug, dass die Spawnrate am Anschlag steht: Ein fertiger Bau
+    // raeumt rund 27 Gegner je Sekunde weg, nachschieben muessen also mehr.
+    s.zeit = 500
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+
+    const wunsch = ['klinge', 'bazooka', 'trabanten', 'prisma', 'schlucker']
+    s.spieler.waffen = wunsch.map((id, platz) => {
+      const def = griff.waffen.find((d) => d.id === id)
+      if (def === undefined) throw new Error(`Waffe fehlt: ${id}`)
+      const w = griff.ruesteAus(def, platz)
+      // Ueber `werteAuf` statt die Stufe direkt zu setzen: Nur so werden die
+      // Werte mitgerechnet, sonst feuern Maxstufen-Waffen mit Stufe-1-Zahlen.
+      for (let k = 1; k < def.maxStufe; k++) griff.werteAuf(w)
+      return w
+    })
+  })
+
+  const ende = Date.now() + 14_000
+  while (Date.now() < ende) {
+    if ((await lies(page)).phase === 'levelup') await page.keyboard.press('Digit1')
+    else await page.waitForTimeout(250)
+  }
+
+  // Ein offenes Levelup verdeckt genau das, was das Bild zeigen soll. Mit
+  // einem fertigen Bau stroemt so viel Erfahrung herein, dass im Sekundentakt
+  // eines aufgeht - deshalb die Schwelle hochdrehen statt wegzuklicken.
+  // Reihenfolge zaehlt: `gibXp` rechnet die naechste Schwelle bei jedem
+  // Aufstieg aus der Formel neu. Wer sie vorher hochdreht, sieht sie beim
+  // naechsten Levelup wieder ueberschrieben - also erst leerraeumen.
+  while ((await lies(page)).phase === 'levelup') {
+    await page.keyboard.press('Digit1')
+    await page.waitForTimeout(200)
+  }
+  await page.evaluate(() => {
+    ;(window as unknown as Fenster).__scherbenfeld.spiel.spieler.xpNaechste = 1e9
+  })
+  // Kurz laufen lassen, damit Strahl und Sog wieder ausloesen.
+  await page.waitForTimeout(2500)
+
+  const zustand = await lies(page)
+  expect(zustand.gegner).toBeGreaterThan(40)
+  await page.screenshot({ path: 'screenshots/06-vollausbau.png' })
 })

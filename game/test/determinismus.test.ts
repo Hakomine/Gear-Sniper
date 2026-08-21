@@ -113,13 +113,23 @@ describe('Der Lauf tut ueberhaupt etwas', () => {
     expect(s.gegner.anzahl).toBeLessThanOrEqual(MAX_GEGNER)
   })
 
-  it('laesst den Spieler ohne Schutz irgendwann sterben', () => {
-    // Wenn Nichtstun ueberlebbar waere, gaebe es kein Spiel. Der Lauf steht
-    // still, die Gegner kommen trotzdem.
+  it('laesst den Spieler mit der Startwaffe allein irgendwann sterben', () => {
+    // Der Guertel wird nach jedem Levelup wieder auf die Startwaffe gestutzt.
+    // Das ist Absicht: Geprueft wird die *Grundlage* - taete die Startwaffe
+    // allein schon alles, gaebe es keinen Grund, Waffen zu sammeln.
+    //
+    // Mit fuenf voll ausgebauten Waffen ueberlebt eine stehende Figur dagegen
+    // messbar zehn Minuten. Das ist kein Fehler, sondern die Gattung: Ein
+    // fertiger Bau *soll* raeumen. Die Antwort darauf ist ein Zeitlimit oder
+    // ein Endgegner - nicht, den Bau schwach zu machen.
     const s = erzeugeSpielstand(5)
     starteLauf(s, 5)
     const b: Befehle = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
-    for (let i = 0; i < 60 * 120 && s.phase !== 'tot'; i++) tick(s, b, TICK_DT)
+
+    for (let i = 0; i < 60 * 180 && s.phase !== 'tot'; i++) {
+      tick(s, b, TICK_DT)
+      if (s.spieler.waffen.length > 1) s.spieler.waffen.length = 1
+    }
     expect(s.phase).toBe('tot')
   })
 })

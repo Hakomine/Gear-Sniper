@@ -44,6 +44,22 @@ export const FARBEN = {
 export type FarbName = keyof typeof FARBEN
 
 /**
+ * Seltenheitsfarben.
+ *
+ * Die Abstufung grau-blau -> blau -> violett -> gold ist bewusst die, die
+ * jeder Spieler aus anderen Spielen schon kennt. Eine eigene Skala zu
+ * erfinden waere originell und wuerde nur dazu fuehren, dass niemand auf einen
+ * Blick sieht, was eine Karte wert ist.
+ */
+export const SELTENHEIT_FARBE = {
+  gewoehnlich: '#8d99b3',
+  selten: '#4fa3ff',
+  episch: '#b46bff',
+  legendaer: '#ffb020',
+} as const
+
+
+/**
  * Schrift.
  *
  * Bewusst nur Systemschriften: Eine Webschrift muesste nachgeladen werden,

@@ -1,5 +1,7 @@
-import { FARBEN, mitAlpha, SCHRIFT } from '../render/palette'
 import type { Spielstand } from '../game/state'
+import type { Aufwertung } from '../game/upgrades'
+import { SELTENHEIT_NAME } from '../game/weapons'
+import { FARBEN, mitAlpha, SCHRIFT, SELTENHEIT_FARBE } from '../render/palette'
 import { TEXTE, zahlText, zeitText } from './strings'
 
 /**
@@ -39,7 +41,7 @@ export function zeichneTitel(ctx: CanvasRenderingContext2D, breite: number, hoeh
 }
 
 const KARTE_B = 290
-const KARTE_H = 208
+const KARTE_H = 216
 const KARTE_LUECKE = 26
 
 export function zeichneLevelup(
@@ -55,7 +57,7 @@ export function zeichneLevelup(
 
   ctx.font = `700 40px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.spieler
-  ctx.fillText(TEXTE.levelup, breite / 2, hoehe / 2 - 172)
+  ctx.fillText(TEXTE.levelup, breite / 2, hoehe / 2 - 176)
 
   const anzahl = s.angebote.length
   const gesamt = anzahl * KARTE_B + (anzahl - 1) * KARTE_LUECKE
@@ -63,73 +65,116 @@ export function zeichneLevelup(
   const y = hoehe / 2 - KARTE_H / 2 + 12
 
   for (let i = 0; i < anzahl; i++) {
-    const a = s.angebote[i]
-    const x = startX + i * (KARTE_B + KARTE_LUECKE)
-    const gewaehlt = i === s.auswahl
-    const stufe = s.stufen.get(a.id) ?? 0
-
-    // Die gewaehlte Karte hebt sich ab - nicht nur durch den Rand, sondern
-    // auch durch die Hoehe. Auf einem Deck-Bildschirm aus einem Meter
-    // Entfernung ist Farbe allein zu wenig.
-    const hebung = gewaehlt ? 10 : 0
-
-    ctx.beginPath()
-    ctx.roundRect(x, y - hebung, KARTE_B, KARTE_H, 14)
-    ctx.fillStyle = gewaehlt ? '#131d33' : FARBEN.kartenGrund
-    ctx.fill()
-    ctx.lineWidth = gewaehlt ? 3 : 1.5
-    ctx.strokeStyle = gewaehlt ? FARBEN.kartenRandAktiv : FARBEN.kartenRand
-    ctx.stroke()
-
-    const mx = x + KARTE_B / 2
-
-    // Zifferntaste als Abkuerzung - schneller als Blaettern, und auf der
-    // Tastatur die Art, wie erfahrene Spieler waehlen.
-    ctx.font = `700 15px ${SCHRIFT.mono}`
-    ctx.fillStyle = gewaehlt ? FARBEN.kartenRandAktiv : FARBEN.textSchwach
-    ctx.fillText(String(i + 1), mx, y - hebung + 26)
-
-    ctx.font = `700 27px ${SCHRIFT.mono}`
-    ctx.fillStyle = gewaehlt ? FARBEN.text : FARBEN.text
-    ctx.fillText(a.name, mx, y - hebung + 74)
-
-    ctx.font = `400 17px ${SCHRIFT.mono}`
-    ctx.fillStyle = FARBEN.textSchwach
-    umbrochenerText(ctx, a.beschreibung, mx, y - hebung + 116, KARTE_B - 40, 23)
-
-    // Punkte zeigen, wie oft die Aufwertung schon genommen wurde. Ohne das
-    // waehlt man im Eifer dreimal dasselbe, ohne es zu merken.
-    if (Number.isFinite(a.maxStufe)) {
-      zeichneStufenPunkte(ctx, mx, y - hebung + KARTE_H - 30, stufe, a.maxStufe)
-    }
+    zeichneKarte(ctx, s.angebote[i], startX + i * (KARTE_B + KARTE_LUECKE), y, i, i === s.auswahl)
   }
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(TEXTE.levelupHinweis, breite / 2, hoehe / 2 + 158)
+  ctx.fillText(TEXTE.levelupHinweis, breite / 2, hoehe / 2 + 162)
 
   ctx.textBaseline = 'alphabetic'
 }
 
-function zeichneStufenPunkte(
+function zeichneKarte(
   ctx: CanvasRenderingContext2D,
+  a: Aufwertung,
+  x: number,
+  y: number,
+  index: number,
+  gewaehlt: boolean,
+): void {
+  const vollendung = a.vollendung === true
+  const rand = vollendung ? SELTENHEIT_FARBE.legendaer : SELTENHEIT_FARBE[a.seltenheit]
+
+  // Die gewaehlte Karte hebt sich ab - nicht nur durch den Rand, sondern auch
+  // durch die Hoehe. Auf einem Deck-Bildschirm aus einem Meter Entfernung ist
+  // Farbe allein zu wenig.
+  const hebung = gewaehlt ? 10 : 0
+  const oben = y - hebung
+  const mx = x + KARTE_B / 2
+
+  // Legendaere und Vollendungen schimmern. Ein Fund, der sich nicht vom
+  // Alltag abhebt, ist keiner.
+  if (vollendung || a.seltenheit === 'legendaer') {
+    const puls = 0.35 + 0.3 * Math.sin(performance.now() / 260 + index)
+    ctx.beginPath()
+    ctx.roundRect(x - 5, oben - 5, KARTE_B + 10, KARTE_H + 10, 18)
+    ctx.fillStyle = mitAlpha(rand, puls * 0.35)
+    ctx.fill()
+  }
+
+  ctx.beginPath()
+  ctx.roundRect(x, oben, KARTE_B, KARTE_H, 14)
+  ctx.fillStyle = gewaehlt ? '#131d33' : FARBEN.kartenGrund
+  ctx.fill()
+  ctx.lineWidth = gewaehlt ? 3 : 1.5
+  ctx.strokeStyle = gewaehlt ? rand : mitAlpha(rand, 0.5)
+  ctx.stroke()
+
+  // Farbstreifen am Kopf: die Seltenheit auf einen Blick, auch wenn der Rand
+  // im Getuemmel untergeht.
+  ctx.save()
+  ctx.beginPath()
+  ctx.roundRect(x, oben, KARTE_B, KARTE_H, 14)
+  ctx.clip()
+  ctx.fillStyle = rand
+  ctx.fillRect(x, oben, KARTE_B, 5)
+  ctx.restore()
+
+  // Zifferntaste als Abkuerzung - auf der Tastatur die Art, wie erfahrene
+  // Spieler waehlen.
+  ctx.font = `700 15px ${SCHRIFT.mono}`
+  ctx.fillStyle = gewaehlt ? rand : FARBEN.textSchwach
+  ctx.textAlign = 'left'
+  ctx.fillText(String(index + 1), x + 16, oben + 26)
+
+  ctx.textAlign = 'center'
+  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = rand
+  ctx.fillText(kopfZeile(a), mx, oben + 26)
+
+  ctx.font = `700 26px ${SCHRIFT.mono}`
+  ctx.fillStyle = a.art === 'passiv' ? FARBEN.text : a.farbe
+  ctx.fillText(a.name, mx, oben + 68)
+
+  ctx.font = `400 17px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  umbrochenerText(ctx, a.beschreibung, mx, oben + 110, KARTE_B - 40, 23)
+
+  zeichneFuss(ctx, a, mx, oben + KARTE_H - 28, rand)
+}
+
+/** Was oben auf der Karte steht: NEU, VOLLENDUNG oder die Seltenheit. */
+function kopfZeile(a: Aufwertung): string {
+  if (a.vollendung === true) return TEXTE.kartenVollendung
+  if (a.art === 'waffe') return TEXTE.kartenNeu
+  return SELTENHEIT_NAME[a.seltenheit].toUpperCase()
+}
+
+/** Fuss der Karte: Stufenpunkte, sonst nichts. */
+function zeichneFuss(
+  ctx: CanvasRenderingContext2D,
+  a: Aufwertung,
   mx: number,
   y: number,
-  stufe: number,
-  maxStufe: number,
+  farbe: string,
 ): void {
+  if (a.art === 'waffe') return
+  const max = a.maxStufe
+  if (max === undefined || !Number.isFinite(max)) return
+
+  const vorher = a.stufeVon ?? 0
   const r = 4
   const abstand = 14
-  const gesamt = (maxStufe - 1) * abstand
-  const startX = mx - gesamt / 2
+  const startX = mx - ((max - 1) * abstand) / 2
 
-  for (let i = 0; i < maxStufe; i++) {
+  for (let i = 0; i < max; i++) {
     ctx.beginPath()
     ctx.arc(startX + i * abstand, y, r, 0, Math.PI * 2)
     // Die kommende Stufe wird mitgezeigt, damit die Karte sagt, was sie
     // bewirkt - nicht nur, was schon da ist.
-    if (i < stufe) ctx.fillStyle = FARBEN.textHervor
-    else if (i === stufe) ctx.fillStyle = mitAlpha(FARBEN.textHervor, 0.45)
+    if (i < vorher) ctx.fillStyle = farbe
+    else if (i === vorher) ctx.fillStyle = mitAlpha(farbe, 0.5)
     else ctx.fillStyle = mitAlpha(FARBEN.textSchwach, 0.3)
     ctx.fill()
   }
@@ -148,11 +193,12 @@ export function zeichneTod(
 
   ctx.font = `700 62px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.gefahr
-  ctx.fillText(TEXTE.tot, breite / 2, hoehe / 2 - 132)
+  ctx.fillText(TEXTE.tot, breite / 2, hoehe / 2 - 148)
 
   const zeilen: Array<[string, string]> = [
     [TEXTE.ergebnisZeit, zeitText(s.statistik.zeit)],
     [TEXTE.ergebnisKills, zahlText(s.statistik.kills)],
+    [TEXTE.ergebnisZersplittert, zahlText(s.statistik.zersplittert)],
     [TEXTE.ergebnisStufe, String(s.statistik.level)],
     [TEXTE.ergebnisSchaden, zahlText(s.statistik.schaden)],
   ]
@@ -160,9 +206,9 @@ export function zeichneTod(
   // Zweispaltig gesetzt: Bezeichnung rechtsbuendig, Wert linksbuendig. So
   // steht die Spalte auch dann gerade, wenn die Zahlen unterschiedlich lang
   // sind - der Grund, warum die Anzeige Monospace nutzt.
-  const y0 = hoehe / 2 - 48
+  const y0 = hoehe / 2 - 66
   for (let i = 0; i < zeilen.length; i++) {
-    const y = y0 + i * 38
+    const y = y0 + i * 36
     ctx.font = `400 19px ${SCHRIFT.mono}`
     ctx.textAlign = 'right'
     ctx.fillStyle = FARBEN.textSchwach
@@ -177,7 +223,7 @@ export function zeichneTod(
   ctx.textAlign = 'center'
   ctx.font = `600 21px ${SCHRIFT.mono}`
   ctx.fillStyle = mitAlpha(FARBEN.text, puls)
-  ctx.fillText(TEXTE.totHinweis, breite / 2, hoehe / 2 + 138)
+  ctx.fillText(TEXTE.totHinweis, breite / 2, hoehe / 2 + 152)
 
   ctx.textBaseline = 'alphabetic'
 }

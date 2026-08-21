@@ -1,5 +1,6 @@
 import { GEGNER_ARTEN } from '../game/enemies'
 import type { Spielstand } from '../game/state'
+import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
 import { zeichneLevelup, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
 import { erschuetterung } from './juice'
@@ -100,10 +101,17 @@ export class Zeichner {
     ctx.scale(WELT_ZOOM, WELT_ZOOM)
     ctx.translate(-s.kamera.x, -s.kamera.y)
 
+    // Reihenfolge ist Lesbarkeit: Zonen liegen als Untergrund unter allem,
+    // Bruchlinien direkt auf den Gegnern, Effekte ueber dem Getuemmel, der
+    // Spieler zuletzt - er darf nie verdeckt sein.
     zeichneGitter(ctx, s)
+    zeichneZonen(ctx, s)
     zeichneKristalle(ctx, s)
     zeichneGegner(ctx, s)
+    zeichneBruchlinien(ctx, s)
+    zeichneTrabanten(ctx, s)
     zeichneGeschosse(ctx, s)
+    zeichneEffekte(ctx, s)
     zeichnePartikel(ctx, s)
     zeichneSpieler(ctx, s)
     zeichneZahlen(ctx, s)
@@ -176,12 +184,6 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
 
   const gegner = s.gegner.aktiv
   for (let i = 0; i < gegner.length; i++) {
-    // Frisch getroffene Gegner kommen in einen eigenen weissen Durchgang -
-    // dieser Aufblitzer ist die wichtigste Rueckmeldung im ganzen Spiel.
-    if (gegner[i].blitz > 0) {
-      blitzende.push(i)
-      continue
-    }
     const id = gegner[i].art.id
     let liste = gegnerEimer.get(id)
     if (liste === undefined) {
@@ -189,6 +191,7 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       gegnerEimer.set(id, liste)
     }
     liste.push(i)
+    if (gegner[i].blitz > 0) blitzende.push(i)
   }
 
   const drehung = s.zeit * 0.7
@@ -208,15 +211,23 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     trennKante(ctx)
   }
 
-  if (blitzende.length > 0) {
-    ctx.beginPath()
-    for (let k = 0; k < blitzende.length; k++) {
-      formPfad(ctx, gegner[blitzende[k]], px, py, drehung)
-    }
-    ctx.fillStyle = FARBEN.treffer
-    ctx.fill()
-    trennKante(ctx)
+  // Der Trefferblitz *ueberlagert* die Farbe, er ersetzt sie nicht.
+  //
+  // Zuerst kamen frisch getroffene Gegner in einen eigenen weissen Durchgang.
+  // Mit einer Waffe ging das gut; mit fuenf gleichzeitig feuernden war
+  // praktisch jeder Gegner dauernd im Blitz, und der Screenshot zeigte ein
+  // graues Feld statt der Formsprache aus Farbe und Umriss. Als Ueberlagerung
+  // mit abklingender Deckkraft bleibt beides: der Treffer *und* die Identitaet
+  // des Gegners. Die Deckkraft ist bewusst niedrig: Bei fuenf Waffen wird ein
+  // Gegner praktisch ununterbrochen getroffen, und alles ueber einem Drittel
+  // faerbt das ganze Feld cremeweiss.
+  if (blitzende.length === 0) return
+  ctx.beginPath()
+  for (let k = 0; k < blitzende.length; k++) {
+    formPfad(ctx, gegner[blitzende[k]], px, py, drehung)
   }
+  ctx.fillStyle = mitAlpha(FARBEN.treffer, 0.32)
+  ctx.fill()
 }
 
 /**
@@ -286,29 +297,54 @@ function formPfad(
   ctx.closePath()
 }
 
+/** Eimer, um Geschosse nach Waffenfarbe zu buendeln. */
+const geschossEimer = new Map<string, number[]>()
+
+/**
+ * Geschosse - gebuendelt nach Waffenfarbe.
+ *
+ * Jede Waffe traegt ihre eigene Farbe, damit man im Getuemmel sieht, was
+ * gerade wirkt: Der gruene Pfad des Bogens, die orangen Granaten, die gelben
+ * Splitter. Bei fuenf gleichzeitig feuernden Waffen ist das der Unterschied
+ * zwischen "da passiert etwas" und "ich verstehe, was passiert".
+ */
 function zeichneGeschosse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   const liste = s.geschosse.aktiv
   if (liste.length === 0) return
 
-  // Zwei Durchgaenge ergeben ein Leuchten, ohne `shadowBlur` zu benutzen -
-  // der ist bei dieser Menge um ein Vielfaches teurer als ein zweiter Pfad.
-  ctx.beginPath()
+  for (const eimer of geschossEimer.values()) eimer.length = 0
   for (let i = 0; i < liste.length; i++) {
-    const p = liste[i]
-    ctx.moveTo(p.x + p.radius * 2.6, p.y)
-    ctx.arc(p.x, p.y, p.radius * 2.6, 0, Math.PI * 2)
+    let eimer = geschossEimer.get(liste[i].farbe)
+    if (eimer === undefined) {
+      eimer = []
+      geschossEimer.set(liste[i].farbe, eimer)
+    }
+    eimer.push(i)
   }
-  ctx.fillStyle = mitAlpha(FARBEN.geschoss, 0.18)
-  ctx.fill()
 
-  ctx.beginPath()
-  for (let i = 0; i < liste.length; i++) {
-    const p = liste[i]
-    ctx.moveTo(p.x + p.radius, p.y)
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+  for (const [farbe, eimer] of geschossEimer) {
+    if (eimer.length === 0) continue
+
+    // Zwei Durchgaenge ergeben ein Leuchten, ohne `shadowBlur` zu benutzen -
+    // der ist bei dieser Menge um ein Vielfaches teurer als ein zweiter Pfad.
+    ctx.beginPath()
+    for (let k = 0; k < eimer.length; k++) {
+      const p = liste[eimer[k]]
+      ctx.moveTo(p.x + p.radius * 2.6, p.y)
+      ctx.arc(p.x, p.y, p.radius * 2.6, 0, Math.PI * 2)
+    }
+    ctx.fillStyle = mitAlpha(farbe, 0.18)
+    ctx.fill()
+
+    ctx.beginPath()
+    for (let k = 0; k < eimer.length; k++) {
+      const p = liste[eimer[k]]
+      ctx.moveTo(p.x + p.radius, p.y)
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+    }
+    ctx.fillStyle = farbe
+    ctx.fill()
   }
-  ctx.fillStyle = FARBEN.geschoss
-  ctx.fill()
 }
 
 function zeichneKristalle(ctx: CanvasRenderingContext2D, s: Spielstand): void {
@@ -411,4 +447,189 @@ function zeichneZahlen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   }
 
   ctx.textBaseline = 'alphabetic'
+}
+
+/**
+ * Zonen - Sog und Truemmerfeld.
+ *
+ * Der Sog wird von innen nach aussen dunkler gezeichnet, damit er wie ein
+ * Loch wirkt und nicht wie eine Lampe: Ein helles Zentrum saehe aus, als
+ * strahle etwas ab, und genau das Gegenteil passiert hier.
+ */
+function zeichneZonen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.zonen.aktiv
+  if (liste.length === 0) return
+
+  for (let i = 0; i < liste.length; i++) {
+    const z = liste[i]
+    const rest = z.leben / z.maxLeben
+
+    if (z.art === 'sog') {
+      // Der Rand zuckt mit - ein starrer Kreis wirkt wie ein Aufkleber.
+      const zucken = 1 + Math.sin(performance.now() / 90) * 0.02
+      ctx.beginPath()
+      ctx.arc(z.x, z.y, z.radius * zucken, 0, Math.PI * 2)
+      ctx.fillStyle = mitAlpha(z.farbe, 0.1)
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = mitAlpha(z.farbe, 0.55)
+      ctx.stroke()
+
+      // Drei einlaufende Ringe zeigen die Richtung des Sogs.
+      for (let k = 1; k <= 3; k++) {
+        const anteil = ((performance.now() / 900 + k / 3) % 1)
+        ctx.beginPath()
+        ctx.arc(z.x, z.y, z.radius * (1 - anteil), 0, Math.PI * 2)
+        ctx.strokeStyle = mitAlpha(z.farbe, 0.28 * anteil)
+        ctx.lineWidth = 1.5
+        ctx.stroke()
+      }
+
+      // Schwarzer Kern.
+      ctx.beginPath()
+      ctx.arc(z.x, z.y, z.radius * 0.16, 0, Math.PI * 2)
+      ctx.fillStyle = mitAlpha(FARBEN.grund, 0.95)
+      ctx.fill()
+      continue
+    }
+
+    ctx.beginPath()
+    ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2)
+    ctx.fillStyle = mitAlpha(z.farbe, 0.12 * rest)
+    ctx.fill()
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = mitAlpha(z.farbe, 0.4 * rest)
+    ctx.stroke()
+  }
+}
+
+/**
+ * Bruchlinien auf angerissenen Gegnern.
+ *
+ * Das ist die Sichtbarkeit der Kernregel. Ohne sie platzen Gegner scheinbar
+ * grundlos, und niemand kommt darauf, dass es an der *Mischung* der Waffen
+ * liegt - die eine Entscheidung, um die sich das ganze Spiel dreht.
+ *
+ * Alles in einem Pfad: Bei hunderten angerissenen Gegnern waere ein Strich je
+ * Gegner der teuerste Teil des Bildes.
+ */
+function zeichneBruchlinien(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.gegner.aktiv
+  ctx.beginPath()
+  let gezeichnet = false
+
+  for (let i = 0; i < liste.length; i++) {
+    const g = liste[i]
+    if (g.risse <= 0) continue
+    gezeichnet = true
+
+    for (let k = 0; k < g.risse; k++) {
+      // Aus der ID abgeleitet statt gespeichert: Der Riss sitzt bei jedem
+      // Gegner woanders, bleibt aber ueber die Bilder hinweg an derselben
+      // Stelle - ohne ein zusaetzliches Feld an 1400 Objekten.
+      const winkel = ((g.id * 2.399 + k * 1.911) % Math.PI) - Math.PI / 2
+      // Kuerzer als der Radius: Ragen die Linien ueber die Form hinaus, sieht
+      // der Gegner aus, als traege er Stacheln. Ein Sprung liegt *im* Glas.
+      const laenge = g.radius * 0.82
+      const cx = Math.cos(winkel) * laenge
+      const cy = Math.sin(winkel) * laenge
+      // Leichter Knick in der Mitte - eine gerade Linie sieht aus wie ein
+      // Strich, eine geknickte wie ein Sprung im Glas.
+      const knickX = g.x + cy * 0.16
+      const knickY = g.y - cx * 0.16
+      ctx.moveTo(g.x - cx, g.y - cy)
+      ctx.lineTo(knickX, knickY)
+      ctx.lineTo(g.x + cx, g.y + cy)
+    }
+  }
+
+  if (!gezeichnet) return
+  ctx.lineWidth = 1.6
+  ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.8)
+  ctx.stroke()
+}
+
+/** Trabanten: kreisende Scherben, Position kommt aus dem Verhalten. */
+function zeichneTrabanten(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const sp = s.spieler
+
+  for (let i = 0; i < sp.waffen.length; i++) {
+    const w = sp.waffen[i]
+    if (w.def.verhalten !== 'trabant') continue
+
+    // Die Bahn andeuten, damit der Spieler die Reichweite einschaetzen kann.
+    ctx.beginPath()
+    ctx.arc(sp.x, sp.y, w.werte.extra, 0, Math.PI * 2)
+    ctx.strokeStyle = mitAlpha(w.def.farbe, 0.12)
+    ctx.lineWidth = 1
+    ctx.stroke()
+
+    const gesamt = trabantenAnzahl(w)
+    ctx.beginPath()
+    for (let k = 0; k < gesamt; k++) {
+      const punkt = trabantPunkt(w, k, sp.x, sp.y)
+      const r = w.werte.radius
+      ctx.moveTo(punkt.x, punkt.y - r)
+      ctx.lineTo(punkt.x + r, punkt.y)
+      ctx.lineTo(punkt.x, punkt.y + r)
+      ctx.lineTo(punkt.x - r, punkt.y)
+      ctx.closePath()
+    }
+    ctx.fillStyle = w.def.farbe
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = FARBEN.grund
+    ctx.stroke()
+  }
+}
+
+/** Blitzbahnen, Hiebboegen und Druckringe. */
+function zeichneEffekte(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.effekte.aktiv
+  if (liste.length === 0) return
+
+  for (let i = 0; i < liste.length; i++) {
+    const e = liste[i]
+    const rest = Math.max(0, e.leben / e.maxLeben)
+
+    if (e.art === 'strich') {
+      // Zweimal gezeichnet: breit und blass als Schein, schmal und weiss als
+      // Kern. Das ist der billigste Weg zu einem Strahl, der gleisst.
+      ctx.beginPath()
+      ctx.moveTo(e.x, e.y)
+      ctx.lineTo(e.x2, e.y2)
+      ctx.lineCap = 'round'
+      ctx.lineWidth = e.breite * 2.2 * rest
+      ctx.strokeStyle = mitAlpha(e.farbe, 0.35 * rest)
+      ctx.stroke()
+
+      ctx.lineWidth = Math.max(1, e.breite * 0.5) * rest
+      ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.9 * rest)
+      ctx.stroke()
+      ctx.lineCap = 'butt'
+      continue
+    }
+
+    if (e.art === 'bogen') {
+      ctx.beginPath()
+      ctx.arc(e.x, e.y, e.radius, e.winkel - e.spanne, e.winkel + e.spanne)
+      ctx.lineCap = 'round'
+      ctx.lineWidth = e.breite * 2.4 * rest
+      ctx.strokeStyle = mitAlpha(e.farbe, 0.5 * rest)
+      ctx.stroke()
+      ctx.lineWidth = e.breite * rest
+      ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.85 * rest)
+      ctx.stroke()
+      ctx.lineCap = 'butt'
+      continue
+    }
+
+    // Ring: waechst nach aussen und verblasst - eine Druckwelle.
+    const fortschritt = 1 - rest
+    ctx.beginPath()
+    ctx.arc(e.x, e.y, e.radius * (0.35 + 0.65 * fortschritt), 0, Math.PI * 2)
+    ctx.lineWidth = e.breite * rest
+    ctx.strokeStyle = mitAlpha(e.farbe, 0.75 * rest)
+    ctx.stroke()
+  }
 }

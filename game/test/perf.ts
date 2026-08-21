@@ -1,6 +1,7 @@
 import { TICK_DT } from '../src/core/loop'
 import { GEGNER_ARTEN } from '../src/game/enemies'
 import { legeGegner, MAX_GEGNER } from '../src/game/spawner'
+import { ruesteAus, WAFFEN, werteAuf } from '../src/game/weapons'
 import type { Befehle } from '../src/game/state'
 import { erzeugeSpielstand, starteLauf, tick } from '../src/game/state'
 
@@ -30,13 +31,20 @@ function messen(): void {
   starteLauf(s, 20260818)
 
   // Unsterblich: Gemessen werden soll die Last, nicht wie schnell der Spieler
-  // unter 2000 Gegnern stirbt.
+  // unter der vollen Gegnerzahl stirbt.
   s.spieler.maxHp = 1e9
   s.spieler.hp = 1e9
-  // Voll ausgebaute Waffe - das ist der teuerste Fall, nicht der schoenste.
-  s.spieler.zusatzProjektile = 3
-  s.spieler.zusatzDurchschlag = 3
-  s.spieler.abklingMult = 0.5
+
+  // Der Ernstfall: fuenf Waffen, jede auf halber Stufe, alle gleichzeitig am
+  // Feuern. Darunter sind Sternenschlucker und Prismastrahl, die grosse
+  // Flaechen abfragen, und die Splitterkaskade laeuft dauernd mit. Mit der
+  // Startwaffe allein zu messen waere eine Selbsttaeuschung.
+  s.spieler.waffen = WAFFEN.slice(0, 5).map((def, i) => {
+    const w = ruesteAus(def, i)
+    for (let k = 1; k < Math.ceil(def.maxStufe / 2); k++) werteAuf(w)
+    return w
+  })
+  s.spieler.abklingMult = 0.7
 
   const b: Befehle = { x: 1, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
   const zeiten = new Float64Array(TICKS)
