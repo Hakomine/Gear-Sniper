@@ -1,4 +1,5 @@
 import { TICK_DT } from '../src/core/loop'
+import { bossWelle, findeBoss, naechsteBossZeit } from '../src/game/bosse'
 import { GEGNER_ARTEN } from '../src/game/enemies'
 import { legeGegner, MAX_GEGNER } from '../src/game/spawner'
 import { ruesteAus, WAFFEN, werteAuf } from '../src/game/weapons'
@@ -48,8 +49,12 @@ function messen(): void {
 
   const b: Befehle = { x: 1, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
   const zeiten = new Float64Array(TICKS)
+  let feindSpitze = 0
 
   for (let i = 0; i < TICKS; i++) {
+    // Der Boss zuerst: `auffuellen` fuellt bis zum Deckel, und ein voller Pool
+    // liefert keinen Platz mehr fuer ihn.
+    bossHalten(s)
     auffuellen(s)
     const w = i * 0.02
     b.x = Math.cos(w)
@@ -58,6 +63,10 @@ function messen(): void {
     const t0 = performance.now()
     tick(s, b, TICK_DT)
     zeiten[i] = performance.now() - t0
+
+    // Spitzenwert, nicht Endstand: Bossgeschosse leben nur wenige Sekunden,
+    // und der letzte Tick trifft fast nie eine Salve.
+    if (s.feindSchuesse.anzahl > feindSpitze) feindSpitze = s.feindSchuesse.anzahl
   }
 
   const sortiert = Array.from(zeiten).sort((x, y) => x - y)
@@ -70,6 +79,8 @@ function messen(): void {
   console.log(`  Geschosse        ${s.geschosse.anzahl}`)
   console.log(`  Partikel         ${s.partikel.anzahl}`)
   console.log(`  Kills            ${s.statistik.kills}`)
+  console.log(`  Bosse erlegt     ${s.statistik.bosse}`)
+  console.log(`  Feindgeschosse   ${feindSpitze} (Spitze)`)
   console.log('')
   console.log(`  Mittel           ${(summe / TICKS).toFixed(3)} ms/Tick`)
   console.log(`  Median           ${p(0.5).toFixed(3)} ms/Tick`)
@@ -86,6 +97,27 @@ function messen(): void {
   } else {
     console.log(`  ✓ p95 innerhalb des Budgets`)
   }
+}
+
+/**
+ * Immer ein Boss auf dem Feld.
+ *
+ * Ein Boss kostet mehr als ein Gegner: Vorwarnungen legen Effekte an, Salven
+ * fuellen den Geschosspool des Feindes, und der Bruchruf setzt achtmal
+ * Gegner nach. Ohne ihn misst die Zahl den halben Ernstfall.
+ *
+ * Die Spielzeit wird fuer den Aufruf kurz vorgestellt und danach zurueckgesetzt
+ * - sonst schoebe die Messung selbst die Schwierigkeitskurve nach vorn und die
+ * Zahlen waeren mit frueheren Laeufen nicht mehr vergleichbar. Weil
+ * `bossWelle` bei jedem Auftritt weiterzaehlt, steht nach den ersten beiden
+ * dauerhaft der Zerbrecher mit allen vier Angriffen da: der teuerste Fall.
+ */
+function bossHalten(s: ReturnType<typeof erzeugeSpielstand>): void {
+  if (findeBoss(s) !== null) return
+  const echteZeit = s.zeit
+  s.zeit = naechsteBossZeit(s.bossNummer)
+  bossWelle(s)
+  s.zeit = echteZeit
 }
 
 /** Nachlegen, bis wieder die Zielzahl steht - gemessen wird der Dauerzustand. */

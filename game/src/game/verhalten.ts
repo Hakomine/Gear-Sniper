@@ -35,6 +35,18 @@ export type Verhalten = {
 /** Eigenes Array - siehe die Warnung zu verschachtelten Abfragen in `welt.ts`. */
 const treffer: Gegner[] = []
 
+/**
+ * Zweites Array fuer Verhalten, die *waehrend* des Durchlaufs eine neue
+ * Abfrage starten.
+ *
+ * Der Zerlegestrahl sammelt seine Treffer und laesst jeden einzeln
+ * detonieren - und `detoniere` fragt selbst den Umkreis ab. Mit nur einem
+ * Array uebermalt der erste Knall die Liste, ueber die gerade gelaufen wird,
+ * und der Rest des Strahls verpufft. Derselbe Fall wie in `state.ts`, nur eine
+ * Ebene tiefer.
+ */
+const treffer2: Gegner[] = []
+
 function schadenWurf(s: Spielstand, w: WaffenInstanz): { wert: number; krit: boolean } {
   const sp = s.spieler
   return berechneSchaden(w.werte.schaden, sp.schadenMult, sp.kritChance, sp.kritFaktor, s.rng)
@@ -411,6 +423,42 @@ function trabantenSchaden(s: Spielstand, w: WaffenInstanz): boolean {
   return true
 }
 
+/**
+ * Wen ein Strahl von `sp` in Richtung `winkel` trifft.
+ *
+ * Eine grosse Abfrage um die Mitte der Strecke statt vieler kleiner - der
+ * Strahl feuert selten genug, dass sich das lohnt.
+ */
+function strahlBahn(
+  s: Spielstand,
+  w: WaffenInstanz,
+  winkel: number,
+  aus: Gegner[],
+): { bx: number; by: number } {
+  const sp = s.spieler
+  const bx = sp.x + Math.cos(winkel) * w.werte.reichweite
+  const by = sp.y + Math.sin(winkel) * w.werte.reichweite
+  const mx = (sp.x + bx) / 2
+  const my = (sp.y + by) / 2
+
+  gegnerImUmkreis(s, mx, my, w.werte.reichweite / 2 + w.werte.extra + 24, treffer)
+  aus.length = 0
+  for (let k = 0; k < treffer.length; k++) {
+    const g = treffer[k]
+    if (abstandZurStrecke(g.x, g.y, sp.x, sp.y, bx, by) > w.werte.extra + g.radius) continue
+    aus.push(g)
+  }
+  return { bx, by }
+}
+
+function strahlEffekt(s: Spielstand, w: WaffenInstanz, bx: number, by: number): void {
+  const e = legeEffekt(s, 'strich', s.spieler.x, s.spieler.y, 0, w.werte.lebensdauer, w.def.farbe, w.werte.extra)
+  if (e !== null) {
+    e.x2 = bx
+    e.y2 = by
+  }
+}
+
 /** Sofort-Laser quer durch das Bild. */
 function strahl(s: Spielstand, w: WaffenInstanz): boolean {
   const sp = s.spieler
@@ -423,22 +471,13 @@ function strahl(s: Spielstand, w: WaffenInstanz): boolean {
 
   for (let i = 0; i < strahlen; i++) {
     const winkel = grund + (i / strahlen) * Math.PI * 2
-    const bx = sp.x + Math.cos(winkel) * w.werte.reichweite
-    const by = sp.y + Math.sin(winkel) * w.werte.reichweite
+    const bahn = strahlBahn(s, w, winkel, treffer2)
 
-    // Eine grosse Abfrage um die Mitte der Strecke statt vieler kleiner. Der
-    // Strahl feuert selten genug, dass sich das lohnt.
-    const mx = (sp.x + bx) / 2
-    const my = (sp.y + by) / 2
-    gegnerImUmkreis(s, mx, my, w.werte.reichweite / 2 + w.werte.extra + 24, treffer)
-
-    for (let k = 0; k < treffer.length; k++) {
-      const g = treffer[k]
-      if (abstandZurStrecke(g.x, g.y, sp.x, sp.y, bx, by) > w.werte.extra + g.radius) continue
+    for (let k = 0; k < treffer2.length; k++) {
       const wurf = schadenWurf(s, w)
       verletzeGegner(
         s,
-        g,
+        treffer2[k],
         wurf.wert,
         w.platz,
         wurf.krit,
@@ -446,12 +485,7 @@ function strahl(s: Spielstand, w: WaffenInstanz): boolean {
         Math.sin(winkel) * w.werte.rueckstoss,
       )
     }
-
-    const e = legeEffekt(s, 'strich', sp.x, sp.y, 0, w.werte.lebensdauer, w.def.farbe, w.werte.extra)
-    if (e !== null) {
-      e.x2 = bx
-      e.y2 = by
-    }
+    strahlEffekt(s, w, bahn.bx, bahn.by)
   }
 
   s.trauma = Math.min(1, s.trauma + 0.2)
@@ -483,6 +517,222 @@ function singularitaet(s: Spielstand, w: WaffenInstanz): boolean {
   return true
 }
 
+
+// ---------------------------------------------------------------------------
+// Fusionen
+// ---------------------------------------------------------------------------
+// Sechs Verhalten, die nur entstehen, wenn zwei ausgereizte Waffen
+// verschmelzen. Sie sind absichtlich nicht "dasselbe, aber staerker", sondern
+// nehmen von beiden Eltern die Eigenart mit - sonst waere eine Fusion nur eine
+// Zahlenerhoehung mit neuem Namen.
+
+/** Schwarzes Loch, das alles Gefangene unter Strom setzt. */
+function gewitterkern(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const vollendet = istVollendet(w.def, w.stufe)
+  const z = legeZone(
+    s,
+    'sog',
+    ziel.x,
+    ziel.y,
+    w.werte.extra * (vollendet ? 1.6 : 1),
+    w.werte.lebensdauer,
+    w.werte.schaden * sp.schadenMult,
+    w.platz,
+    w.def.farbe,
+  )
+  z.sogKraft = 520
+  z.gewitter = true
+  z.truemmer = vollendet
+
+  legeEffekt(s, 'ring', ziel.x, ziel.y, z.radius, 0.4, w.def.farbe, 3)
+  return true
+}
+
+/** Kreisende Klingen, die bei jeder vollen Umdrehung rundum schlagen. */
+function scherbenkranzDrehen(s: Spielstand, w: WaffenInstanz, dt: number): void {
+  const vorher = w.winkel
+  w.winkel += w.werte.tempo * dt
+
+  // Volle Umdrehung erkannt: Der Hieb kommt genau dann, wenn der Kranz
+  // durchgelaufen ist - dadurch hat er einen hoerbaren Takt statt zufaellig
+  // loszugehen.
+  const umlauf = Math.PI * 2
+  if (Math.floor(vorher / umlauf) === Math.floor(w.winkel / umlauf)) return
+
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.extra * 1.35, treffer2)
+  for (let i = 0; i < treffer2.length; i++) {
+    const g = treffer2[i]
+    const dx = g.x - sp.x
+    const dy = g.y - sp.y
+    const laenge = Math.hypot(dx, dy) || 1
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(
+      s,
+      g,
+      wurf.wert * 1.4,
+      w.platz,
+      wurf.krit,
+      (dx / laenge) * w.werte.rueckstoss,
+      (dy / laenge) * w.werte.rueckstoss,
+    )
+  }
+
+  const e = legeEffekt(s, 'bogen', sp.x, sp.y, w.werte.extra * 1.35, 0.22, w.def.farbe, 5)
+  if (e !== null) {
+    e.winkel = 0
+    e.spanne = Math.PI
+  }
+}
+
+/** Strahl, der an jedem getroffenen Gegner detoniert. */
+function zerlegestrahl(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const winkel = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
+  const bahn = strahlBahn(s, w, winkel, treffer2)
+
+  // Die Positionen zuerst festhalten: `detoniere` fragt selbst den Umkreis ab
+  // und wuerde die Trefferliste sonst unter den Fuessen wegziehen.
+  const punkte: number[] = []
+  for (let k = 0; k < treffer2.length; k++) {
+    punkte.push(treffer2[k].x, treffer2[k].y)
+  }
+
+  const wurf = schadenWurf(s, w)
+  for (let k = 0; k < punkte.length; k += 2) {
+    detoniere(s, punkte[k], punkte[k + 1], w.werte.extra * 3.2, wurf.wert, w.platz, w.def.farbe)
+  }
+
+  strahlEffekt(s, w, bahn.bx, bahn.by)
+  s.trauma = Math.min(1, s.trauma + 0.25)
+  return true
+}
+
+/** Zielsuchende Nadeln, die sich bei jedem Kill teilen. */
+function schwarmnadeln(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const grund = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
+  const anzahl = Math.max(1, w.werte.anzahl)
+
+  for (let i = 0; i < anzahl; i++) {
+    const versatz = anzahl === 1 ? 0 : (i - (anzahl - 1) / 2) * w.werte.streuung
+    const winkel = grund + versatz
+    const wurf = schadenWurf(s, w)
+
+    const p = nimmGeschoss(s)
+    p.x = sp.x
+    p.y = sp.y
+    p.vx = Math.cos(winkel) * w.werte.tempo
+    p.vy = Math.sin(winkel) * w.werte.tempo
+    p.schaden = wurf.wert
+    p.krit = wurf.krit
+    p.radius = w.werte.radius
+    p.durchschlag = w.werte.durchschlag
+    p.leben = w.werte.lebensdauer
+    p.rueckstoss = w.werte.rueckstoss
+    p.platz = w.platz
+    p.farbe = w.def.farbe
+    p.zielsuche = w.werte.extra
+    p.zielId = ziel.id
+    // Zwei Teilungen bei jedem Kill, vollendet drei. Die Kette endet von
+    // selbst, weil jede Nadel nur einen Teil der Lebensdauer erbt.
+    p.spaltet = istVollendet(w.def, w.stufe) ? 3 : 2
+  }
+  return true
+}
+
+/** Granate, die erst zusammenreisst und dann detoniert. */
+function kollaps(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const winkel = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
+  const wurf = schadenWurf(s, w)
+
+  const p = nimmGeschoss(s)
+  p.x = sp.x
+  p.y = sp.y
+  p.vx = Math.cos(winkel) * w.werte.tempo
+  p.vy = Math.sin(winkel) * w.werte.tempo
+  p.schaden = wurf.wert
+  p.krit = wurf.krit
+  p.radius = w.werte.radius
+  p.durchschlag = 0
+  p.leben = w.werte.lebensdauer
+  p.rueckstoss = w.werte.rueckstoss
+  p.platz = w.platz
+  p.farbe = w.def.farbe
+  p.explosionsRadius = w.werte.extra
+  p.kollaps = true
+  return true
+}
+
+/** Strahl, der sich an jedem Gegner bricht und weiterspringt. */
+function bogenlicht(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const winkel = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
+  const bahn = strahlBahn(s, w, winkel, treffer2)
+
+  // Erst alle Strahltreffer abarbeiten, dann die Spruenge: `naechstenSprung`
+  // benutzt `treffer` und wuerde eine laufende Liste ueberschreiben.
+  const getroffen: Gegner[] = []
+  for (let k = 0; k < treffer2.length; k++) getroffen.push(treffer2[k])
+
+  const vollendet = istVollendet(w.def, w.stufe)
+  const spruenge = vollendet ? 3 : 2
+
+  for (let k = 0; k < getroffen.length; k++) {
+    const g = getroffen[k]
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(
+      s,
+      g,
+      wurf.wert,
+      w.platz,
+      wurf.krit,
+      Math.cos(winkel) * w.werte.rueckstoss,
+      Math.sin(winkel) * w.werte.rueckstoss,
+    )
+
+    // Von jedem Strahltreffer springt das Licht weiter.
+    let vonX = g.x
+    let vonY = g.y
+    const bereits = [g.id]
+    for (let j = 0; j < spruenge; j++) {
+      const naechster = naechstenSprung(s, vonX, vonY, 190, bereits)
+      if (naechster === null) break
+      const sprungWurf = schadenWurf(s, w)
+      verletzeGegner(s, naechster, sprungWurf.wert * 0.6, w.platz, sprungWurf.krit, 0, 0)
+      const e = legeEffekt(s, 'strich', vonX, vonY, 0, 0.14, w.def.farbe, 2)
+      if (e !== null) {
+        e.x2 = naechster.x
+        e.y2 = naechster.y
+      }
+      bereits.push(naechster.id)
+      vonX = naechster.x
+      vonY = naechster.y
+    }
+  }
+
+  strahlEffekt(s, w, bahn.bx, bahn.by)
+  s.trauma = Math.min(1, s.trauma + 0.22)
+  return true
+}
+
 export const VERHALTEN: Record<VerhaltenId, Verhalten> = {
   gerade: { feuern: gerade },
   schwung: { feuern: schwung },
@@ -492,4 +742,11 @@ export const VERHALTEN: Record<VerhaltenId, Verhalten> = {
   trabant: { feuern: trabantenSchaden, dauernd: trabantenDrehen },
   strahl: { feuern: strahl },
   singularitaet: { feuern: singularitaet },
+
+  gewitterkern: { feuern: gewitterkern },
+  scherbenkranz: { feuern: trabantenSchaden, dauernd: scherbenkranzDrehen },
+  zerlegestrahl: { feuern: zerlegestrahl },
+  schwarmnadeln: { feuern: schwarmnadeln },
+  kollaps: { feuern: kollaps },
+  bogenlicht: { feuern: bogenlicht },
 }

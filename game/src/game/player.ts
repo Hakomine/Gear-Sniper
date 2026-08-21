@@ -30,6 +30,15 @@ export function erzeugeSpieler(): Spieler {
     magnetRadius: 95,
     kritChance: 0.05,
     kritFaktor: 2.1,
+    xpMult: 1,
+    maxWaffen: 5,
+    // Charakter-Mechaniken. Bei allen anderen bleiben sie auf null und kosten
+    // genau eine Abfrage pro Tick - siehe charaktere.ts.
+    schliffProNah: 0,
+    schliff: 0,
+    stillstand: 0,
+    stillstandSchwelle: 0,
+    dornen: 0,
   }
 }
 

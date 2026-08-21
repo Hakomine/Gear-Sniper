@@ -1,8 +1,10 @@
 import { FARBEN } from '../render/palette'
 import { legeZahl, zerspringen } from './effects'
 import {
+  BOSS_ZERSPLITTER_ANTEIL,
   KASKADE_MAX_TIEFE,
   rissBonus,
+  risseLoeschen,
   rissSetzen,
   ZERSPLITTER_ANTEIL,
   ZERSPLITTER_NACHBAR_ANTEIL,
@@ -44,6 +46,21 @@ const rohIds: number[] = []
  * Kettenreaktion durch die Menge.
  */
 export const SPLITTER_PLATZ = MAX_WAFFEN
+
+/**
+ * Der Platz des Geisterrisses (Charakter "Riss").
+ *
+ * Ein eigenes Bit, kein geteiltes: Waere er derselbe wie die Scherben, koennte
+ * eine Splitterwelle den Geisterriss "verbrauchen" und die Mechanik waere
+ * unberechenbar.
+ */
+export const GEIST_PLATZ = MAX_WAFFEN + 1
+
+/** Beruehrungsschaden des Kolosses. */
+export const DORNEN_PLATZ = MAX_WAFFEN + 2
+
+/** Wie viele Platznummern es insgesamt gibt - Laenge der Auswertungs-Arrays. */
+export const PLATZ_ANZAHL = MAX_WAFFEN + 3
 
 /**
  * Obergrenze fuer den aufgestauten Rueckstoss eines Gegners.
@@ -138,11 +155,25 @@ export function verletzeGegner(
   // den Bonus schon mitnehmen. Das macht den Moment spuerbar, in dem ein Bau
   // greift.
   rissSetzen(g, platz)
-  const schaden = Math.max(1, Math.floor(basisSchaden * rissBonus(g)))
+
+  // Charakter "Riss": Drei Sekunden ohne Treffer, und jeder Schlag setzt
+  // zusaetzlich einen Geisterriss - er zersplittert damit mit zwei Waffen
+  // statt drei. Sauberes Ausweichen wird zur Waffe.
+  const sp = s.spieler
+  if (sp.stillstandSchwelle > 0 && sp.stillstand >= sp.stillstandSchwelle) {
+    rissSetzen(g, GEIST_PLATZ)
+  }
+
+  // Schleiferin: Der aufgestapelte Schliff wirkt auf alles, was sie austeilt.
+  const schliff = sp.schliffProNah > 0 ? 1 + sp.schliff * 0.04 : 1
+  const schaden = Math.max(1, Math.floor(basisSchaden * rissBonus(g) * schliff))
 
   g.hp -= schaden
   g.blitz = 0.09
   s.statistik.schaden += schaden
+  if (platz >= 0 && platz < s.statistik.schadenProPlatz.length) {
+    s.statistik.schadenProPlatz[platz] += schaden
+  }
 
   g.stossX += stossX
   g.stossY += stossY
@@ -192,11 +223,24 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
     const tiefe = warteTiefe[i]
     if (g.tot) continue
 
-    const wucht = g.maxHp * ZERSPLITTER_ANTEIL
+    const istBoss = g.bossZustand !== null
+    const wucht = g.maxHp * (istBoss ? BOSS_ZERSPLITTER_ANTEIL : ZERSPLITTER_ANTEIL)
     g.hp -= wucht
     s.statistik.schaden += wucht
+    // Auf das Scherbenkonto, nicht auf das der ausloesenden Waffe: Die
+    // Auswertung am Ende soll zeigen, wie viel die eigene Regel beitraegt -
+    // und ohne diese Zeile fehlte ausgerechnet der groesste Brocken davon.
+    s.statistik.schadenProPlatz[SPLITTER_PLATZ] += wucht
     s.statistik.zersplittert++
     if (g.hp <= 0) g.tot = true
+
+    // Nur der Boss darf erneut zerspringen - und auch er erst, wenn drei
+    // verschiedene Waffen ihn wieder aufgerissen haben. Bei allen anderen
+    // bleibt das Kennzeichen stehen, bis der Pool sie neu vergibt.
+    if (istBoss) {
+      g.zersplittert = false
+      risseLoeschen(g)
+    }
 
     zerspringen(s, g.x, g.y, g.radius * 1.6, FARBEN.treffer)
     legeEffekt(s, 'ring', g.x, g.y, ZERSPLITTER_RADIUS, 0.3, FARBEN.treffer, 3)
@@ -238,7 +282,10 @@ export function nimmGeschoss(s: Spielstand): Geschoss {
   p.zielsuche = 0
   p.zielId = -1
   p.explosionsRadius = 0
+  p.nachwurf = 0
   p.prallt = false
+  p.spaltet = 0
+  p.kollaps = false
   return p
 }
 
@@ -266,6 +313,10 @@ export function legeZone(
   z.farbe = farbe
   z.sogKraft = 0
   z.tickRest = 0
+  z.truemmer = false
+  z.feindlich = false
+  z.wachsend = false
+  z.gewitter = false
   return z
 }
 
@@ -296,5 +347,6 @@ export function legeEffekt(
   e.maxLeben = leben
   e.farbe = farbe
   e.breite = breite
+  e.warnung = false
   return e
 }

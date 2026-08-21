@@ -1,5 +1,4 @@
-import { GEGNER_ARTEN } from '../game/enemies'
-import type { Spielstand } from '../game/state'
+import type { Effekt, Spielstand } from '../game/state'
 import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
 import { zeichneLevelup, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
@@ -108,9 +107,11 @@ export class Zeichner {
     zeichneZonen(ctx, s)
     zeichneKristalle(ctx, s)
     zeichneGegner(ctx, s)
+    zeichneBosse(ctx, s)
     zeichneBruchlinien(ctx, s)
     zeichneTrabanten(ctx, s)
     zeichneGeschosse(ctx, s)
+    zeichneFeindSchuesse(ctx, s)
     zeichneEffekte(ctx, s)
     zeichnePartikel(ctx, s)
     zeichneSpieler(ctx, s)
@@ -124,8 +125,10 @@ export class Zeichner {
       ctx.fillRect(0, 0, VIRT_B, VIRT_H)
     }
 
-    if (s.phase !== 'titel') zeichneHud(ctx, s, VIRT_B, VIRT_H)
-    if (s.phase === 'titel') zeichneTitel(ctx, VIRT_B, VIRT_H)
+    // Im Tod kein HUD: Uhr, Lebensbalken und Waffenleiste stehen sonst quer
+    // durch die Auswertung, und der Lauf ist ohnehin vorbei.
+    if (s.phase !== 'titel' && s.phase !== 'tot') zeichneHud(ctx, s, VIRT_B, VIRT_H)
+    if (s.phase === 'titel') zeichneTitel(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'levelup') zeichneLevelup(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'tot') zeichneTod(ctx, s, VIRT_B, VIRT_H)
   }
@@ -198,15 +201,17 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   const px = s.spieler.x
   const py = s.spieler.y
 
-  for (const art of GEGNER_ARTEN) {
-    const liste = gegnerEimer.get(art.id)
-    if (liste === undefined || liste.length === 0) continue
+  // Ueber die Eimer laufen, nicht ueber die feste Artenliste: Bosse bringen
+  // eigene Arten mit, die dort nicht stehen - mit der alten Schleife waeren
+  // sie unsichtbar gewesen.
+  for (const [, liste] of gegnerEimer) {
+    if (liste.length === 0) continue
 
     ctx.beginPath()
     for (let k = 0; k < liste.length; k++) {
       formPfad(ctx, gegner[liste[k]], px, py, drehung)
     }
-    ctx.fillStyle = art.farbe
+    ctx.fillStyle = gegner[liste[0]].art.farbe
     ctx.fill()
     trennKante(ctx)
   }
@@ -592,6 +597,11 @@ function zeichneEffekte(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     const e = liste[i]
     const rest = Math.max(0, e.leben / e.maxLeben)
 
+    if (e.warnung) {
+      zeichneWarnung(ctx, e, rest)
+      continue
+    }
+
     if (e.art === 'strich') {
       // Zweimal gezeichnet: breit und blass als Schein, schmal und weiss als
       // Kern. Das ist der billigste Weg zu einem Strahl, der gleisst.
@@ -632,4 +642,92 @@ function zeichneEffekte(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.strokeStyle = mitAlpha(e.farbe, 0.75 * rest)
     ctx.stroke()
   }
+}
+
+/**
+ * Vorwarnung eines Bossangriffs.
+ *
+ * Gestrichelt, rot und pulsierend - und **auf voller Groesse**, nicht
+ * wachsend. Eine Warnung muss zeigen, wo gleich etwas passiert, nicht wo es
+ * gerade anfaengt. Sie wird zum Ende hin kraeftiger statt schwaecher: Der
+ * letzte Moment vor dem Einschlag ist der, in dem man reagiert.
+ */
+function zeichneWarnung(ctx: CanvasRenderingContext2D, e: Effekt, rest: number): void {
+  const naehe = 1 - rest
+  const puls = 0.45 + 0.55 * Math.abs(Math.sin(performance.now() / 90))
+  ctx.save()
+  ctx.setLineDash([10, 8])
+  ctx.lineWidth = e.breite * (1 + naehe)
+  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, (0.35 + 0.5 * naehe) * puls)
+
+  if (e.art === 'strich') {
+    ctx.beginPath()
+    ctx.moveTo(e.x, e.y)
+    ctx.lineTo(e.x2, e.y2)
+    ctx.stroke()
+  } else {
+    ctx.beginPath()
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
+ * Bosse zusaetzlich hervorheben.
+ *
+ * Ein Boss ist ein Sechseck wie ein Elite-Gegner, nur groesser - das allein
+ * reicht im Getuemmel nicht. Ein pulsierender Aussenring und ein Kern in der
+ * Phasenfarbe machen ihn auf einen Blick auffindbar, ohne die Formsprache zu
+ * verwaessern.
+ */
+function zeichneBosse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.gegner.aktiv
+
+  for (let i = 0; i < liste.length; i++) {
+    const g = liste[i]
+    const z = g.bossZustand
+    if (z === null) continue
+
+    const puls = 0.5 + 0.5 * Math.sin(performance.now() / 220)
+    ctx.beginPath()
+    ctx.arc(g.x, g.y, g.radius * (1.25 + puls * 0.08), 0, Math.PI * 2)
+    ctx.strokeStyle = mitAlpha(z.art.farbe, 0.35 + puls * 0.3)
+    ctx.lineWidth = 3
+    ctx.stroke()
+
+    // Kern: In Phase zwei weiss glühend statt in Bossfarbe - man soll den
+    // Wechsel sehen, nicht nur merken.
+    ctx.beginPath()
+    ctx.arc(g.x, g.y, g.radius * 0.3, 0, Math.PI * 2)
+    ctx.fillStyle = z.phase === 1 ? mitAlpha(FARBEN.grund, 0.7) : mitAlpha(FARBEN.treffer, 0.85)
+    ctx.fill()
+  }
+}
+
+/** Bossgeschosse - rot, mit hellem Kern, damit sie nie mit eigenen verwechselt werden. */
+function zeichneFeindSchuesse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.feindSchuesse.aktiv
+  if (liste.length === 0) return
+
+  ctx.beginPath()
+  for (let i = 0; i < liste.length; i++) {
+    const p = liste[i]
+    ctx.moveTo(p.x + p.radius * 2.2, p.y)
+    ctx.arc(p.x, p.y, p.radius * 2.2, 0, Math.PI * 2)
+  }
+  ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.22)
+  ctx.fill()
+
+  ctx.beginPath()
+  for (let i = 0; i < liste.length; i++) {
+    const p = liste[i]
+    ctx.moveTo(p.x + p.radius, p.y)
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+  }
+  ctx.fillStyle = FARBEN.gefahr
+  ctx.fill()
+  ctx.lineWidth = 2
+  ctx.strokeStyle = FARBEN.treffer
+  ctx.stroke()
 }

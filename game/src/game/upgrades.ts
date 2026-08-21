@@ -1,9 +1,10 @@
+import { FUSIONEN, istFusion } from './fusionen'
 import { heileSpieler } from './player'
 import type { Spieler, Spielstand } from './state'
 import type { Seltenheit, WaffenDef } from './weapons'
 import {
+  freierPlatz,
   istVollendet,
-  MAX_WAFFEN,
   ruesteAus,
   SELTENHEIT_GEWICHT,
   stufenText,
@@ -26,7 +27,7 @@ import {
  * passiven Werte das sind, was sie sein sollen: Kitt fuer einen Bau, nicht
  * der Bau.
  */
-export type AufwertungArt = 'waffe' | 'stufe' | 'passiv'
+export type AufwertungArt = 'waffe' | 'stufe' | 'passiv' | 'fusion'
 
 export type Aufwertung = {
   readonly id: string
@@ -154,6 +155,16 @@ export const PASSIVE: readonly PassivDef[] = [
 const GEWICHT_STUFE = 75
 
 /**
+ * Gewicht einer moeglichen Verschmelzung.
+ *
+ * Hoch genug, dass man sie sieht, sobald sie moeglich ist - eine Fusion, auf
+ * die man zwanzig Stufen wartet, ist keine Belohnung, sondern Zufall. Sie
+ * kommt ohnehin nur zustande, wenn *zwei* Waffen ausgereizt sind, und das ist
+ * die eigentliche Huerde.
+ */
+const GEWICHT_FUSION = 90
+
+/**
  * Passive sind absichtlich im Hintertreffen. Ganz weglassen waere falsch -
  * ohne sie liesse sich ein schwacher Bau nicht mehr auffangen, und es gaebe
  * keine Heilung.
@@ -162,33 +173,89 @@ const GEWICHT_PASSIV_ANTEIL = 0.35
 
 type Kandidat = { gewicht: number; bauen: () => Aufwertung }
 
+/**
+ * Wie stark die Bossbelohnung die Seltenheiten verschiebt.
+ *
+ * Kein hartes Filtern auf "nur legendaer": Waere gerade nichts Legendaeres
+ * verfuegbar, staende der Spieler vor einer leeren Auswahl. Ein kraeftiger
+ * Faktor macht den guten Fund sehr wahrscheinlich und laesst die Ziehung
+ * trotzdem immer etwas ausspucken.
+ */
+const BOSS_BONUS: Record<string, number> = {
+  gewoehnlich: 1,
+  selten: 3,
+  episch: 9,
+  legendaer: 16,
+}
+
 function waffenKandidaten(s: Spielstand): Kandidat[] {
   const sp = s.spieler
   const liste: Kandidat[] = []
   const getragen = new Set(sp.waffen.map((w) => w.def.id))
+  const bonus = (seltenheit: Seltenheit): number => (s.bossKarte ? BOSS_BONUS[seltenheit] : 1)
 
   // Topf 1: neue Waffen - nur solange ein Platz frei ist.
-  if (sp.waffen.length < MAX_WAFFEN) {
+  if (sp.waffen.length < sp.maxWaffen) {
     for (const def of WAFFEN) {
       if (getragen.has(def.id)) continue
+      if (istFusion(def.id)) continue
       liste.push({
-        gewicht: SELTENHEIT_GEWICHT[def.seltenheit],
+        gewicht: SELTENHEIT_GEWICHT[def.seltenheit] * bonus(def.seltenheit),
         bauen: () => neueWaffe(def),
       })
     }
   }
 
-  // Topf 2: getragene Waffen aufwerten.
+  // Topf 2: Verschmelzungen - nur wenn *beide* Eltern ausgereizt sind.
+  for (const fusion of FUSIONEN) {
+    // Wer die Eltern spaeter neu zieht und wieder ausreizt, darf dieselbe
+    // Fusion nicht ein zweites Mal bekommen - gemessen stand danach
+    // "Schwarmnadeln 4" *und* "Schwarmnadeln 1" im Guertel. Zwei Kopien
+    // derselben Waffe sind kein Bau, sondern ein Anzeigefehler mit Wirkung.
+    if (getragen.has(fusion.def.id)) continue
+    const [aId, bId] = fusion.aus
+    const a = sp.waffen.find((w) => w.def.id === aId)
+    const b = sp.waffen.find((w) => w.def.id === bId)
+    if (a === undefined || b === undefined) continue
+    if (!istVollendet(a.def, a.stufe) || !istVollendet(b.def, b.stufe)) continue
+    liste.push({ gewicht: GEWICHT_FUSION, bauen: () => fusionsKarte(fusion) })
+  }
+
+  // Topf 3: getragene Waffen aufwerten.
   for (const w of sp.waffen) {
     if (istVollendet(w.def, w.stufe)) continue
     const stufe = w.stufe
     liste.push({
-      gewicht: GEWICHT_STUFE,
+      gewicht: GEWICHT_STUFE * bonus(w.def.seltenheit),
       bauen: () => waffenStufe(w.def, stufe),
     })
   }
 
   return liste
+}
+
+function fusionsKarte(fusion: (typeof FUSIONEN)[number]): Aufwertung {
+  const def = fusion.def
+  return {
+    id: `fusion:${def.id}`,
+    art: 'fusion',
+    name: def.name,
+    beschreibung: def.beschreibung,
+    seltenheit: 'fusion',
+    farbe: def.farbe,
+    anwenden: (s) => {
+      const [aId, bId] = fusion.aus
+      // Beide Eltern raus, *dann* den freien Platz suchen: Die neue Waffe soll
+      // den niedrigeren der beiden frei gewordenen Plaetze bekommen, damit der
+      // Guertel nicht auseinanderfaellt.
+      s.spieler.waffen = s.spieler.waffen.filter((w) => w.def.id !== aId && w.def.id !== bId)
+      const platz = freierPlatz(s.spieler.waffen, s.spieler.maxWaffen)
+      if (platz < 0) return
+      s.spieler.waffen.push(ruesteAus(def, platz))
+      s.statistik.platzName[platz] = def.name
+      s.statistik.platzFarbe[platz] = def.farbe
+    },
+  }
 }
 
 function neueWaffe(def: WaffenDef): Aufwertung {
@@ -200,11 +267,14 @@ function neueWaffe(def: WaffenDef): Aufwertung {
     seltenheit: def.seltenheit,
     farbe: def.farbe,
     anwenden: (s) => {
-      // Der Platz ist der Index im Guertel - und zugleich das Bit, unter dem
-      // diese Waffe ihre Risse setzt. Waffen werden nie entfernt, deshalb ist
-      // die Laenge der richtige Wert.
-      if (s.spieler.waffen.length >= MAX_WAFFEN) return
-      s.spieler.waffen.push(ruesteAus(def, s.spieler.waffen.length))
+      // Kleinster freier Platz, nicht die Array-Laenge: Nach einer Fusion sind
+      // Luecken im Guertel, und die Laenge wuerde ein bereits belegtes
+      // Riss-Bit noch einmal vergeben.
+      const platz = freierPlatz(s.spieler.waffen, s.spieler.maxWaffen)
+      if (platz < 0) return
+      s.spieler.waffen.push(ruesteAus(def, platz))
+      s.statistik.platzName[platz] = def.name
+      s.statistik.platzFarbe[platz] = def.farbe
     },
   }
 }
@@ -237,7 +307,7 @@ function passivKandidaten(s: Spielstand): Kandidat[] {
     if ((s.stufen.get(def.id) ?? 0) >= def.maxStufe) continue
     if (def.verfuegbar && !def.verfuegbar(sp)) continue
     liste.push({
-      gewicht: SELTENHEIT_GEWICHT[def.seltenheit] * GEWICHT_PASSIV_ANTEIL,
+      gewicht: SELTENHEIT_GEWICHT[def.seltenheit] * GEWICHT_PASSIV_ANTEIL * (s.bossKarte ? 0.15 : 1),
       bauen: () => ({
         id: `passiv:${def.id}`,
         art: 'passiv' as const,

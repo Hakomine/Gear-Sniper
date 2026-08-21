@@ -20,7 +20,17 @@ export const TEXTE = {
   kartenStufe: 'Stufe',
 
   tot: 'ZERBROCHEN',
-  totHinweis: 'LEERTASTE für einen neuen Lauf',
+  totHinweis: 'LEERTASTE zurück zur Auswahl',
+  punkte: 'PUNKTE',
+  bestwert: 'Bester Lauf',
+  schadensAnteil: 'Woran sie gestorben sind',
+  freigeschaltet: 'FREIGESCHALTET',
+
+  charakterHinweis: 'A / D wählt · LEERTASTE startet',
+  vorteil: 'Dafür',
+  nachteil: 'Dagegen',
+  gesperrt: 'GESPERRT',
+  punkteFaktor: 'Punkte-Faktor',
 
   hudLeben: 'LEBEN',
   hudStufe: 'STUFE',

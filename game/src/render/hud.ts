@@ -1,6 +1,8 @@
 import type { Spielstand } from '../game/state'
+import { findeBoss } from '../game/bosse'
 import { istVollendet } from '../game/weapons'
 import { TEXTE, zahlText, zeitText } from '../ui/strings'
+import { schraegBalken } from './glas'
 import { FARBEN, mitAlpha, SCHRIFT, SELTENHEIT_FARBE } from './palette'
 
 /**
@@ -95,14 +97,25 @@ export function zeichneHud(
   const by = hoehe - 46
   const lebenAnteil = Math.max(0, sp.hp / sp.maxHp)
 
+  const schraege = bh * 0.7
+
+  schraegBalken(ctx, bx - 2, by - 2, bw + 4, bh + 4, schraege)
   ctx.fillStyle = mitAlpha('#000000', 0.55)
-  ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4)
+  ctx.fill()
+  schraegBalken(ctx, bx, by, bw, bh, schraege)
   ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.22)
-  ctx.fillRect(bx, by, bw, bh)
+  ctx.fill()
+
+  // Die Fuellung wird am Balken *abgeschnitten* statt selbst schraeg gerechnet.
+  // Sonst muesste jede Fuellbreite ihre eigene Schraege bekommen, und bei
+  // wenig Leben liefe sie in sich zusammen.
+  ctx.save()
+  ctx.clip()
   // Faerbt sich mit sinkendem Leben von Mint nach Rot - man soll es sehen,
   // ohne die Zahl zu lesen.
   ctx.fillStyle = lebenAnteil > 0.34 ? FARBEN.heilung : FARBEN.gefahr
   ctx.fillRect(bx, by, bw * lebenAnteil, bh)
+  ctx.restore()
 
   ctx.font = `600 14px ${SCHRIFT.mono}`
   ctx.textAlign = 'center'
@@ -111,6 +124,7 @@ export function zeichneHud(
   ctx.fillText(`${Math.ceil(sp.hp)} / ${Math.ceil(sp.maxHp)}`, breite / 2, by + bh / 2 + 1)
 
   zeichneWaffenLeiste(ctx, s, hoehe)
+  zeichneBossLeiste(ctx, s, breite)
 
   // --- Warnschleier bei wenig Leben ----------------------------------------
   if (lebenAnteil < 0.34) {
@@ -206,5 +220,51 @@ function zeichneWaffenLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, hoehe
     ctx.fillText(voll ? 'MAX' : `${w.stufe}`, mx, y + kasten - 8)
   }
 
+  ctx.textBaseline = 'alphabetic'
+}
+
+/**
+ * Bossleiste mit Phasenmarke.
+ *
+ * Der Strich bei der Phasenschwelle ist der eigentliche Punkt: Er sagt dem
+ * Spieler vorher, wann der Kampf sich aendert - statt ihn davon ueberraschen
+ * zu lassen. Ein Boss soll schwer sein, nicht heimtueckisch.
+ */
+function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite: number): void {
+  const boss = findeBoss(s)
+  if (boss === null || boss.bossZustand === null) return
+
+  const z = boss.bossZustand
+  const bw = 640
+  const bh = 14
+  const bx = (breite - bw) / 2
+  const by = 78
+  const anteil = Math.max(0, boss.hp / boss.maxHp)
+
+  const schraege = bh * 0.9
+
+  schraegBalken(ctx, bx - 3, by - 3, bw + 6, bh + 6, schraege)
+  ctx.fillStyle = mitAlpha('#000000', 0.6)
+  ctx.fill()
+  schraegBalken(ctx, bx, by, bw, bh, schraege)
+  ctx.fillStyle = mitAlpha(z.art.farbe, 0.2)
+  ctx.fill()
+
+  ctx.save()
+  ctx.clip()
+  ctx.fillStyle = z.art.farbe
+  ctx.fillRect(bx, by, bw * anteil, bh)
+  ctx.restore()
+
+  // Phasenmarke.
+  const markeX = bx + bw * z.art.phaseSchwelle
+  ctx.fillStyle = z.phase === 1 ? FARBEN.treffer : mitAlpha(FARBEN.treffer, 0.3)
+  ctx.fillRect(markeX - 1, by - 4, 2, bh + 8)
+
+  ctx.font = `700 15px ${SCHRIFT.mono}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillStyle = FARBEN.text
+  ctx.fillText(z.phase === 1 ? z.art.name : `${z.art.name} — PHASE 2`, breite / 2, by - 8)
   ctx.textBaseline = 'alphabetic'
 }

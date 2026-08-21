@@ -37,6 +37,21 @@ export const RISS_BONUS = 0.3
  */
 export const ZERSPLITTER_ANTEIL = 0.6
 
+/**
+ * Was eine Zersplitterung an einem Boss abraeumt.
+ *
+ * Deutlich weniger - und dafuer beliebig oft. Gemessen mit den vollen 60
+ * Prozent fiel jeder Boss in ungefaehr zwoelf Sekunden, weil ein einziger
+ * Splitter mehr als die Haelfte seiner Leiste nahm und die zweite Phase
+ * praktisch uebersprungen wurde. Ein Boss soll die Kernregel *belohnen*, nicht
+ * an ihr zerplatzen.
+ *
+ * Der Boss darf dafuer als Einziger mehrfach zerspringen: Die Risse werden
+ * danach geloescht und muessen komplett neu gesetzt werden. Damit wird der
+ * gemischte Bau ueber den ganzen Kampf hinweg belohnt statt einmal am Anfang.
+ */
+export const BOSS_ZERSPLITTER_ANTEIL = 0.15
+
 /** Wie weit die Scherben fliegen. */
 export const ZERSPLITTER_RADIUS = 88
 

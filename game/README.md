@@ -7,6 +7,9 @@ Man bewegt sich, geschossen wird von allein, Gegner kommen in Wellen,
 XP-Kristalle bringen Aufwertungen. Der Reiz entsteht aus der *Kombination*
 mehrerer Waffen, nicht daraus, dass eine Zahl steigt.
 
+Jeder Lauf startet bei null — es gibt keine dauerhaften Aufwertungen. Was man
+freischaltet, sind **Charaktere**: andere Spielweisen, keine höheren Zahlen.
+
 Keine Laufzeit-Abhängigkeiten: TypeScript, Canvas 2D, sonst nichts.
 
 ## Losspielen
@@ -16,6 +19,7 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+Auf dem Titelbild wählt man mit A/D den Charakter und startet mit Leertaste.
 WASD oder Pfeiltasten bewegen, Gamepad geht auch. Beim Levelup wählt man mit
 A/D und bestätigt mit Leertaste — oder drückt gleich 1, 2 oder 3.
 
@@ -65,11 +69,101 @@ aber deutlich seltener. Sie sind der Kitt für einen Bau, nie der Bau.
 **Eine Karte betrifft immer eine Waffe**, solange überhaupt eine möglich ist.
 Ein reiner Statistik-Bildschirm soll gar nicht erst vorkommen.
 
+### Verschmelzungen
+
+Stehen **beide** Ausgangswaffen auf Maxstufe, kann eine Fusionskarte kommen.
+Sie nimmt beide weg und setzt eine neue an ihre Stelle — ein Platz wird frei.
+
+| Fusion | Aus | Was sie tut |
+|---|---|---|
+| **Gewitterkern** | Sternenschlucker + Kettenblitz | Loch, das alles Gefangene unter Strom setzt |
+| **Scherbenkranz** | Klinge + Trabanten | Klingen kreisen, jede Umdrehung schlägt rundum |
+| **Zerlegestrahl** | Prismastrahl + Bazooka | Strahl, der an jedem Getroffenen detoniert |
+| **Schwarmnadeln** | Kurzbogen + Splitterwerfer | Nadeln, die sich bei jedem Kill teilen |
+| **Kollaps** | Bazooka + Sternenschlucker | Granate, die erst zusammenzieht, dann detoniert |
+| **Bogenlicht** | Prismastrahl + Kettenblitz | Strahl, der sich bricht und weiterspringt |
+
+Vier Stufen mit kräftigen Schritten und eine eigene Vollendung — damit gibt es
+auch bei Spielerstufe 40 noch etwas zu ziehen. Genau da war der Lauf vorher zu
+Ende, was das Entscheiden angeht. Fusionen lassen sich nicht weiter verschmelzen
+und kommen kein zweites Mal, wenn das Ergebnis schon im Gürtel liegt.
+
+Kurzfristig kostet eine Fusion **einen Riss** — zwei Waffen werden zu einer. Der
+frei gewordene Platz nimmt dafür etwas Neues auf. Eine Abwägung, kein Geschenk.
+
+## Bosse
+
+Alle 90 Sekunden, ab 1:30, mitten im Getümmel — nicht in einer leeren Arena.
+
+Bosse laufen im **normalen Gegner-Pool** mit und sind damit rissbar und
+zersplitterbar wie alles andere. Auch der dickste Gegner im Spiel fällt
+schneller, wenn drei verschiedene Waffen ihn aufreißen: bessere Werbung für die
+Kernregel gibt es nicht.
+
+Vier Angriffe, **jeder mit Vorwarnung** — Speichenfeuer, Sturmangriff,
+Schockringe, Bruchruf. Ein Boss ohne Telegraf ist nicht schwer, sondern unfair;
+man verliert, ohne zu verstehen warum.
+
+Drei Arten, und **Phase zwei ändert das Muster, nicht die Zahlen**: Der Wächter
+feuert seine Speichen im Gegenlauf, sodass die Lücken wandern. Der Kolossus
+wechselt das Angriffsbild. Der Zerbrecher hat alle vier.
+
+Wer einen Boss legt, bekommt sofort eine Karte mit deutlich besseren
+Seltenheiten — zusätzlich zum normalen Aufstieg.
+
+## Charaktere statt dauerhafter Aufwertungen
+
+Jeder Lauf startet bei null. **Es gibt keine dauerhaften Aufwertungen**, und das
+ist Absicht: Eine Bestenliste, in der man sich Werte erspielen kann, misst nur
+noch, wer am längsten gespielt hat.
+
+Freigeschaltet wird stattdessen der **Zugang zu einem anderen Spielstil**.
+Charaktere sind Seitwärtsbewegungen, keine Stufenleiter — jeder hat einen echten
+Vorteil *und* einen echten Nachteil.
+
+| Charakter | Dafür | Dagegen | Freigeschaltet durch |
+|---|---|---|---|
+| **Splitter** | — | — | von Anfang an |
+| **Schleiferin** | startet mit der Klinge, Nahkills stapeln Schaden | −25 Leben | 500 Gegner in einem Lauf |
+| **Sammler** | doppelter Einzug, +60 % Erfahrung | −30 % Schaden | Stufe 25 in einem Lauf |
+| **Riss** | 3 s ohne Treffer: zersplittert mit *zwei* Waffen | nur 60 Leben | 250 Gegner zersplittern |
+| **Koloss** | 220 Leben, verletzt bei Berührung | −25 % Tempo, 4 Plätze | 5 Minuten überleben |
+| **Prismatikerin** | startet mit einer Legendären auf Stufe 3 | nur 3 Plätze | eine Waffe vollenden |
+
+Der **Punkte-Faktor** hält die schwereren konkurrenzfähig:
+
+```
+Punkte = Sekunden × 10 + Kills + Stufe × 50 + Zersplittert × 2 + Bosse × 500
+       × Charakter-Faktor
+```
+
+Gespeichert wird über `localStorage` genau zweierlei: welche Charaktere offen
+sind und der beste Punktestand. Keine Werte, keine Rechenkraft, nichts, was
+einen späteren Lauf leichter macht. Ein Test hält das fest, weil diese Regel
+beim Balancing als Erstes aufweicht.
+
+Am Ende zeigt ein Balkendiagramm, **woran die Gegner gestorben sind** — Waffe
+für Waffe, mit einem eigenen Balken für die Scherben. Man soll sehen, wie viel
+die Kernregel wirklich beiträgt.
+
+## Die Oberfläche aus Glas
+
+Das Spiel heißt Scherbenfeld, die Gegner sind Glas, die Kernregel heißt Risse —
+dann soll die Oberfläche auch aus Glas sein und nicht aus abgerundeten
+Rechtecken. `render/glas.ts` liefert vier Werkzeuge, alles Canvas-Pfade:
+kantige Scherbenplatten mit abgeschlagener Ecke, Bruchlinien, angeschrägte
+Balken und einen Sprung über den ganzen Bildschirm.
+
+Angewendet auf die Levelup-Karten (jede um ein bis zwei Grad anders geneigt,
+die Seltenheitsfarbe läuft **in den Bruchlinien** statt in einem gleichmäßigen
+Rahmen), auf Lebens- und Bossleiste, auf den Titel (von einem Sprung geteilt)
+und auf den Todesbildschirm, der von der Stelle des Todes aus zerspringt.
+
 ## Nachprüfen
 
 ```bash
 npm run check      # TypeScript
-npm run test       # 67 Tests: Waffen, Karten, Risse, Determinismus
+npm run test       # 102 Tests: Waffen, Karten, Risse, Bosse, Charaktere, Determinismus
 npm run perf       # Simulation ohne Zeichnen, misst ms pro Tick
 npm run smoke      # startet das Spiel im Browser, legt Screenshots ab
 ```
@@ -129,6 +223,16 @@ einen eigenen Test. Das bringt reproduzierbare Fehler, deterministische Tests
 und einen „Täglichen Lauf" als späteres Wiederkehr-Feature (`tagesSaat()` liegt
 bereit).
 
+### Fünf Plätze, acht Bits
+
+`platz` ist zugleich der Index im Gürtel **und** das Bit für die Risse. Beim
+Verschmelzen fallen zwei Einträge weg und einer kommt hinzu — würde der Platz
+aus der Array-Länge kommen, bekämen danach zwei Waffen dasselbe Bit, und die
+Kernregel wäre im Spiel unsichtbar ausgehebelt. Deshalb: **kleinster freier
+Index**, und er bleibt an der Waffe kleben. Drei reservierte Plätze dahinter
+gehören den Scherben, dem Geisterriss und den Dornen des Kolosses — daher acht
+Bits bei fünf Waffen.
+
 ## Was gemessen ist
 
 `npm run perf` fährt die volle Simulation bei voller Gegnerzahl **mit fünf
@@ -139,10 +243,11 @@ bestückten Waffen**, 3000 Ticks, ohne zu zeichnen. Budget: 5 ms pro Tick, bei
 |---|---|---|
 | 1400 Gegner, eine Waffe | 1,8 ms | 2,4 ms |
 | 1400 Gegner, fünf Waffen | 1,8 ms | 2,7 ms |
+| 1400 Gegner, fünf Waffen **und dauernd ein Boss** | 1,6 ms | 2,5 ms |
 | 2000 Gegner | 4,5 ms | 5,8 ms |
 
-Das ganze Waffensystem kostet also praktisch nichts. Die Obergrenze steht bei
-1400, weil bei 2000 der p95 das Budget reißt.
+Das ganze Waffensystem kostet also praktisch nichts, Bosse ebenso wenig. Die
+Obergrenze steht bei 1400, weil bei 2000 der p95 das Budget reißt.
 
 Beim Messen kam eine Sache heraus, die man nicht vermutet: Das
 Auseinanderdrücken der Gegner **spart** Rechenzeit. Wird die Trennkraft
@@ -168,14 +273,45 @@ Runden echte Fehler gefunden, die keine Zahl gezeigt hätte:
   nächstgelegenen Kristall eingerechnet — es geht keine Erfahrung verloren, sie
   sammelt sich nur in dickeren Brocken.
 
+Und in der dritten Runde, mit Bossen und Auswertung:
+
+- **Die Auswertung sagte „Platz 4" statt „Bazooka".** `starteLauf` hat die
+  Plätze beschriftet und die Statistik danach ausgetauscht — die Namen waren
+  sofort wieder weg. Genau die Frage, für die der Bildschirm da ist, blieb
+  unbeantwortet. Kein Test hätte das gezeigt; jetzt tut es einer.
+- **Der Todesbildschirm war unlesbar.** Der Schleier ließ das Getümmel
+  durchscheinen, und das HUD zeichnete quer über die Zahlen.
+- **Der Boss fiel bei vollem Feld lautlos aus.** Steht der Gegner-Pool am
+  Deckel, liefert er keinen Platz mehr — und die Bossnummer zählte trotzdem
+  weiter. Die Welle war damit übersprungen, ausgerechnet in der späten Phase.
+- **Dieselbe Fusion lag zweimal im Gürtel.** Wer die Ausgangswaffen später neu
+  zieht und wieder ausreizt, bekam eine zweite Kopie.
+
+Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
+
+- **Bosse liefen auf der Schwarmkurve mit.** Die ist quadratisch und ergibt in
+  der zehnten Minute Faktor 71 — gemessen wurden Bosskämpfe von über drei
+  Minuten, und weil die nächste Welle wartet, kamen statt sieben Bossen nur
+  drei. Bosse haben jetzt ihre eigene, viel flachere Kurve.
+- **Ein Splitter nahm dem Boss 60 % seiner Leiste.** Zwei davon, und er war
+  weg, Phase zwei praktisch nie zu sehen. Beim Boss sind es jetzt 15 % — dafür
+  darf er als Einziger **mehrfach** zerspringen, wenn drei Waffen ihn erneut
+  aufreißen. Der gemischte Bau wird damit über den ganzen Kampf belohnt statt
+  einmal am Anfang.
+
 ## Was noch fehlt
 
 - **Ton.** Kein einziger. In diesem Genre fehlt damit ein guter Teil der Wucht.
-- **Ein Ende.** Der Lauf hört auf, wenn man stirbt — sonst nie. Und hier steckt
-  die wichtigste offene Frage: Ein Bau mit fünf voll ausgebauten Waffen ist
-  gattungsgemäß übermächtig; gemessen überlebt eine Figur, die sich *gar nicht
-  bewegt*, damit zehn Minuten. Die Antwort des Genres darauf ist ein Zeitlimit
-  oder ein Endgegner, nicht schwächere Waffen.
+- **Ein Ende.** Der Lauf hört auf, wenn man stirbt — sonst nie. Bosse alle 90
+  Sekunden geben ihm jetzt einen Takt, aber kein Ziel. Ein Endgegner oder ein
+  Zeitlimit fehlt weiterhin.
+- **Bossbalance.** Gemessen über fünf Läufe schwankt ein Bosskampf zwischen 4
+  und 100 Sekunden — je nachdem, ob der Bau Einzelziel-Schaden hat. Dass ein
+  Flächenbau sich am Boss schwertut, ist gewollt; diese Spanne ist zu groß. Und
+  ob sich der Boss *schwer und fair zugleich* anfühlt, entscheidet sich am
+  Gamepad, nicht in einer Tabelle.
+- **Eine echte Bestenliste.** Der Punktestand steht, gespeichert wird lokal.
+  Online daraus zu machen ist ein Datenfeld, kein Umbau.
 - **Zwischenbilder.** Bei 144 Hz ist eine leichte Unruhe sichtbar, weil zwischen
   zwei Logikschritten nicht interpoliert wird.
 

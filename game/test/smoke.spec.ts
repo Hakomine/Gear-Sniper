@@ -34,17 +34,30 @@ type Spiel = {
   phase: string
   zeit: number
   saat: number
-  statistik: { kills: number }
+  statistik: { kills: number; schadenProPlatz: number[] }
   spieler: {
     level: number
     hp: number
     maxHp: number
+    xp: number
     xpNaechste: number
     abklingMult: number
+    maxWaffen: number
     waffen: WaffenInstanzLose[]
   }
-  gegner: { anzahl: number }
+  gegner: { anzahl: number; aktiv: GegnerLose[] }
   zonen: { anzahl: number }
+  angebote: Array<{ art: string; name: string }>
+  charakterWahl: number
+  offen: string[]
+  bossNummer: number
+}
+
+/** So weit, wie der Test an einen Gegner herangeht. */
+type GegnerLose = {
+  hp: number
+  maxHp: number
+  bossZustand: { phase: number; telegraf: number; art: { name: string } } | null
 }
 
 type WaffenDefLose = { id: string; maxStufe: number }
@@ -281,4 +294,167 @@ test('Voller Waffenbau zeigt alle Wirkungen', async ({ page }) => {
   const zustand = await lies(page)
   expect(zustand.gegner).toBeGreaterThan(40)
   await page.screenshot({ path: 'screenshots/06-vollausbau.png' })
+})
+
+test('Charakterwahl zeigt Vorteil, Nachteil und die gesperrten', async ({ page }) => {
+  // Der Titelbildschirm ist zugleich die Auswahl. Weitergeblaettert wird auf
+  // einen gesperrten Charakter: Dort steht die Bedingung statt der Werte, und
+  // genau das ist der Grund, ihn ueberhaupt anzuzeigen.
+  expect((await lies(page)).phase).toBe('titel')
+  await page.keyboard.press('KeyD')
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: 'screenshots/07-charakterwahl.png' })
+
+  const wahl = await page.evaluate(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.charakterWahl,
+  )
+  expect(wahl).toBe(1)
+
+  // Ein gesperrter Charakter startet den Lauf nicht.
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(300)
+  expect((await lies(page)).phase).toBe('titel')
+})
+
+test('Boss erscheint, kuendigt an und traegt seine Leiste', async ({ page }) => {
+  await starte(page)
+
+  // Vorspulen bis kurz vor die erste Bosswelle - der Spawner setzt ihn dann
+  // von allein. Unsterblich, weil das Bild den Boss zeigen soll und nicht den
+  // Todesbildschirm.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.zeit = 90
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+  })
+
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand !== null,
+      ),
+    undefined,
+    { timeout: 30_000 },
+  )
+
+  // Auf eine laufende Vorwarnung warten: Das ist der Moment, den das Bild
+  // belegen soll - der Angriff steht angekuendigt auf dem Boden.
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand !== null && g.bossZustand.telegraf > 0,
+      ),
+    undefined,
+    { timeout: 30_000 },
+  )
+  await page.screenshot({ path: 'screenshots/08-boss-telegraf.png' })
+
+  // Phase zwei: Trefferpunkte unter die Schwelle druecken und ansehen, wie
+  // das Muster wechselt.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    for (const g of s.gegner.aktiv) {
+      if (g.bossZustand !== null) g.hp = g.maxHp * 0.25
+    }
+  })
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand !== null && g.bossZustand.phase === 2,
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+  await page.waitForTimeout(600)
+  await page.screenshot({ path: 'screenshots/09-boss-phase2.png' })
+})
+
+test('Fusionskarte steht im Angebot', async ({ page }) => {
+  await starte(page)
+
+  // Beide Eltern ausgereizt und der Guertel dicht: Damit bleibt im Waffentopf
+  // nur noch die Verschmelzung uebrig - keine neuen Waffen (kein Platz), keine
+  // Stufen (beide auf Max). Die Karte ist damit sicher dabei, ohne dass der
+  // Test zwanzigmal wuerfeln muss.
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.waffen = ['klinge', 'trabanten'].map((id, platz) => {
+      const def = griff.waffen.find((d) => d.id === id)
+      if (def === undefined) throw new Error(`Waffe fehlt: ${id}`)
+      const w = griff.ruesteAus(def, platz)
+      for (let k = 1; k < def.maxStufe; k++) griff.werteAuf(w)
+      return w
+    })
+    s.spieler.maxWaffen = 2
+    s.spieler.xp = s.spieler.xpNaechste
+  })
+
+  await page.waitForFunction(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.phase === 'levelup',
+    undefined,
+    { timeout: 20_000 },
+  )
+
+  const arten = await page.evaluate(() =>
+    (window as unknown as Fenster).__scherbenfeld.spiel.angebote.map((a) => a.art),
+  )
+  expect(arten).toContain('fusion')
+  await page.screenshot({ path: 'screenshots/10-fusionskarte.png' })
+})
+
+test('Todesbildschirm wertet aus, woran sie gestorben sind', async ({ page }) => {
+  await starte(page)
+
+  // Erst ein paar Waffen wirken lassen, damit die Balken etwas zu zeigen
+  // haben - ein leeres Diagramm belegt nichts.
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    s.zeit = 200
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.spieler.waffen = ['klinge', 'bazooka', 'blitz', 'prisma'].map((id, platz) => {
+      const def = griff.waffen.find((d) => d.id === id)
+      if (def === undefined) throw new Error(`Waffe fehlt: ${id}`)
+      const w = griff.ruesteAus(def, platz)
+      for (let k = 1; k < def.maxStufe; k++) griff.werteAuf(w)
+      return w
+    })
+  })
+  await page.waitForTimeout(6000)
+
+  const verteilt = await page.evaluate(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.statistik.schadenProPlatz.filter(
+        (x) => x > 0,
+      ).length,
+  )
+  // Mehrere Balken, sonst ist es kein Diagramm.
+  expect(verteilt).toBeGreaterThan(2)
+
+  await page.evaluate(() => {
+    const sp = (window as unknown as Fenster).__scherbenfeld.spiel.spieler
+    sp.waffen.length = 0
+    sp.maxHp = 100
+    sp.hp = 1
+  })
+
+  const frist = Date.now() + 30_000
+  while (Date.now() < frist) {
+    const zustand = await lies(page)
+    if (zustand.phase === 'tot') break
+    if (zustand.phase === 'levelup') await page.keyboard.press('Digit1')
+    else await page.waitForTimeout(200)
+  }
+
+  // Kurz warten, damit der Sprung im Glas seine volle Groesse erreicht hat.
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: 'screenshots/11-auswertung.png' })
+  expect((await lies(page)).phase).toBe('tot')
 })

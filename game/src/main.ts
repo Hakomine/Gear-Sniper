@@ -1,5 +1,6 @@
 import { Eingabe } from './core/input'
 import { Schleife } from './core/loop'
+import { CHARAKTERE } from './game/charaktere'
 import type { Befehle } from './game/state'
 import { erzeugeSpielstand, tick } from './game/state'
 import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
@@ -24,6 +25,65 @@ const eingabe = new Eingabe()
 
 const spiel = erzeugeSpielstand(Date.now() >>> 0)
 spiel.sichtRadius = SICHT_RADIUS
+
+/**
+ * Was ueber einen Lauf hinaus bestehen bleibt - und was nicht.
+ *
+ * Gespeichert werden genau zwei Dinge: welche Charaktere offen sind und der
+ * beste Punktestand. Keine Werte, keine Aufwertungen, nichts Zaehlbares. Das
+ * ist Absicht und die tragende Regel des ganzen Spiels: Jeder Lauf beginnt bei
+ * null, sonst misst eine Bestenliste nur noch, wer am laengsten gespielt hat.
+ * Freigeschaltet wird der *Zugang* zu einem Spielstil, nie Rechenkraft.
+ *
+ * Der Speicherzugriff steht hier und nicht in der Spiellogik: `src/game/`
+ * kennt keinen Browser, und genau das macht die Messungen und Tests ohne
+ * Fenster ueberhaupt erst moeglich.
+ */
+const SPEICHER = 'scherbenfeld.fortschritt.v1'
+
+type Fortschritt = { offen: string[]; bestwert: number }
+
+function ladeFortschritt(): Fortschritt {
+  // Ein kaputter, fremder oder gesperrter Eintrag darf das Spiel nicht am
+  // Starten hindern - im privaten Fenster wirft schon der Zugriff selbst.
+  try {
+    const roh = localStorage.getItem(SPEICHER)
+    if (roh === null) return { offen: [], bestwert: 0 }
+    const daten = JSON.parse(roh) as Partial<Fortschritt>
+    const bekannt = new Set<string>(CHARAKTERE.map((c) => c.id))
+    return {
+      offen: Array.isArray(daten.offen) ? daten.offen.filter((id) => bekannt.has(id)) : [],
+      bestwert:
+        typeof daten.bestwert === 'number' && Number.isFinite(daten.bestwert)
+          ? Math.max(0, Math.floor(daten.bestwert))
+          : 0,
+    }
+  } catch {
+    return { offen: [], bestwert: 0 }
+  }
+}
+
+function sichereFortschritt(): void {
+  try {
+    localStorage.setItem(
+      SPEICHER,
+      JSON.stringify({ offen: spiel.offen, bestwert: spiel.bestwert }),
+    )
+  } catch {
+    // Volle Quote oder gesperrter Speicher: Der Lauf laeuft trotzdem weiter.
+  }
+}
+
+const gespeichert = ladeFortschritt()
+for (const id of gespeichert.offen) if (!spiel.offen.includes(id)) spiel.offen.push(id)
+spiel.bestwert = Math.max(spiel.bestwert, gespeichert.bestwert)
+
+// Geschrieben wird nur, wenn sich wirklich etwas geaendert hat. Beides aendert
+// sich ausschliesslich im Moment des Todes, also hoechstens einmal pro Lauf -
+// eine Pruefung auf zwei Zahlen pro Bild ist dafuer bezahlbar, ein
+// `setItem` pro Bild waere es nicht.
+let offenStand = spiel.offen.length
+let bestStand = spiel.bestwert
 
 // Einmal angelegt und pro Tick ueberschrieben - kein Muell in der Schleife.
 const befehle: Befehle = {
@@ -58,6 +118,12 @@ const schleife = new Schleife({
 
     tick(spiel, befehle, dt)
     eingabe.tickEnde()
+
+    if (spiel.offen.length !== offenStand || spiel.bestwert !== bestStand) {
+      offenStand = spiel.offen.length
+      bestStand = spiel.bestwert
+      sichereFortschritt()
+    }
   },
 
   render(alpha) {

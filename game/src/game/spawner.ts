@@ -174,6 +174,9 @@ export function entferneVerlorene(s: Spielstand): void {
 
   for (let i = liste.length - 1; i >= 0; i--) {
     const g = liste[i]
+    // Bosse bleiben. Ein Boss, der verschwindet, weil man weit genug wegläuft,
+    // waere kein Boss, sondern eine Empfehlung.
+    if (g.bossZustand !== null) continue
     const dx = g.x - px
     const dy = g.y - py
     if (dx * dx + dy * dy > grenze2) s.gegner.freigeben(i)

@@ -10,7 +10,7 @@ import { FARBEN } from '../render/palette'
  * reiner Tabelleneintrag. Nur ein wirklich neues Verhalten kostet Code.
  */
 
-export type Seltenheit = 'gewoehnlich' | 'selten' | 'episch' | 'legendaer'
+export type Seltenheit = 'gewoehnlich' | 'selten' | 'episch' | 'legendaer' | 'fusion'
 
 /**
  * Wie oft eine Seltenheit ueberhaupt angeboten wird.
@@ -24,6 +24,9 @@ export const SELTENHEIT_GEWICHT: Record<Seltenheit, number> = {
   selten: 42,
   episch: 15,
   legendaer: 4,
+  // Fusionen werden nie als Fund gezogen - sie entstehen nur aus zwei
+  // ausgereizten Waffen und haben ihre eigene Gewichtung in `upgrades.ts`.
+  fusion: 0,
 }
 
 export const SELTENHEIT_NAME: Record<Seltenheit, string> = {
@@ -31,6 +34,7 @@ export const SELTENHEIT_NAME: Record<Seltenheit, string> = {
   selten: 'Selten',
   episch: 'Episch',
   legendaer: 'Legendär',
+  fusion: 'Fusion',
 }
 
 export type VerhaltenId =
@@ -42,6 +46,13 @@ export type VerhaltenId =
   | 'trabant'
   | 'strahl'
   | 'singularitaet'
+  // Verhalten der Fusionen - siehe `fusionen.ts`.
+  | 'gewitterkern'
+  | 'scherbenkranz'
+  | 'zerlegestrahl'
+  | 'schwarmnadeln'
+  | 'kollaps'
+  | 'bogenlicht'
 
 /**
  * Alle Zahlen, die eine Waffe ausmachen.
@@ -378,6 +389,22 @@ export const WAFFE_START = WAFFEN[0]
 
 /** Wie viele Waffen gleichzeitig getragen werden koennen. */
 export const MAX_WAFFEN = 5
+
+/**
+ * Der kleinste freie Guertelplatz.
+ *
+ * **Nicht** die Laenge des Arrays. Der Platz ist zugleich das Bit, unter dem
+ * eine Waffe ihre Risse setzt - und beim Verschmelzen fallen zwei Eintraege
+ * weg, waehrend einer hinzukommt. Mit der Laenge als Index bekaemen danach
+ * zwei Waffen denselben Platz, saessen also auf demselben Bit, und die
+ * Kernregel waere still ausgehebelt: ein Fehler, den man im Spiel nicht sieht.
+ */
+export function freierPlatz(belegt: readonly WaffenInstanz[], maxPlaetze: number): number {
+  for (let p = 0; p < maxPlaetze; p++) {
+    if (!belegt.some((w) => w.platz === p)) return p
+  }
+  return -1
+}
 
 export function waffeMit(id: string): WaffenDef | undefined {
   return WAFFEN.find((w) => w.id === id)

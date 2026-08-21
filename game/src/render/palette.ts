@@ -56,6 +56,9 @@ export const SELTENHEIT_FARBE = {
   selten: '#4fa3ff',
   episch: '#b46bff',
   legendaer: '#ffb020',
+  // Fusionen bekommen ein helles Weissgold: Sie stehen ueber allem anderen
+  // und sollen auf einer Karte sofort als Sonderfall lesbar sein.
+  fusion: '#fff2c4',
 } as const
 
 
