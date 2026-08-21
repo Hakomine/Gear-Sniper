@@ -3,7 +3,7 @@ import { TICK_DT } from '../src/core/loop'
 import { Rng } from '../src/core/rng'
 import { MAX_GEGNER } from '../src/game/spawner'
 import type { Befehle, Spielstand } from '../src/game/state'
-import { erzeugeSpielstand, starteLauf, tick } from '../src/game/state'
+import { erzeugeSpielstand, leereBefehle, starteLauf, tick } from '../src/game/state'
 
 /**
  * Der Lauf muss bei gleichem Saatwert gleich verlaufen.
@@ -37,7 +37,10 @@ function laufe(saat: number, ticks: number, unsterblich = false): Spielstand {
     s.spieler.maxHp = 1e9
     s.spieler.hp = 1e9
   }
-  const b: Befehle = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
+  const b: Befehle = leereBefehle()
+  // Jedes Levelup nimmt von selbst die erste Karte - sonst steht der Lauf
+  // im Menue und die Zeit laeuft nicht weiter.
+  b.wahl = 0
   for (let i = 0; i < ticks; i++) tick(s, befehleFuer(i, b), TICK_DT)
   return s
 }
@@ -81,7 +84,8 @@ describe('Determinismus', () => {
     starteLauf(b, 999)
     b.rngOptik = new Rng(123456)
 
-    const bef: Befehle = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
+    const bef: Befehle = leereBefehle()
+    bef.wahl = 0
     for (let i = 0; i < 2500; i++) {
       tick(a, befehleFuer(i, bef), TICK_DT)
       tick(b, befehleFuer(i, bef), TICK_DT)
@@ -124,7 +128,8 @@ describe('Der Lauf tut ueberhaupt etwas', () => {
     // ein Endgegner - nicht, den Bau schwach zu machen.
     const s = erzeugeSpielstand(5)
     starteLauf(s, 5)
-    const b: Befehle = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
+    const b: Befehle = leereBefehle()
+    b.wahl = 0
 
     for (let i = 0; i < 60 * 180 && s.phase !== 'tot'; i++) {
       tick(s, b, TICK_DT)

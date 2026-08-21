@@ -1,5 +1,6 @@
 import { FARBEN } from '../render/palette'
 import { legeZahl, zerspringen } from './effects'
+import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import {
   BOSS_ZERSPLITTER_ANTEIL,
   KASKADE_MAX_TIEFE,
@@ -154,7 +155,9 @@ export function verletzeGegner(
   // Erst reissen, dann rechnen: Der Treffer, der den dritten Riss setzt, soll
   // den Bonus schon mitnehmen. Das macht den Moment spuerbar, in dem ein Bau
   // greift.
-  rissSetzen(g, platz)
+  // Nur der *neue* Riss meldet sich - sonst knackst es bei jedem Treffer, und
+  // das Geraeusch verliert genau die Bedeutung, die es tragen soll.
+  if (rissSetzen(g, platz)) s.klaenge.melde('riss')
 
   // Charakter "Riss": Drei Sekunden ohne Treffer, und jeder Schlag setzt
   // zusaetzlich einen Geisterriss - er zersplittert damit mit zwei Waffen
@@ -166,10 +169,23 @@ export function verletzeGegner(
 
   // Schleiferin: Der aufgestapelte Schliff wirkt auf alles, was sie austeilt.
   const schliff = sp.schliffProNah > 0 ? 1 + sp.schliff * 0.04 : 1
-  const schaden = Math.max(1, Math.floor(basisSchaden * rissBonus(g) * schliff))
+
+  /*
+   * Der Schildtraeger wehrt von vorn fast alles ab.
+   *
+   * Als Quelle gilt der *Spieler*, nicht das einzelne Geschoss. Praktisch
+   * aller Schaden geht ohnehin von ihm aus, und die Ansage soll "komm von
+   * hinten" lauten - nicht "such den richtigen Splitterwinkel". Ein Schild,
+   * dessen Wirkung von der Flugbahn einer Granate abhaengt, ist nicht lesbar.
+   */
+  const abwehr = GEGNER_VERHALTEN[g.art.verhalten].schadensFaktor
+  const richtung = abwehr === undefined ? 1 : abwehr(g, sp.x, sp.y)
+
+  const schaden = Math.max(1, Math.floor(basisSchaden * rissBonus(g) * schliff * richtung))
 
   g.hp -= schaden
   g.blitz = 0.09
+  s.klaenge.melde('treffer')
   s.statistik.schaden += schaden
   if (platz >= 0 && platz < s.statistik.schadenProPlatz.length) {
     s.statistik.schadenProPlatz[platz] += schaden
@@ -242,6 +258,7 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
       risseLoeschen(g)
     }
 
+    s.klaenge.melde('zersplittert', istBoss ? 1.4 : 1)
     zerspringen(s, g.x, g.y, g.radius * 1.6, FARBEN.treffer)
     legeEffekt(s, 'ring', g.x, g.y, ZERSPLITTER_RADIUS, 0.3, FARBEN.treffer, 3)
     s.trauma = Math.min(1, s.trauma + 0.06)

@@ -5,8 +5,9 @@ import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import { xpFuerLevel } from './damage'
 import { zerspringen } from './effects'
 import type { GegnerArt } from './enemies'
+import { Klangpuffer } from './klaenge'
 import { aktualisiereKristalle, legeKristall } from './pickups'
-import { bewegeSpieler, erzeugeSpieler, verletzeSpieler } from './player'
+import { bewegeSpieler, erzeugeSpieler, stosse, stossTick, verletzeSpieler } from './player'
 import type { BossZustand } from './bosse'
 import { bossTick, bossWelle } from './bosse'
 import type { Charakter } from './charaktere'
@@ -21,6 +22,8 @@ import {
   SCHLIFF_ZERFALL,
 } from './charaktere'
 import { risseAblaufen } from './risse'
+import type { Bewegung } from './gegnerVerhalten'
+import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
 import type { Aufwertung } from './upgrades'
 import { zieheAngebote } from './upgrades'
@@ -53,7 +56,28 @@ import {
  * gibt es keine gegenseitigen Importe.
  */
 
-export type Phase = 'titel' | 'laufend' | 'levelup' | 'tot'
+export type Phase = 'titel' | 'laufend' | 'levelup' | 'pause' | 'tot'
+
+/**
+ * Ein Befehlssatz, in dem nichts gedrueckt ist.
+ *
+ * Damit ein neues Feld in `Befehle` nicht sieben Stellen in Tests und Messung
+ * bricht - genau das ist gerade passiert, als Pause und senkrechte
+ * Menuefuehrung dazukamen.
+ */
+export function leereBefehle(): Befehle {
+  return {
+    x: 0,
+    y: 0,
+    bestaetigen: false,
+    links: false,
+    rechts: false,
+    hoch: false,
+    runter: false,
+    pause: false,
+    wahl: -1,
+  }
+}
 
 export type Spieler = {
   x: number
@@ -96,6 +120,27 @@ export type Spieler = {
   stillstandSchwelle: number
   /** Koloss: Schaden je Sekunde an allem, was ihn beruehrt. */
   dornen: number
+
+  // --- Stoss ----------------------------------------------------------------
+
+  /** Restlaufzeit des Stosses. Groesser als 0 heisst: gerade unterwegs. */
+  stossRest: number
+  /** Restliche Abklingzeit. 0 heisst: bereit. */
+  stossAbkling: number
+  /** Richtung des laufenden Stosses, bereits mit Tempo multipliziert. */
+  stossVx: number
+  stossVy: number
+  /** Wie schnell der Stoss nachlaedt. 1 ist normal, 2 doppelt so schnell. */
+  stossLaden: number
+  /**
+   * Zuletzt gelaufene Richtung.
+   *
+   * Damit ein Stoss aus dem Stand nicht ins Leere geht: Gerade im Gedraenge
+   * steht man oft einen Moment still, und ein verschluckter Knopfdruck fuehlt
+   * sich wie ein Fehler des Spiels an, nicht wie einer des Spielers.
+   */
+  blickX: number
+  blickY: number
 }
 
 export type Gegner = {
@@ -123,6 +168,24 @@ export type Gegner = {
   risse: number
   risseZeit: number
   zersplittert: boolean
+  /**
+   * Arbeitsspeicher der Gegnerverhalten - siehe `gegnerVerhalten.ts`.
+   *
+   * Fuenf Zahlen je Gegner, bei 1400 Stueck also nichts. Ein eigenes
+   * Zustandsobjekt je Art waere sauberer zu lesen und 1400 Allokationen
+   * teurer; die Pools im ganzen Spiel existieren genau dafuer, das zu
+   * vermeiden.
+   *
+   * `takt` ist ein Zaehler (Vorwarnung, Schusspause, Kreisphase), `zustand`
+   * eine kleine Zahl (0 laeuft, 1 kuendigt an, 2 prescht), `merkX`/`merkY`
+   * merken sich ein Ziel oder eine Bahn, `blick` ist die Ausrichtung des
+   * Schildtraegers.
+   */
+  takt: number
+  zustand: number
+  merkX: number
+  merkY: number
+  blick: number
   /**
    * Nur bei Bossen gesetzt.
    *
@@ -287,6 +350,18 @@ export type Befehle = {
   bestaetigen: boolean
   links: boolean
   rechts: boolean
+  /**
+   * Senkrechte Menuefuehrung.
+   *
+   * Das Levelup blaettert waagerecht durch drei Karten, das Pausenmenue
+   * senkrecht durch eine Liste. Beide Richtungen getrennt zu fuehren ist
+   * billiger, als eine Liste quer zu legen, damit sie zu den vorhandenen
+   * Tasten passt.
+   */
+  hoch: boolean
+  runter: boolean
+  /** Escape oder Start - oeffnet und schliesst das Pausenmenue. */
+  pause: boolean
   /** Direktwahl per Zifferntaste, sonst -1. */
   wahl: number
 }
@@ -368,6 +443,24 @@ export type Spielstand = {
    * zustandslos und weiss nicht, wann der Lauf geendet hat.
    */
   totSeit: number
+  /**
+   * Was in diesem Tick zu hoeren sein soll.
+   *
+   * Nur Meldungen - die Simulation spielt nichts ab und kennt keinen Browser.
+   * `main.ts` leert den Puffer je Bild. Siehe `klaenge.ts`.
+   */
+  klaenge: Klangpuffer
+  /** Ausgewaehlter Eintrag im Pausenmenue. */
+  pauseWahl: number
+  /**
+   * Ton aus.
+   *
+   * Steht hier und nicht im Zeichencode, weil das Pausenmenue ihn umschaltet -
+   * und das Menue liegt in der Spiellogik, damit es ohne Browser pruefbar
+   * bleibt. `main.ts` liest das Feld, schaltet den Klang stumm und merkt es
+   * sich. Ein `boolean` ist kein Browserwissen.
+   */
+  tonAus: boolean
   angebote: Aufwertung[]
   auswahl: number
   /** Stufen der passiven Gegenstaende. Waffenstufen stehen an der Waffe. */
@@ -422,6 +515,9 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     bestwert: 0,
     neuFreigeschaltet: [],
     totSeit: 0,
+    klaenge: new Klangpuffer(),
+    pauseWahl: 0,
+    tonAus: false,
     angebote: [],
     auswahl: 0,
     stufen: new Map(),
@@ -445,6 +541,7 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   // ersetzen, den Guertel verkleinern und Werte umschreiben.
   charakter.anwenden(s.spieler, s.rng)
 
+  s.klaenge.leeren()
   s.gegner.alleFreigeben()
   s.geschosse.alleFreigeben()
   s.zonen.alleFreigeben()
@@ -516,6 +613,10 @@ export function tick(s: Spielstand, b: Befehle, dt: number): void {
       if (b.bestaetigen) s.phase = 'titel'
       return
 
+    case 'pause':
+      pauseTick(s, b)
+      return
+
     case 'levelup':
       levelupTick(s, b, dt)
       return
@@ -526,7 +627,65 @@ export function tick(s: Spielstand, b: Befehle, dt: number): void {
   }
 }
 
+/**
+ * Was im Pausenmenue steht.
+ *
+ * Als Kennungen und nicht als Beschriftungen: Die Texte liegen in
+ * `ui/strings.ts`, damit eine Uebersetzung ein Dateitausch bleibt und keine
+ * Suchaktion durch die Spiellogik.
+ */
+export type PauseEintrag = 'weiter' | 'ton' | 'aufgeben' | 'auswahl'
+
+export const PAUSE_EINTRAEGE: readonly PauseEintrag[] = ['weiter', 'ton', 'aufgeben', 'auswahl']
+
+/**
+ * Das Pausenmenue.
+ *
+ * Kein `dt`: Hier laeuft nichts. Genau das ist der Punkt einer Pause - und der
+ * Grund, warum sie in der Spiellogik steht statt im Zeichencode. Waere sie im
+ * Zeichencode, liefe die Simulation dahinter weiter.
+ */
+function pauseTick(s: Spielstand, b: Befehle): void {
+  // Escape schliesst wieder - dieselbe Taste hin und zurueck.
+  if (b.pause) {
+    s.phase = 'laufend'
+    return
+  }
+
+  const anzahl = PAUSE_EINTRAEGE.length
+  if (b.hoch) s.pauseWahl = (s.pauseWahl + anzahl - 1) % anzahl
+  if (b.runter) s.pauseWahl = (s.pauseWahl + 1) % anzahl
+  if (b.wahl >= 0 && b.wahl < anzahl) s.pauseWahl = b.wahl
+  if (!b.bestaetigen) return
+
+  switch (PAUSE_EINTRAEGE[s.pauseWahl]) {
+    case 'weiter':
+      s.phase = 'laufend'
+      return
+    case 'ton':
+      s.tonAus = !s.tonAus
+      return
+    case 'aufgeben':
+      beendeLauf(s)
+      return
+    case 'auswahl':
+      // Auch dieser Weg wertet den Lauf aus. Sonst waere die Charakterwahl das
+      // Schlupfloch, durch das ein schlechter Lauf spurlos verschwindet.
+      beendeLauf(s)
+      s.phase = 'titel'
+      return
+  }
+}
+
 function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
+  // Vor allem anderen: Wer Escape drueckt, will *jetzt* anhalten und nicht
+  // erst nach dem naechsten Treffer.
+  if (b.pause) {
+    s.phase = 'pause'
+    s.pauseWahl = 0
+    return
+  }
+
   // Zeitlupe beim Levelup: Die Simulation rampt herunter, statt hart zu
   // stehen. Ein harter Schnitt mitten im Getuemmel liest sich als Ruckler,
   // eine Rampe von gut zwei Zehnteln als Absicht.
@@ -544,7 +703,17 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
   s.zeit += sdt
   s.statistik.zeit = s.zeit
 
-  bewegeSpieler(s.spieler, b.x, b.y, sdt)
+  // Erst ausloesen, dann laufen lassen: Ein Stoss soll noch in dem Tick
+  // wirken, in dem die Taste faellt.
+  const sp = s.spieler
+  if (b.x !== 0 || b.y !== 0) {
+    sp.blickX = b.x
+    sp.blickY = b.y
+  }
+  if (b.bestaetigen && stosse(sp, b.x, b.y, sp.blickX, sp.blickY)) s.klaenge.melde('stoss')
+  stossTick(sp, sdt)
+
+  bewegeSpieler(sp, b.x, b.y, sdt)
   spawne(s, sdt)
   bossWelle(s)
 
@@ -569,24 +738,39 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
   entferneVerlorene(s)
 
   const ausbeute = aktualisiereKristalle(s, sdt)
-  if (ausbeute > 0) gibXp(s, ausbeute)
+  if (ausbeute > 0) {
+    s.klaenge.melde('kristall')
+    gibXp(s, ausbeute)
+  }
 
   charakterTick(s, sdt)
   aktualisiereOptik(s, dt)
   folgeKamera(s, dt)
 
-  if (s.spieler.hp <= 0) {
-    s.phase = 'tot'
-    s.totSeit = 0
-    s.trauma = 1
-    s.blitz = 0.9
-    s.punkte = punkteFuer(s.statistik, s.charakter.punkteFaktor)
-    s.neuFreigeschaltet = freigeschaltetDurch(s.statistik, s.spieler).filter(
-      (id) => !s.offen.includes(id),
-    )
-    for (const id of s.neuFreigeschaltet) s.offen.push(id)
-    s.bestwert = Math.max(s.bestwert, s.punkte)
-  }
+  if (s.spieler.hp <= 0) beendeLauf(s)
+}
+
+/**
+ * Den Lauf abschliessen: Punkte, Freischaltungen, Bestwert.
+ *
+ * Herausgezogen, weil es seit dem Pausenmenue zwei Wege hierher gibt - Tod und
+ * Aufgeben. Aufgeben fuehrt bewusst denselben Weg: Wer aufgibt, bekommt seine
+ * Punkte und seine Freischaltungen, und der Lauf steht in der Wertung. Waere
+ * es ein blosser Ausstieg, waere es der bequeme Weg, einen schlechten Lauf aus
+ * der Bestenliste herauszuhalten.
+ */
+export function beendeLauf(s: Spielstand): void {
+  s.klaenge.melde('zerbrochen')
+  s.phase = 'tot'
+  s.totSeit = 0
+  s.trauma = 1
+  s.blitz = 0.9
+  s.punkte = punkteFuer(s.statistik, s.charakter.punkteFaktor)
+  s.neuFreigeschaltet = freigeschaltetDurch(s.statistik, s.spieler).filter(
+    (id) => !s.offen.includes(id),
+  )
+  for (const id of s.neuFreigeschaltet) s.offen.push(id)
+  s.bestwert = Math.max(s.bestwert, s.punkte)
 }
 
 /**
@@ -607,10 +791,11 @@ export function gitterAufbauen(s: Spielstand): void {
 /** Wie stark sich ueberlappende Gegner auseinanderschieben. */
 const TRENN_KRAFT = 165
 
+/** Wiederverwendet, damit die Verhalten pro Tick nichts anlegen. */
+const wunsch: Bewegung = { vx: 0, vy: 0 }
+
 function bewegeGegner(s: Spielstand, dt: number): void {
   const liste = s.gegner.aktiv
-  const px = s.spieler.x
-  const py = s.spieler.y
 
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
@@ -631,11 +816,12 @@ function bewegeGegner(s: Spielstand, dt: number): void {
       continue
     }
 
-    const dx = px - g.x
-    const dy = py - g.y
-    const abstand = Math.hypot(dx, dy) || 1
-    let vx = (dx / abstand) * g.tempo
-    let vy = (dy / abstand) * g.tempo
+    // Was der Gegner *will* - je nach Art. Das Auseinanderdruecken kommt
+    // danach unveraendert obendrauf: Die Wunschrichtung ist das Neue, die
+    // Trennkraft ist gemessen und bleibt, wie sie ist.
+    GEGNER_VERHALTEN[g.art.verhalten].bewege(s, g, dt, wunsch)
+    let vx = wunsch.vx
+    let vy = wunsch.vy
 
     // Auseinanderdruecken. Ohne das laufen alle Gegner exakt uebereinander,
     // und aus tausend Feinden wird optisch einer: Man sieht die Gefahr nicht
@@ -697,7 +883,11 @@ function feuereWaffen(s: Spielstand, dt: number): void {
 
     // Kein Ziel: nicht feuern, aber auch keinen Vorrat aufstauen, der sich
     // spaeter auf einen Schlag entlaedt.
-    w.abkling = v.feuern(s, w) ? w.werte.abklingzeit * sp.abklingMult : 0
+    const gefeuert = v.feuern(s, w)
+    // Der Schussklang steht hier und nicht in den sechs Feuerfunktionen: eine
+    // Stelle, an der wirklich *eine* Waffe ausloest.
+    if (gefeuert) s.klaenge.melde('schuss')
+    w.abkling = gefeuert ? w.werte.abklingzeit * sp.abklingMult : 0
   }
 }
 
@@ -921,6 +1111,18 @@ function raeumeTote(s: Spielstand): void {
     zerspringen(s, g.x, g.y, g.radius, g.art.farbe)
     s.statistik.kills++
 
+    /*
+     * Was der Gegner beim Sterben noch anstellt - der Teiler zerfaellt hier in
+     * zwei Kleine.
+     *
+     * Die Schleife laeuft rueckwaerts, und `legeGegner` haengt hinten an. Der
+     * naechste `freigeben(i)` tauscht das letzte Element auf Platz `i` - ein
+     * eben gesetztes Bruchstueck kann also auf einem schon besuchten Index
+     * landen. Das ist harmlos, weil es nicht tot ist und im naechsten Tick
+     * ganz normal drankommt; nur mitdenken muss man es.
+     */
+    GEGNER_VERHALTEN[g.art.verhalten].beiTod?.(s, g)
+
     // Schleiferin: Nur Kills in Reichweite zaehlen. Das ist der ganze Punkt -
     // der Bonus zwingt dazu, im Gedraenge zu bleiben statt es zu umlaufen.
     const sp = s.spieler
@@ -934,6 +1136,7 @@ function raeumeTote(s: Spielstand): void {
     s.trauma = Math.min(1, s.trauma + 0.012)
 
     if (g.bossZustand !== null) {
+      s.klaenge.melde('boss')
       s.statistik.bosse++
       s.trauma = 1
       s.blitz = 0.9
@@ -965,6 +1168,7 @@ function trefferAmSpieler(s: Spielstand, schaden: number): void {
   sp.stillstand = 0
 
   verletzeSpieler(sp, schaden)
+  s.klaenge.melde('einschlag')
   sp.unverwundbar = UNVERWUNDBAR
   sp.blitz = 1
   s.trauma = Math.min(1, s.trauma + 0.45)
@@ -1084,6 +1288,7 @@ export function gibXp(s: Spielstand, menge: number): void {
   s.statistik.level = sp.level
   s.blitz = Math.max(s.blitz, 0.55)
   s.levelWartet = LEVELUP_RAMPE
+  s.klaenge.melde('stufe')
 }
 
 function oeffneLevelup(s: Spielstand): void {
@@ -1153,6 +1358,11 @@ function leererGegner(): Gegner {
     risse: 0,
     risseZeit: 0,
     zersplittert: false,
+    takt: 0,
+    zustand: 0,
+    merkX: 0,
+    merkY: 0,
+    blick: 0,
   }
 }
 

@@ -1,6 +1,7 @@
 import type { Charakter } from '../game/charaktere'
 import { CHARAKTERE } from '../game/charaktere'
-import type { Spielstand } from '../game/state'
+import type { PauseEintrag, Spielstand } from '../game/state'
+import { PAUSE_EINTRAEGE } from '../game/state'
 import type { Aufwertung } from '../game/upgrades'
 import { SELTENHEIT_NAME } from '../game/weapons'
 import { DORNEN_PLATZ, GEIST_PLATZ, SPLITTER_PLATZ } from '../game/welt'
@@ -539,6 +540,100 @@ function zeichneFreischaltung(
   ctx.font = `700 22px ${SCHRIFT.mono}`
   ctx.fillStyle = SELTENHEIT_FARBE.legendaer
   ctx.fillText(namen, mx, y + 26)
+}
+
+// ---------------------------------------------------------------------------
+// Pausenmenue
+// ---------------------------------------------------------------------------
+
+/**
+ * Angehalten.
+ *
+ * Der Schleier ist duenner als beim Tod: Der Lauf ist nicht vorbei, er wartet.
+ * Man soll sehen, in welcher Lage man steht, waehrend man ueberlegt - und
+ * genau das ist oft der Grund, warum jemand anhaelt.
+ */
+export function zeichnePause(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  breite: number,
+  hoehe: number,
+): void {
+  schleier(ctx, breite, hoehe, 0.72)
+
+  const b = 460
+  const h = 300
+  const x = (breite - b) / 2
+  const y = (hoehe - h) / 2
+
+  ctx.save()
+  ctx.translate(x + b / 2, y + h / 2)
+  ctx.rotate(neigung(7))
+  ctx.translate(-b / 2, -h / 2)
+
+  scherbenPfad(ctx, 0, 0, b, h, 7)
+  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.95)
+  ctx.fill()
+  ctx.strokeStyle = mitAlpha(FARBEN.text, 0.35)
+  ctx.lineWidth = 1.6
+  ctx.stroke()
+
+  ctx.save()
+  ctx.clip()
+  bruchLinien(ctx, 0, 0, b, h, 7, 3)
+  ctx.strokeStyle = mitAlpha(FARBEN.text, 0.12)
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `700 26px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textHervor
+  ctx.fillText(TEXTE.pauseTitel, b / 2, 46)
+
+  for (let i = 0; i < PAUSE_EINTRAEGE.length; i++) {
+    const gewaehlt = i === s.pauseWahl
+    const zy = 108 + i * 44
+
+    if (gewaehlt) {
+      // Die Auswahl liegt auf einer eigenen kleinen Scherbe, statt nur die
+      // Farbe zu wechseln - sonst sieht die Liste aus wie eine Webseite.
+      scherbenPfad(ctx, 34, zy - 17, b - 68, 34, 20 + i)
+      ctx.fillStyle = mitAlpha(FARBEN.textHervor, 0.14)
+      ctx.fill()
+    }
+
+    ctx.font = `${gewaehlt ? 700 : 400} 18px ${SCHRIFT.mono}`
+    ctx.fillStyle = gewaehlt ? FARBEN.textHervor : FARBEN.textSchwach
+    ctx.fillText(eintragText(PAUSE_EINTRAEGE[i], s), b / 2, zy)
+  }
+
+  // Der Hinweis steht dauerhaft da, nicht nur wenn "Aufgeben" gewaehlt ist:
+  // Man soll es lesen, bevor man dort landet, nicht danach.
+  ctx.font = `400 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.8)
+  ctx.fillText(TEXTE.pauseWarnung, b / 2, h - 52)
+
+  ctx.font = `400 13px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  ctx.fillText(TEXTE.pauseHinweis, b / 2, h - 28)
+
+  ctx.restore()
+  ctx.textBaseline = 'alphabetic'
+}
+
+function eintragText(eintrag: PauseEintrag, s: Spielstand): string {
+  switch (eintrag) {
+    case 'weiter':
+      return TEXTE.pauseWeiter
+    case 'ton':
+      return `${TEXTE.pauseTon}: ${s.tonAus ? TEXTE.pauseAus : TEXTE.pauseAn}`
+    case 'aufgeben':
+      return TEXTE.pauseAufgeben
+    case 'auswahl':
+      return TEXTE.pauseAuswahl
+  }
 }
 
 // ---------------------------------------------------------------------------

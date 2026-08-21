@@ -1,6 +1,8 @@
+import { SCHILD_WINKEL } from '../game/gegnerVerhalten'
+import { STOSS_ABKLING } from '../game/player'
 import type { Effekt, Spielstand } from '../game/state'
 import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
-import { zeichneLevelup, zeichneTitel, zeichneTod } from '../ui/menus'
+import { zeichneLevelup, zeichnePause, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
 import { erschuetterung } from './juice'
 import { FARBEN, mitAlpha, SCHRIFT } from './palette'
@@ -130,6 +132,7 @@ export class Zeichner {
     if (s.phase !== 'titel' && s.phase !== 'tot') zeichneHud(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'titel') zeichneTitel(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'levelup') zeichneLevelup(ctx, s, VIRT_B, VIRT_H)
+    if (s.phase === 'pause') zeichnePause(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'tot') zeichneTod(ctx, s, VIRT_B, VIRT_H)
   }
 }
@@ -181,9 +184,13 @@ function zeichneGitter(ctx: CanvasRenderingContext2D, s: Spielstand): void {
  * Bei bis zu 1400 Gegnern ist nicht das Fuellen teuer, sondern der Wechsel
  * der Farbe. Ein Pfad pro Art heisst drei Farbwechsel statt 1400.
  */
+/** Wer gerade einen Schildbogen braucht - wiederverwendet, kein Muell je Bild. */
+const schildTraeger: number[] = []
+
 function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   for (const liste of gegnerEimer.values()) liste.length = 0
   blitzende.length = 0
+  schildTraeger.length = 0
 
   const gegner = s.gegner.aktiv
   for (let i = 0; i < gegner.length; i++) {
@@ -195,11 +202,14 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     }
     liste.push(i)
     if (gegner[i].blitz > 0) blitzende.push(i)
+    if (gegner[i].art.verhalten === 'schild') schildTraeger.push(i)
   }
 
   const drehung = s.zeit * 0.7
   const px = s.spieler.x
   const py = s.spieler.y
+
+  zeichneSchildBoegen(ctx, s, schildTraeger)
 
   // Ueber die Eimer laufen, nicht ueber die feste Artenliste: Bosse bringen
   // eigene Arten mit, die dort nicht stehen - mit der alten Schleife waeren
@@ -236,6 +246,40 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
 }
 
 /**
+ * Der Bogen vor dem Schildtraeger.
+ *
+ * Ohne ihn ist "von vorn prallt fast alles ab" eine unsichtbare Regel, und der
+ * Spieler lernt nur, dass dieser Gegner zaeh ist - nicht, dass er umlaufen
+ * werden will. Der Bogen deckt genau den Winkel ab, den `SCHILD_WINKEL` in
+ * `gegnerVerhalten.ts` abwehrt: Was man sieht, ist die Regel.
+ *
+ * Wird *vor* den Koerpern gezeichnet, damit die Form obenauf liegt und der
+ * Bogen wie ein davorgehaltenes Stueck Glas wirkt.
+ */
+function zeichneSchildBoegen(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  liste: readonly number[],
+): void {
+  if (liste.length === 0) return
+  const gegner = s.gegner.aktiv
+
+  ctx.beginPath()
+  for (let k = 0; k < liste.length; k++) {
+    const g = gegner[liste[k]]
+    if (g === undefined) continue
+    ctx.moveTo(
+      g.x + Math.cos(g.blick - SCHILD_WINKEL) * g.radius * 1.5,
+      g.y + Math.sin(g.blick - SCHILD_WINKEL) * g.radius * 1.5,
+    )
+    ctx.arc(g.x, g.y, g.radius * 1.5, g.blick - SCHILD_WINKEL, g.blick + SCHILD_WINKEL)
+  }
+  ctx.lineWidth = 5
+  ctx.strokeStyle = mitAlpha('#dfe8ff', 0.75)
+  ctx.stroke()
+}
+
+/**
  * Dunkle Linie um jede Form.
  *
  * Im dichten Getuemmel verschmolzen gleichfarbige Gegner zu einer einzigen
@@ -255,7 +299,7 @@ function trennKante(ctx: CanvasRenderingContext2D): void {
 /** Haengt die Umrissform eines Gegners an den aktuellen Pfad. */
 function formPfad(
   ctx: CanvasRenderingContext2D,
-  g: { x: number; y: number; radius: number; art: { form: string } },
+  g: { x: number; y: number; radius: number; blick?: number; art: { form: string } },
   px: number,
   py: number,
   drehung: number,
@@ -288,6 +332,97 @@ function formPfad(
     // ausstrahlen. Der Gegensatz zu den zappelnden Dreiecken traegt die
     // Lesbarkeit.
     ctx.rect(g.x - r, g.y - r, r * 2, r * 2)
+    return
+  }
+
+  if (g.art.form === 'raute') {
+    // Auf die Spitze gestellt und mitdrehend: Der Schwaermer kreist, und die
+    // Form soll das schon im Stand andeuten.
+    const c = Math.cos(drehung * 0.8)
+    const sn = Math.sin(drehung * 0.8)
+    const lang = r * 1.5
+    ctx.moveTo(g.x + c * lang, g.y + sn * lang)
+    ctx.lineTo(g.x - sn * r * 0.62, g.y + c * r * 0.62)
+    ctx.lineTo(g.x - c * lang, g.y - sn * lang)
+    ctx.lineTo(g.x + sn * r * 0.62, g.y - c * r * 0.62)
+    ctx.closePath()
+    return
+  }
+
+  if (g.art.form === 'pfeil') {
+    // Pfeil mit eingezogenem Heck - zeigt dorthin, wo er hinwill, und ist
+    // damit auch waehrend der Vorwarnung eine Ansage.
+    const dx = px - g.x
+    const dy = py - g.y
+    const laenge = Math.hypot(dx, dy) || 1
+    const nx = dx / laenge
+    const ny = dy / laenge
+    const qx = -ny
+    const qy = nx
+    ctx.moveTo(g.x + nx * r * 1.6, g.y + ny * r * 1.6)
+    ctx.lineTo(g.x - nx * r * 0.8 + qx * r, g.y - ny * r * 0.8 + qy * r)
+    ctx.lineTo(g.x - nx * r * 0.25, g.y - ny * r * 0.25)
+    ctx.lineTo(g.x - nx * r * 0.8 - qx * r, g.y - ny * r * 0.8 - qy * r)
+    ctx.closePath()
+    return
+  }
+
+  if (g.art.form === 'stern') {
+    // Vierzackig, abwechselnd lang und kurz: sticht aus runden und eckigen
+    // Formen heraus, damit man den Schuetzen im Gewuehl findet.
+    for (let i = 0; i < 8; i++) {
+      const w = drehung * 0.5 + (i * Math.PI) / 4
+      const laenge = i % 2 === 0 ? r * 1.45 : r * 0.55
+      const x = g.x + Math.cos(w) * laenge
+      const y = g.y + Math.sin(w) * laenge
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    return
+  }
+
+  if (g.art.form === 'kreuz') {
+    // Ein Pflasterkreuz. Der Kitt flickt Risse - die Form sagt es, bevor der
+    // Spieler den Ring aufblitzen sieht.
+    const d = r * 0.4
+    ctx.moveTo(g.x - d, g.y - r)
+    ctx.lineTo(g.x + d, g.y - r)
+    ctx.lineTo(g.x + d, g.y - d)
+    ctx.lineTo(g.x + r, g.y - d)
+    ctx.lineTo(g.x + r, g.y + d)
+    ctx.lineTo(g.x + d, g.y + d)
+    ctx.lineTo(g.x + d, g.y + r)
+    ctx.lineTo(g.x - d, g.y + r)
+    ctx.lineTo(g.x - d, g.y + d)
+    ctx.lineTo(g.x - r, g.y + d)
+    ctx.lineTo(g.x - r, g.y - d)
+    ctx.lineTo(g.x - d, g.y - d)
+    ctx.closePath()
+    return
+  }
+
+  if (g.art.form === 'doppelquadrat') {
+    // Rahmen im Rahmen: "hieraus werden zwei". Der innere Ring laeuft
+    // gegenlaeufig, damit die Fuellregel ihn als Loch stehen laesst.
+    ctx.rect(g.x - r, g.y - r, r * 2, r * 2)
+    const i = r * 0.44
+    ctx.moveTo(g.x - i, g.y - i)
+    ctx.lineTo(g.x - i, g.y + i)
+    ctx.lineTo(g.x + i, g.y + i)
+    ctx.lineTo(g.x + i, g.y - i)
+    ctx.closePath()
+    return
+  }
+
+  if (g.art.form === 'halbmond') {
+    // Der Schildtraeger. Der Koerper ist ein Halbkreis, dessen flache Seite
+    // dorthin zeigt, wo der Panzer sitzt - der Bogen davor wird getrennt
+    // gezeichnet, weil er eine eigene Farbe braucht.
+    const blick = g.blick ?? 0
+    ctx.moveTo(g.x + Math.cos(blick + Math.PI / 2) * r, g.y + Math.sin(blick + Math.PI / 2) * r)
+    ctx.arc(g.x, g.y, r, blick + Math.PI / 2, blick - Math.PI / 2)
+    ctx.closePath()
     return
   }
 
@@ -394,6 +529,44 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   ctx.strokeStyle = mitAlpha(FARBEN.kristall, 0.09)
   ctx.lineWidth = 1.5
   ctx.stroke()
+
+  /*
+   * Der Stoss-Ring.
+   *
+   * Ein Ausweichmanoever mit Abklingzeit ist nur dann eine Entscheidung, wenn
+   * man *weiss*, ob es bereit ist. Steht der Ring voll, kann man stossen; ein
+   * Blick auf die eigene Figur genuegt, ohne die Augen vom Getuemmel zu
+   * nehmen. Deshalb hier und nicht als Balken am Bildrand.
+   */
+  const bereit = sp.stossAbkling <= 0
+  const anteil = bereit ? 1 : 1 - sp.stossAbkling / STOSS_ABKLING
+  if (!bereit || sp.stossRest > 0) {
+    ctx.beginPath()
+    ctx.arc(sp.x, sp.y, sp.radius + 7, -Math.PI / 2, -Math.PI / 2 + anteil * Math.PI * 2)
+    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, 0.55)
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+  } else {
+    // Voll: ein geschlossener Ring, der leicht atmet - das liest sich als
+    // "steht bereit" statt als "hier fehlt noch etwas".
+    const puls = 0.35 + 0.2 * Math.sin(performance.now() / 320)
+    ctx.beginPath()
+    ctx.arc(sp.x, sp.y, sp.radius + 7, 0, Math.PI * 2)
+    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, puls)
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+
+  // Waehrend des Stosses eine Schleifspur in Stossrichtung.
+  if (sp.stossRest > 0) {
+    const laenge = Math.hypot(sp.stossVx, sp.stossVy) || 1
+    ctx.beginPath()
+    ctx.moveTo(sp.x, sp.y)
+    ctx.lineTo(sp.x - (sp.stossVx / laenge) * 46, sp.y - (sp.stossVy / laenge) * 46)
+    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, 0.5)
+    ctx.lineWidth = 5
+    ctx.stroke()
+  }
 
   // Waehrend der Unverwundbarkeit blinken - sonst raetselt der Spieler, warum
   // Treffer ploetzlich nichts tun.

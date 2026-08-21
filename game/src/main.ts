@@ -1,8 +1,9 @@
+import { Ton } from './audio/ton'
 import { Eingabe } from './core/input'
 import { Schleife } from './core/loop'
 import { CHARAKTERE } from './game/charaktere'
 import type { Befehle } from './game/state'
-import { erzeugeSpielstand, tick } from './game/state'
+import { erzeugeSpielstand, leereBefehle, tick } from './game/state'
 import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
 import { SICHT_RADIUS, Zeichner } from './render/draw'
 
@@ -22,6 +23,7 @@ if (ctx === null) throw new Error('Canvas 2D nicht verfügbar')
 
 const zeichner = new Zeichner(canvas, ctx)
 const eingabe = new Eingabe()
+const ton = new Ton()
 
 const spiel = erzeugeSpielstand(Date.now() >>> 0)
 spiel.sichtRadius = SICHT_RADIUS
@@ -41,7 +43,7 @@ spiel.sichtRadius = SICHT_RADIUS
  */
 const SPEICHER = 'scherbenfeld.fortschritt.v1'
 
-type Fortschritt = { offen: string[]; bestwert: number }
+type Fortschritt = { offen: string[]; bestwert: number; tonAus?: boolean }
 
 function ladeFortschritt(): Fortschritt {
   // Ein kaputter, fremder oder gesperrter Eintrag darf das Spiel nicht am
@@ -57,6 +59,7 @@ function ladeFortschritt(): Fortschritt {
         typeof daten.bestwert === 'number' && Number.isFinite(daten.bestwert)
           ? Math.max(0, Math.floor(daten.bestwert))
           : 0,
+      tonAus: daten.tonAus === true,
     }
   } catch {
     return { offen: [], bestwert: 0 }
@@ -67,7 +70,7 @@ function sichereFortschritt(): void {
   try {
     localStorage.setItem(
       SPEICHER,
-      JSON.stringify({ offen: spiel.offen, bestwert: spiel.bestwert }),
+      JSON.stringify({ offen: spiel.offen, bestwert: spiel.bestwert, tonAus: spiel.tonAus }),
     )
   } catch {
     // Volle Quote oder gesperrter Speicher: Der Lauf laeuft trotzdem weiter.
@@ -77,6 +80,8 @@ function sichereFortschritt(): void {
 const gespeichert = ladeFortschritt()
 for (const id of gespeichert.offen) if (!spiel.offen.includes(id)) spiel.offen.push(id)
 spiel.bestwert = Math.max(spiel.bestwert, gespeichert.bestwert)
+spiel.tonAus = gespeichert.tonAus === true
+ton.stumm = spiel.tonAus
 
 // Geschrieben wird nur, wenn sich wirklich etwas geaendert hat. Beides aendert
 // sich ausschliesslich im Moment des Todes, also hoechstens einmal pro Lauf -
@@ -84,16 +89,10 @@ spiel.bestwert = Math.max(spiel.bestwert, gespeichert.bestwert)
 // `setItem` pro Bild waere es nicht.
 let offenStand = spiel.offen.length
 let bestStand = spiel.bestwert
+let tonStand = spiel.tonAus
 
 // Einmal angelegt und pro Tick ueberschrieben - kein Muell in der Schleife.
-const befehle: Befehle = {
-  x: 0,
-  y: 0,
-  bestaetigen: false,
-  links: false,
-  rechts: false,
-  wahl: -1,
-}
+const befehle: Befehle = leereBefehle()
 const bewegung = { x: 0, y: 0 }
 
 const schleife = new Schleife({
@@ -108,6 +107,10 @@ const schleife = new Schleife({
     befehle.bestaetigen = eingabe.getippt('bestaetigen')
     befehle.links = eingabe.getippt('links')
     befehle.rechts = eingabe.getippt('rechts')
+    befehle.hoch = eingabe.getippt('hoch')
+    befehle.runter = eingabe.getippt('runter')
+    // Escape und Start fuehren beide ins Pausenmenue - und wieder heraus.
+    befehle.pause = eingabe.getippt('zurueck') || eingabe.getippt('pause')
     befehle.wahl = eingabe.getippt('wahl1')
       ? 0
       : eingabe.getippt('wahl2')
@@ -119,9 +122,21 @@ const schleife = new Schleife({
     tick(spiel, befehle, dt)
     eingabe.tickEnde()
 
-    if (spiel.offen.length !== offenStand || spiel.bestwert !== bestStand) {
+    // Der Ton entsteht erst nach der ersten Taste: Browser lassen einen
+    // ungefragt angelegten AudioContext dauerhaft schweigen.
+    if (befehle.bestaetigen || befehle.pause) ton.wecken()
+    ton.stumm = spiel.tonAus
+    ton.spiele(spiel.klaenge)
+    spiel.klaenge.leeren()
+
+    if (
+      spiel.offen.length !== offenStand ||
+      spiel.bestwert !== bestStand ||
+      spiel.tonAus !== tonStand
+    ) {
       offenStand = spiel.offen.length
       bestStand = spiel.bestwert
+      tonStand = spiel.tonAus
       sichereFortschritt()
     }
   },

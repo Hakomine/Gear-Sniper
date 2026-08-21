@@ -67,6 +67,10 @@ function bossArtAlsGegner(b: BossArt): GegnerArt {
     id: `boss:${b.id}`,
     name: b.name,
     form: 'sechseck',
+    // Bosse laufen nicht ueber die Gegner-Registratur - `bewegeGegner` zweigt
+    // sie vorher zu `bossTick` ab. Der Eintrag steht nur da, damit der Typ
+    // vollstaendig ist.
+    verhalten: 'jaeger',
     farbe: b.farbe,
     radius: b.radius,
     hp: b.hp,
@@ -268,6 +272,7 @@ export function bossTick(s: Spielstand, g: Gegner, dt: number): void {
 function kuendigeAn(s: Spielstand, g: Gegner, z: BossZustand): void {
   const angriff = s.rng.pick(z.art.angriffe)
   z.angriff = angriff
+  s.klaenge.melde('warnung')
   z.zielX = s.spieler.x
   z.zielY = s.spieler.y
 

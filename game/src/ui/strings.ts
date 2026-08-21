@@ -32,6 +32,16 @@ export const TEXTE = {
   gesperrt: 'GESPERRT',
   punkteFaktor: 'Punkte-Faktor',
 
+  pauseTitel: 'ANGEHALTEN',
+  pauseWeiter: 'Weiter',
+  pauseTon: 'Ton',
+  pauseAn: 'an',
+  pauseAus: 'aus',
+  pauseAufgeben: 'Lauf aufgeben',
+  pauseAuswahl: 'Zurück zur Charakterwahl',
+  pauseHinweis: 'W / S wählt · LEERTASTE bestätigt · ESC schließt',
+  pauseWarnung: 'Aufgeben wertet den Lauf ganz normal aus',
+
   hudLeben: 'LEBEN',
   hudStufe: 'STUFE',
 

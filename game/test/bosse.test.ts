@@ -13,7 +13,7 @@ import { FUSIONEN } from '../src/game/fusionen'
 import { BOSS_ZERSPLITTER_ANTEIL, ZERSPLITTER_ANTEIL } from '../src/game/risse'
 import { zieheAngebote } from '../src/game/upgrades'
 import type { Spielstand } from '../src/game/state'
-import { erzeugeSpielstand, gitterAufbauen, starteLauf, tick } from '../src/game/state'
+import { erzeugeSpielstand, gitterAufbauen, leereBefehle, starteLauf, tick } from '../src/game/state'
 import { ruesteAus, WAFFEN, waffeMit } from '../src/game/weapons'
 import { legeGegner } from '../src/game/spawner'
 import { arbeiteKaskadeAb, verletzeGegner } from '../src/game/welt'
@@ -27,7 +27,7 @@ import { arbeiteKaskadeAb, verletzeGegner } from '../src/game/welt'
  */
 
 /** Nichts gedrueckt - fuer die Ticks, die diese Tests selbst ausloesen. */
-const RUHE = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: -1 }
+const RUHE = leereBefehle()
 
 function leererLauf(saat = 7): Spielstand {
   const s = erzeugeSpielstand(saat)

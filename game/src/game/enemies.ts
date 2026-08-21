@@ -1,4 +1,5 @@
 import { FARBEN } from '../render/palette'
+import type { GegnerVerhaltenId } from './gegnerVerhalten'
 
 /**
  * Gegner als Daten.
@@ -7,13 +8,38 @@ import { FARBEN } from '../render/palette'
  * In diesem Genre *ist* die Inhaltsmenge das Produkt: Wer fuer jeden Gegner
  * eine Klasse schreibt, baut nach dem zwanzigsten keine mehr.
  */
-export type Form = 'dreieck' | 'quadrat' | 'sechseck'
+/**
+ * Neun Formen fuer neun Arten.
+ *
+ * Eine Art, die aussieht wie eine andere, ist im Pulk keine eigene Art mehr -
+ * und der ganze Zweck der neuen Gegner ist, dass man sie *unterscheidet*.
+ * Deshalb bekommt jede ihre eigene Silhouette, und die Silhouette sagt, was
+ * sie tut: Das Kreuz flickt, der Doppelrahmen wird zwei, der Halbmond deckt.
+ */
+export type Form =
+  | 'dreieck'
+  | 'quadrat'
+  | 'sechseck'
+  | 'raute'
+  | 'pfeil'
+  | 'stern'
+  | 'kreuz'
+  | 'halbmond'
+  | 'doppelquadrat'
 
 export type GegnerArt = {
   readonly id: string
   readonly name: string
   /** Die eigentliche Ansage an den Spieler - siehe palette.ts. */
   readonly form: Form
+  /**
+   * Wie er sich benimmt.
+   *
+   * Bis hierher hatten *alle* Arten dasselbe Verhalten - Richtung zum
+   * Spieler, Tempo drauf. Drei Arten, ein Muster: Genau daran lag es, dass
+   * sich der Lauf nach zehn Minuten anfuehlte wie nach einer.
+   */
+  readonly verhalten: GegnerVerhaltenId
   readonly farbe: string
   readonly radius: number
   readonly hp: number
@@ -42,6 +68,7 @@ export const GEGNER_ARTEN = [
     id: 'splitter',
     name: 'Splitter',
     form: 'dreieck',
+    verhalten: 'jaeger',
     farbe: FARBEN.splitter,
     radius: 9,
     hp: 10,
@@ -57,6 +84,7 @@ export const GEGNER_ARTEN = [
     id: 'brocken',
     name: 'Brocken',
     form: 'quadrat',
+    verhalten: 'jaeger',
     farbe: FARBEN.brocken,
     radius: 15,
     hp: 58,
@@ -72,6 +100,7 @@ export const GEGNER_ARTEN = [
     id: 'elite',
     name: 'Kantiger',
     form: 'sechseck',
+    verhalten: 'jaeger',
     farbe: FARBEN.elite,
     radius: 20,
     hp: 165,
@@ -82,6 +111,124 @@ export const GEGNER_ARTEN = [
     abSekunde: 130,
     gewicht: 9,
     gewichtSpaet: 62,
+  },
+  {
+    id: 'schwaermer',
+    name: 'Schwärmer',
+    form: 'raute',
+    verhalten: 'schwaermer',
+    farbe: '#5ad1c8',
+    radius: 10,
+    hp: 22,
+    tempo: 104,
+    schaden: 9,
+    xp: 3,
+    masse: 1.1,
+    abSekunde: 40,
+    gewicht: 26,
+    gewichtSpaet: 30,
+  },
+  {
+    id: 'stuermer',
+    name: 'Stürmer',
+    form: 'pfeil',
+    verhalten: 'stuermer',
+    farbe: '#ff8a4d',
+    radius: 13,
+    hp: 46,
+    tempo: 62,
+    schaden: 18,
+    xp: 6,
+    masse: 2.2,
+    abSekunde: 80,
+    gewicht: 16,
+    gewichtSpaet: 34,
+  },
+  {
+    id: 'speier',
+    name: 'Speier',
+    form: 'stern',
+    verhalten: 'speier',
+    farbe: '#c86bff',
+    radius: 12,
+    hp: 40,
+    tempo: 54,
+    schaden: 15,
+    xp: 7,
+    masse: 1.6,
+    abSekunde: 120,
+    gewicht: 10,
+    gewichtSpaet: 26,
+  },
+  {
+    id: 'teiler',
+    name: 'Teiler',
+    form: 'doppelquadrat',
+    verhalten: 'teiler',
+    farbe: '#7de08a',
+    radius: 16,
+    hp: 70,
+    tempo: 50,
+    schaden: 13,
+    xp: 5,
+    masse: 2.8,
+    abSekunde: 180,
+    gewicht: 8,
+    gewichtSpaet: 30,
+  },
+  {
+    /*
+     * Kommt nie von selbst - `gewicht` und `abSekunde` sind so gesetzt, dass
+     * der Spawner ihn nicht zieht. Er entsteht ausschliesslich, wenn ein
+     * Teiler zerfaellt, und traegt deshalb selbst *nicht* das Teiler-Verhalten:
+     * Sonst waere ein Teiler eine Lawine ohne Ende.
+     */
+    id: 'teilerklein',
+    name: 'Bruchstück',
+    form: 'quadrat',
+    verhalten: 'jaeger',
+    farbe: '#a8ecb2',
+    radius: 9,
+    hp: 18,
+    tempo: 96,
+    schaden: 8,
+    xp: 2,
+    masse: 1,
+    abSekunde: 1e9,
+    gewicht: 0,
+    gewichtSpaet: 0,
+  },
+  {
+    id: 'kitt',
+    name: 'Kitt',
+    form: 'kreuz',
+    verhalten: 'kitt',
+    farbe: '#ffd166',
+    radius: 14,
+    hp: 95,
+    tempo: 64,
+    schaden: 11,
+    xp: 12,
+    masse: 2,
+    abSekunde: 210,
+    gewicht: 6,
+    gewichtSpaet: 22,
+  },
+  {
+    id: 'schild',
+    name: 'Schildträger',
+    form: 'halbmond',
+    verhalten: 'schild',
+    farbe: '#8fa4c8',
+    radius: 18,
+    hp: 130,
+    tempo: 46,
+    schaden: 20,
+    xp: 11,
+    masse: 4.5,
+    abSekunde: 300,
+    gewicht: 4,
+    gewichtSpaet: 26,
   },
 ] as const satisfies readonly GegnerArt[]
 

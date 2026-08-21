@@ -39,6 +39,71 @@ export function erzeugeSpieler(): Spieler {
     stillstand: 0,
     stillstandSchwelle: 0,
     dornen: 0,
+    stossRest: 0,
+    stossAbkling: 0,
+    stossVx: 0,
+    stossVy: 0,
+    stossLaden: 1,
+    blickX: 1,
+    blickY: 0,
+  }
+}
+
+/**
+ * Der Stoss - das zweite Verb.
+ *
+ * Bis hierher konnte der Spieler genau *eines*: laufen. Solange alle Gegner
+ * stumpf hinterherliefen, reichte das auch. Mit Stuermern, die eine Bahn
+ * ankuendigen und dann durchziehen, und Speiern, die aus der Ferne treffen,
+ * braucht es eine Antwort - sonst sind beide nur Aerger statt einer Ansage,
+ * auf die man reagieren kann.
+ *
+ * Er setzt bewusst **keinen Riss**: Der Stoss bleibt ein reines
+ * Ausweichmanoever und haengt sich nicht an die Kernregel. Damit braucht die
+ * Riss-Bitmaske auch keinen weiteren reservierten Platz.
+ */
+export const STOSS_DAUER = 0.18
+export const STOSS_ABKLING = 2.5
+/** Wie viel schneller der Stoss ist als normales Laufen. */
+export const STOSS_TEMPO = 3.4
+/** Unverwundbar bleibt man einen Tick laenger als der Stoss dauert. */
+const STOSS_SCHUTZ = STOSS_DAUER + 0.06
+
+/**
+ * Stoss ausloesen, wenn er bereit ist.
+ *
+ * Ohne Richtung stoesst er dorthin, wo man zuletzt hinlief - sonst waere ein
+ * Stoss im Stand ein verschenkter Knopfdruck, und genau im Gedraenge steht man
+ * oft kurz still.
+ */
+export function stosse(sp: Spieler, bx: number, by: number, letztX: number, letztY: number): boolean {
+  if (sp.stossAbkling > 0 || sp.stossRest > 0) return false
+
+  let rx = bx
+  let ry = by
+  if (rx === 0 && ry === 0) {
+    rx = letztX
+    ry = letztY
+  }
+  const laenge = Math.hypot(rx, ry)
+  if (laenge === 0) return false
+
+  const tempo = sp.tempo * sp.tempoMult * STOSS_TEMPO
+  sp.stossVx = (rx / laenge) * tempo
+  sp.stossVy = (ry / laenge) * tempo
+  sp.stossRest = STOSS_DAUER
+  sp.stossAbkling = STOSS_ABKLING
+  // Nicht ueberschreiben, wenn gerade schon Unverwundbarkeit laeuft: Wer
+  // direkt nach einem Treffer stoesst, soll seine Gnadenzeit behalten.
+  sp.unverwundbar = Math.max(sp.unverwundbar, STOSS_SCHUTZ)
+  return true
+}
+
+/** Stoss und Abklingzeit weiterlaufen lassen. */
+export function stossTick(sp: Spieler, dt: number): void {
+  if (sp.stossRest > 0) sp.stossRest = Math.max(0, sp.stossRest - dt)
+  if (sp.stossAbkling > 0) {
+    sp.stossAbkling = Math.max(0, sp.stossAbkling - dt * sp.stossLaden)
   }
 }
 
@@ -47,6 +112,16 @@ export function erzeugeSpieler(): Spieler {
  * Die Welt ist unbegrenzt, es gibt also keine Waende zu pruefen.
  */
 export function bewegeSpieler(sp: Spieler, bx: number, by: number, dt: number): void {
+  // Waehrend des Stosses zaehlt allein die Stossrichtung. Ein Stoss, den man
+  // mit dem Stick verziehen kann, ist kein Ausweichen mehr, sondern nur ein
+  // kurzer Temposchub - und dann laesst sich ein angekuendigter Sturm nicht
+  // mehr sauber lesen.
+  if (sp.stossRest > 0) {
+    sp.x += sp.stossVx * dt
+    sp.y += sp.stossVy * dt
+    return
+  }
+
   const tempo = sp.tempo * sp.tempoMult
   sp.x += bx * tempo * dt
   sp.y += by * tempo * dt

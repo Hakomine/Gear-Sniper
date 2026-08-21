@@ -69,6 +69,30 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.stossX = 0
   g.stossY = 0
   g.tot = false
+
+  /*
+   * Der Pool gibt gebrauchte Objekte heraus - die Werte des Vorbesitzers
+   * stehen noch drin, und *alle* muessen zurueckgesetzt werden.
+   *
+   * Genau das fehlte hier fuer die Risse, und der Fehler war im Spiel
+   * unsichtbar: Ein frisch gespawnter Gegner erbte die Risse seines
+   * Vorgaengers - mal kam er mit zwei Rissen zur Welt und zersprang beim
+   * ersten Treffer, mal trug er dessen `zersplittert` und konnte nie wieder
+   * zerspringen. Die Kernregel wurde damit zum Wuerfelwurf statt zur Folge
+   * des eigenen Baus.
+   */
+  g.risseMaske = 0
+  g.risse = 0
+  g.risseZeit = 0
+  g.zersplittert = false
+  g.bossZustand = null
+
+  // Arbeitsspeicher der Verhalten - siehe `gegnerVerhalten.ts`.
+  g.takt = 0
+  g.zustand = 0
+  g.merkX = 0
+  g.merkY = 0
+  g.blick = 0
   return g
 }
 

@@ -4,7 +4,7 @@ import { GEGNER_ARTEN } from '../src/game/enemies'
 import { legeGegner, MAX_GEGNER } from '../src/game/spawner'
 import { ruesteAus, WAFFEN, werteAuf } from '../src/game/weapons'
 import type { Befehle } from '../src/game/state'
-import { erzeugeSpielstand, starteLauf, tick } from '../src/game/state'
+import { erzeugeSpielstand, leereBefehle, starteLauf, tick } from '../src/game/state'
 
 /**
  * Leistungsmessung ohne Browser.
@@ -47,7 +47,11 @@ function messen(): void {
   })
   s.spieler.abklingMult = 0.7
 
-  const b: Befehle = { x: 1, y: 0, bestaetigen: false, links: false, rechts: false, wahl: 0 }
+  const b: Befehle = leereBefehle()
+  // Levelups von selbst wegraeumen und dauerhaft nach rechts laufen: Die
+  // Messung soll den Dauerzustand treffen, nicht ein offenes Menue.
+  b.wahl = 0
+  b.x = 1
   const zeiten = new Float64Array(TICKS)
   let feindSpitze = 0
 
@@ -120,10 +124,27 @@ function bossHalten(s: ReturnType<typeof erzeugeSpielstand>): void {
   s.zeit = echteZeit
 }
 
-/** Nachlegen, bis wieder die Zielzahl steht - gemessen wird der Dauerzustand. */
+/**
+ * Alle Arten, die im Spiel wirklich vorkommen.
+ *
+ * `gewicht: 0` haben nur Arten, die der Spawner nie zieht - das Bruchstueck
+ * entsteht ausschliesslich, wenn ein Teiler zerfaellt, und darf die Messung
+ * nicht kuenstlich verduennen.
+ */
+const MISCHUNG = GEGNER_ARTEN.filter((a) => a.gewicht > 0)
+
+/**
+ * Nachlegen, bis wieder die Zielzahl steht - gemessen wird der Dauerzustand.
+ *
+ * Reihum durch *alle* Arten, nicht nur Splitter. Das ist der teurere Fall und
+ * der einzig ehrliche: Der Schwaermer kreist, der Stuermer legt Effekte an,
+ * der Speier fuellt den Geschosspool, und der Kitt fragt jede gute Sekunde
+ * seinen Umkreis ab. Eine Messung mit 1400 Splittern wuerde von alledem
+ * nichts sehen.
+ */
 function auffuellen(s: ReturnType<typeof erzeugeSpielstand>): void {
-  const art = GEGNER_ARTEN[0]
   while (s.gegner.anzahl < ZIEL_GEGNER) {
+    const art = MISCHUNG[s.gegner.anzahl % MISCHUNG.length]
     const w = s.rng.next() * Math.PI * 2
     const r = s.rng.range(60, s.sichtRadius)
     if (legeGegner(s, art, s.spieler.x + Math.cos(w) * r, s.spieler.y + Math.sin(w) * r) === null) {

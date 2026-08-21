@@ -12,7 +12,7 @@ import { erzeugeSpieler } from '../src/game/player'
 import { zersplitterBereit } from '../src/game/risse'
 import { legeGegner } from '../src/game/spawner'
 import type { Spieler, Statistik } from '../src/game/state'
-import { erzeugeSpielstand, gitterAufbauen, starteLauf, tick } from '../src/game/state'
+import { erzeugeSpielstand, gitterAufbauen, leereBefehle, starteLauf, tick } from '../src/game/state'
 import { istVollendet, MAX_WAFFEN } from '../src/game/weapons'
 import { arbeiteKaskadeAb, PLATZ_ANZAHL, verletzeGegner } from '../src/game/welt'
 
@@ -26,7 +26,7 @@ import { arbeiteKaskadeAb, PLATZ_ANZAHL, verletzeGegner } from '../src/game/welt
  * und dann misst die Liste nur noch, wer am laengsten gespielt hat.
  */
 
-const RUHE = { x: 0, y: 0, bestaetigen: false, links: false, rechts: false, wahl: -1 }
+const RUHE = leereBefehle()
 
 /** Die Grundwerte, an denen sich "besser" ueberhaupt messen laesst. */
 function werte(sp: Spieler): Record<string, number> {
