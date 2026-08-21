@@ -4,12 +4,23 @@ import { RaumGitter } from '../core/spatialHash'
 import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import { xpFuerLevel } from './damage'
 import { zerspringen } from './effects'
+import type { EtappenWerte, TuerId } from './etappen'
+import { ETAPPEN_PUNKTE, leereEtappenWerte, TUEREN, tuerMit } from './etappen'
+import type { Schrein } from './schreine'
+import {
+  AMBOSS_DAUER,
+  AMBOSS_ZERFALL,
+  GIER_AUFSCHLAG,
+  leererSchrein,
+  SCHREIN_RADIUS,
+  verteileSchreine,
+} from './schreine'
 import type { GegnerArt } from './enemies'
 import { Klangpuffer } from './klaenge'
 import { aktualisiereKristalle, legeKristall } from './pickups'
 import { bewegeSpieler, erzeugeSpieler, stosse, stossTick, verletzeSpieler } from './player'
 import type { BossZustand } from './bosse'
-import { bossTick, bossWelle } from './bosse'
+import { bossTick, bossWelle, findeBoss, naechsteBossZeit } from './bosse'
 import type { Charakter } from './charaktere'
 import type { CharakterId } from './charaktere'
 import {
@@ -21,7 +32,7 @@ import {
   SCHLIFF_NAEHE,
   SCHLIFF_ZERFALL,
 } from './charaktere'
-import { risseAblaufen } from './risse'
+import { risseAblaufen, rissSetzen, zersplitterBereit } from './risse'
 import type { Bewegung } from './gegnerVerhalten'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
@@ -33,6 +44,7 @@ import { ruesteAus, WAFFE_START } from './weapons'
 import {
   arbeiteKaskadeAb,
   DORNEN_PLATZ,
+  KRIT_PLATZ,
   GEIST_PLATZ,
   PLATZ_ANZAHL,
   SPLITTER_PLATZ,
@@ -56,7 +68,7 @@ import {
  * gibt es keine gegenseitigen Importe.
  */
 
-export type Phase = 'titel' | 'laufend' | 'levelup' | 'pause' | 'tot'
+export type Phase = 'titel' | 'laufend' | 'levelup' | 'pause' | 'atempause' | 'tot'
 
 /**
  * Ein Befehlssatz, in dem nichts gedrueckt ist.
@@ -75,6 +87,7 @@ export function leereBefehle(): Befehle {
     hoch: false,
     runter: false,
     pause: false,
+    stumm: false,
     wahl: -1,
   }
 }
@@ -105,6 +118,51 @@ export type Spieler = {
   xpMult: number
   /** Wie viele Waffen dieser Charakter tragen kann. */
   maxWaffen: number
+  // --- Regelverändernde Gegenstaende ----------------------------------------
+  // Alle stehen auf 0 beziehungsweise 1 und kosten damit genau eine Abfrage an
+  // der Stelle, an der sie greifen - dasselbe Muster wie die
+  // Charakter-Mechaniken darueber. Ein Ereignissystem waere sauberer zu lesen
+  // und in der heissen Schleife teurer, als es fuer zwoelf Eintraege einbringt.
+
+  /** Nachhall: Sekunden, die ein Riss laenger haelt. */
+  rissDauer: number
+  /** Kettenriss: Jeder n-te Riss springt auf einen zweiten Gegner ueber. 0 = nie. */
+  kettenRiss: number
+  /** Zaehler dazu. */
+  kettenZaehler: number
+  /** Splitterfeld: Sekunden, die eine Zersplitterung eine Zone hinterlaesst. */
+  splitterFeld: number
+  /** Blutglas: Leben je Zersplitterung. */
+  blutglas: number
+  /** Fehlschlag: Kritische Treffer setzen einen zusaetzlichen Riss. */
+  kritRiss: boolean
+  /** Zwillingsbruch: Faktor auf Weite und Gegenfaktor auf Wucht. */
+  zwillingsbruch: number
+  /** Standhaft: Sekunden Stillstand fuer einen Schild, der einen Treffer schluckt. */
+  standhaft: number
+  /** Steht ein geladener Schild bereit? */
+  schild: boolean
+  /** Wie lange schon stillgestanden wird - fuer Standhaft. */
+  stehZeit: number
+  /** Steht der Spieler gerade? Einmal je Tick gerechnet, mehrfach gelesen. */
+  steht: boolean
+  /** Aussetzer: Ein Treffer zersplittert alles im Umkreis. */
+  aussetzer: boolean
+  /** Sog: Einzugsradius im Stillstand. */
+  sog: number
+  /** Zeitlupe: Unter 30 % Leben laeuft alles andere langsamer. */
+  zeitlupe: number
+  /** Letzter Riss: Der Todesstoss auf einen Boss reisst alles im Bild an. */
+  letzterRiss: boolean
+
+  /**
+   * Faktor auf eingehenden Schaden.
+   *
+   * Steht am Spieler und nicht in den Etappenwerten, weil die Tuer
+   * "Duennhaeutig" als einzige dauerhaft wirkt - sie ist ein Handel fuer den
+   * ganzen restlichen Lauf, kein Wetter fuer die naechsten neunzig Sekunden.
+   */
+  schadenNimmt: number
 
   // --- Charakter-Mechaniken -------------------------------------------------
   // Alle null, ausser der jeweilige Charakter setzt sie. Sie kosten damit eine
@@ -362,6 +420,8 @@ export type Befehle = {
   runter: boolean
   /** Escape oder Start - oeffnet und schliesst das Pausenmenue. */
   pause: boolean
+  /** M - schaltet den Ton stumm, in jeder Phase. */
+  stumm: boolean
   /** Direktwahl per Zifferntaste, sonst -1. */
   wahl: number
 }
@@ -400,6 +460,8 @@ export type Spielstand = {
   zonen: Pool<Zone>
   effekte: Pool<Effekt>
   feindSchuesse: Pool<FeindSchuss>
+  /** Schreine der laufenden Etappe - siehe `schreine.ts`. */
+  schreine: Pool<Schrein>
   kristalle: Pool<Kristall>
   partikel: Pool<Partikel>
   zahlen: Pool<SchadensZahl>
@@ -414,6 +476,28 @@ export type Spielstand = {
   levelWartet: number
   spawnSpeicher: number
   naechsterSchwarm: number
+  /**
+   * Die laufende Etappe, ab 1.
+   *
+   * Eine Etappe ist der Abschnitt zwischen zwei Bossen. Sie endet, wenn ihr
+   * Boss faellt - dann haelt das Spiel an und man waehlt eine Tuer.
+   */
+  etappe: number
+  /** Die fuenf Stellschrauben, die die gewaehlte Tuer setzt. */
+  etappenWerte: EtappenWerte
+  /** Welche drei Tueren gerade zur Wahl stehen. */
+  tuerAngebot: TuerId[]
+  tuerWahl: number
+  /** Gesetzt, sobald der letzte Boss der Etappe liegt - `laufendTick` haelt dann an. */
+  etappeVorbei: boolean
+  /**
+   * Wie viele Kartenbildschirme noch offen sind.
+   *
+   * Eine Tuer kann zwei Karten einbringen; statt zwei Angebote nebeneinander
+   * zu legen, kommen sie nacheinander - sonst waehlt man die zweite, ohne die
+   * Wirkung der ersten gesehen zu haben.
+   */
+  kartenSchuld: number
   /** Wie viele Bosswellen schon kamen - bestimmt, wer als naechstes auftritt. */
   bossNummer: number
   /** Die naechste Karte ist die Bossbelohnung - bessere Seltenheiten. */
@@ -495,6 +579,7 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     zonen: new Pool<Zone>(leereZone, 8),
     effekte: new Pool<Effekt>(leererEffekt, 64),
     feindSchuesse: new Pool<FeindSchuss>(leererFeindSchuss, 64),
+    schreine: new Pool<Schrein>(leererSchrein, 4),
     kristalle: new Pool<Kristall>(leererKristall, 256),
     partikel: new Pool<Partikel>(leeresPartikel, 512),
     zahlen: new Pool<SchadensZahl>(leereZahl, 64),
@@ -506,6 +591,12 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     levelWartet: 0,
     spawnSpeicher: 0,
     naechsterSchwarm: 42,
+    etappe: 1,
+    etappenWerte: leereEtappenWerte(),
+    tuerAngebot: [],
+    tuerWahl: 0,
+    kartenSchuld: 0,
+    etappeVorbei: false,
     bossNummer: 0,
     bossKarte: false,
     charakter: charakterMit('splitter'),
@@ -547,6 +638,7 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.zonen.alleFreigeben()
   s.effekte.alleFreigeben()
   s.feindSchuesse.alleFreigeben()
+  s.schreine.alleFreigeben()
   s.kristalle.alleFreigeben()
   s.partikel.alleFreigeben()
   s.zahlen.alleFreigeben()
@@ -558,6 +650,12 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.levelWartet = 0
   s.spawnSpeicher = 0
   s.naechsterSchwarm = 42
+  s.etappe = 1
+  s.etappenWerte = leereEtappenWerte()
+  s.tuerAngebot = []
+  s.tuerWahl = 0
+  s.kartenSchuld = 0
+  s.etappeVorbei = false
   s.bossNummer = 0
   s.bossKarte = false
   s.angebote = []
@@ -575,6 +673,9 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   }
   s.naechsteId = 1
   startWelle(s)
+  // Auch die erste Etappe bekommt ihre Schreine - sonst steht das Feld genau
+  // dort leer, wo der Spieler das Spiel kennenlernt.
+  verteileSchreine(s, s.rng)
 }
 
 // ---------------------------------------------------------------------------
@@ -594,6 +695,10 @@ const kandidaten: number[] = []
 const zonenTreffer: Gegner[] = []
 
 export function tick(s: Spielstand, b: Befehle, dt: number): void {
+  // Vor allem anderen und in jeder Phase: Wer stummschalten will, will das
+  // sofort - nicht erst, wenn das Menue zu ist.
+  if (b.stumm) s.tonAus = !s.tonAus
+
   switch (s.phase) {
     case 'titel': {
       if (b.links) s.charakterWahl = (s.charakterWahl + CHARAKTERE.length - 1) % CHARAKTERE.length
@@ -615,6 +720,10 @@ export function tick(s: Spielstand, b: Befehle, dt: number): void {
 
     case 'pause':
       pauseTick(s, b)
+      return
+
+    case 'atempause':
+      atempauseTick(s, b, dt)
       return
 
     case 'levelup':
@@ -699,7 +808,12 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
     }
   }
 
-  const sdt = dt * s.zeitskala
+  // Zeitlupe: Unter 30 Prozent Leben laeuft alles *andere* langsamer. Der
+  // Spieler bewegt sich weiter normal - die Rettung liegt darin, dass man
+  // wieder lesen kann, was auf einen zukommt.
+  const sp0 = s.spieler
+  const knapp = sp0.zeitlupe > 0 && sp0.hp < sp0.maxHp * 0.3
+  const sdt = dt * s.zeitskala * (knapp ? Math.max(0.4, 1 - sp0.zeitlupe) : 1)
   s.zeit += sdt
   s.statistik.zeit = s.zeit
 
@@ -743,11 +857,175 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
     gibXp(s, ausbeute)
   }
 
+  // Standhaft und Sog haengen beide daran, ob man wirklich steht - genau wie
+  // der Amboss. Einmal gerechnet, dreimal gelesen.
+  sp.steht = b.x === 0 && b.y === 0 && sp.stossRest <= 0
+  if (sp.standhaft > 0) {
+    if (sp.steht) {
+      sp.stehZeit += sdt
+      if (sp.stehZeit >= sp.standhaft) sp.schild = true
+    } else {
+      sp.stehZeit = 0
+    }
+  }
+
+  schreinTick(s, sdt, b)
   charakterTick(s, sdt)
   aktualisiereOptik(s, dt)
   folgeKamera(s, dt)
 
-  if (s.spieler.hp <= 0) beendeLauf(s)
+  if (s.spieler.hp <= 0) {
+    beendeLauf(s)
+    return
+  }
+  if (s.etappeVorbei) oeffneAtempause(s)
+}
+
+/**
+ * Schreine: laden, ausloesen, aufraeumen.
+ *
+ * Der Amboss ist der eigentliche Griff dieser Datei. Er verlangt drei Sekunden
+ * **Stillstand** - also genau das, was einen in diesem Spiel umbringt. Und er
+ * kollidiert mit dem Charakter *Riss*, dessen Geisterriss drei Sekunden
+ * **ohne Treffer** verlangt: Fuer ihn ist der Amboss doppelt reizvoll und
+ * doppelt gefaehrlich. Solche Ueberschneidungen sind der Grund, warum sich
+ * Charaktere verschieden anfuehlen, statt nur verschieden auszusehen.
+ */
+function schreinTick(s: Spielstand, dt: number, b: Befehle): void {
+  const liste = s.schreine.aktiv
+  const sp = s.spieler
+  const steht = b.x === 0 && b.y === 0 && sp.stossRest <= 0
+
+  for (let i = 0; i < liste.length; i++) {
+    const sch = liste[i]
+    if (sch.benutzt) continue
+
+    const dx = sp.x - sch.x
+    const dy = sp.y - sch.y
+    const nah = dx * dx + dy * dy <= SCHREIN_RADIUS * SCHREIN_RADIUS
+
+    if (sch.art !== 'amboss') {
+      // Die anderen beiden loesen beim Betreten aus - ihr Preis steht auf dem
+      // Schrein, nicht in einer Wartezeit.
+      if (nah) loeseSchreinAus(s, sch)
+      continue
+    }
+
+    if (nah && steht) {
+      sch.ladung += dt / AMBOSS_DAUER
+      if (sch.ladung >= 1) loeseSchreinAus(s, sch)
+      continue
+    }
+    // Weitergehen leert schneller, als Stehen fuellt: Sonst sammelt man den
+    // Amboss in drei kurzen Anlaeufen ein, und aus der Mutprobe wird
+    // Buchhaltung.
+    sch.ladung = Math.max(0, sch.ladung - dt * AMBOSS_ZERFALL)
+  }
+}
+
+function loeseSchreinAus(s: Spielstand, sch: Schrein): void {
+  sch.benutzt = true
+  sch.ladung = 1
+  s.klaenge.melde('stufe')
+  s.blitz = Math.max(s.blitz, 0.6)
+  legeEffekt(s, 'ring', sch.x, sch.y, 190, 0.6, FARBEN.textHervor, 4)
+
+  switch (sch.art) {
+    case 'amboss':
+      // Zwei Karten zur Wahl: Der Amboss zahlt in Entscheidungen, nicht in
+      // Zahlen. Deshalb ist er der beste der drei.
+      s.kartenSchuld = 1
+      s.bossKarte = false
+      naechsteKarte(s)
+      return
+    case 'gierscherbe':
+      // Der Aufschlag gilt nur bis zur naechsten Tuer - `etappenWerte` wird
+      // dort ohnehin zurueckgesetzt.
+      s.etappenWerte.zaehigkeit *= 1 + GIER_AUFSCHLAG
+      s.etappenWerte.nachschub *= 1 + GIER_AUFSCHLAG
+      gibXp(s, s.spieler.xpNaechste)
+      return
+    case 'bruchmal':
+      // Zieht die naechste Bosswelle sofort heran - und der zaehlt dann als
+      // der Boss dieser Etappe.
+      s.zeit = Math.max(s.zeit, naechsteBossZeit(s.bossNummer))
+      bossWelle(s)
+      s.kartenSchuld = 1
+      s.bossKarte = true
+      naechsteKarte(s)
+      return
+  }
+}
+
+/**
+ * Die Atempause zwischen zwei Etappen.
+ *
+ * Drei von sechs Tueren, gezogen aus `s.rng` - nicht `rngOptik`, denn was zur
+ * Wahl steht, veraendert den Lauf. "Ruhe" ist immer dabei: Ohne eine Tuer ohne
+ * Preis waere die Pause keine Entscheidung, sondern eine Zwangsabgabe.
+ */
+function oeffneAtempause(s: Spielstand): void {
+  s.etappeVorbei = false
+  s.phase = 'atempause'
+  s.zeitskala = 0
+  s.tuerWahl = 0
+
+  const uebrige = TUEREN.filter((t) => t.id !== 'ruhe').map((t) => t.id)
+  // Fisher-Yates auf einer Kopie, damit dieselbe Tuer nicht zweimal steht.
+  for (let i = uebrige.length - 1; i > 0; i--) {
+    const j = Math.floor(s.rng.next() * (i + 1))
+    ;[uebrige[i], uebrige[j]] = [uebrige[j], uebrige[i]]
+  }
+  s.tuerAngebot = ['ruhe', uebrige[0], uebrige[1]]
+}
+
+function atempauseTick(s: Spielstand, b: Befehle, dt: number): void {
+  // Die Optik laeuft weiter, damit das Bild hinter den Tueren nicht tot wirkt.
+  aktualisiereOptik(s, dt)
+
+  const anzahl = s.tuerAngebot.length
+  if (anzahl === 0) {
+    s.phase = 'laufend'
+    return
+  }
+  if (b.links) s.tuerWahl = (s.tuerWahl + anzahl - 1) % anzahl
+  if (b.rechts) s.tuerWahl = (s.tuerWahl + 1) % anzahl
+
+  let gewaehlt = -1
+  if (b.wahl >= 0 && b.wahl < anzahl) gewaehlt = b.wahl
+  else if (b.bestaetigen) gewaehlt = s.tuerWahl
+  if (gewaehlt < 0) return
+
+  const tuer = tuerMit(s.tuerAngebot[gewaehlt])
+  // Erst zuruecksetzen, dann anwenden: Eine Tuer wirkt genau eine Etappe.
+  s.etappenWerte = leereEtappenWerte()
+  tuer.anwenden(s.etappenWerte, s.spieler)
+
+  s.etappe++
+  verteileSchreine(s, s.rng)
+  s.tuerAngebot = []
+  s.bossKarte = tuer.gute
+  s.kartenSchuld = tuer.karten
+  s.klaenge.melde('stufe')
+  naechsteKarte(s)
+}
+
+/**
+ * Den naechsten offenen Kartenbildschirm oeffnen - oder weiterlaufen.
+ *
+ * Zwei Karten kommen nacheinander statt nebeneinander: Sonst waehlt man die
+ * zweite, ohne die Wirkung der ersten gesehen zu haben.
+ */
+function naechsteKarte(s: Spielstand): void {
+  if (s.kartenSchuld <= 0) {
+    s.bossKarte = false
+    s.zeitskala = 1
+    s.phase = 'laufend'
+    s.spieler.unverwundbar = Math.max(s.spieler.unverwundbar, 0.6)
+    return
+  }
+  s.kartenSchuld--
+  oeffneLevelup(s)
 }
 
 /**
@@ -765,7 +1043,7 @@ export function beendeLauf(s: Spielstand): void {
   s.totSeit = 0
   s.trauma = 1
   s.blitz = 0.9
-  s.punkte = punkteFuer(s.statistik, s.charakter.punkteFaktor)
+  s.punkte = punkteFuer(s.statistik, s.charakter.punkteFaktor) + (s.etappe - 1) * ETAPPEN_PUNKTE
   s.neuFreigeschaltet = freigeschaltetDurch(s.statistik, s.spieler).filter(
     (id) => !s.offen.includes(id),
   )
@@ -799,7 +1077,7 @@ function bewegeGegner(s: Spielstand, dt: number): void {
 
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
-    risseAblaufen(g, dt)
+    risseAblaufen(g, dt * s.etappenWerte.rissZerfall)
 
     // Bosse bewegen sich nach eigenem Muster und draengen sich nicht: Sie sind
     // zu gross und zu schwer, um von der Trennkraft sinnvoll geschoben zu
@@ -1142,9 +1420,12 @@ function raeumeTote(s: Spielstand): void {
       s.blitz = 0.9
       // Ein Boss muss sich lohnen: eine Karte sofort, mit deutlich besseren
       // Seltenheiten. Sie kommt zusaetzlich zum normalen Aufstieg.
-      s.bossKarte = true
-      if (s.levelWartet <= 0 && s.phase === 'laufend') s.levelWartet = LEVELUP_RAMPE
       g.bossZustand = null
+      // Letzter Riss: Der Todesstoss auf einen Boss reisst das ganze Bild auf.
+      if (s.spieler.letzterRiss) reisseUmkreisAuf(s, g.x, g.y, s.sichtRadius)
+      // Die Etappe endet, wenn ihr letzter Boss liegt. Bei "Zwillinge" stehen
+      // zwei auf dem Feld - dann zaehlt der zweite.
+      if (findeBoss(s) === null) s.etappeVorbei = true
     }
 
     s.gegner.freigeben(i)
@@ -1163,17 +1444,52 @@ function trefferAmSpieler(s: Spielstand, schaden: number): void {
   const sp = s.spieler
   if (sp.unverwundbar > 0) return
 
+  // Standhaft: Der geladene Schild schluckt genau einen Treffer und ist danach
+  // weg. Er kostet Stillstand - also das, was sonst toedlich ist.
+  if (sp.schild) {
+    sp.schild = false
+    sp.stehZeit = 0
+    sp.unverwundbar = UNVERWUNDBAR
+    s.klaenge.melde('riss')
+    legeEffekt(s, 'ring', sp.x, sp.y, 70, 0.35, FARBEN.heilung, 4)
+    return
+  }
+
   // Ein Treffer setzt den Stillstand zurueck - das ist die ganze Spannung des
   // Riss-Charakters: Sauber bleiben zahlt sich aus, ein Fehler kostet sofort.
   sp.stillstand = 0
 
-  verletzeSpieler(sp, schaden)
+  verletzeSpieler(sp, schaden * sp.schadenNimmt)
   s.klaenge.melde('einschlag')
   sp.unverwundbar = UNVERWUNDBAR
   sp.blitz = 1
   s.trauma = Math.min(1, s.trauma + 0.45)
   s.blitz = Math.max(s.blitz, 0.5)
+
+  // Aussetzer: Aus einem Fehler wird eine Chance - aber nur, wenn ringsum
+  // genug steht. Wer sauber spielt, sieht diesen Gegenstand nie wirken.
+  if (sp.aussetzer) reisseUmkreisAuf(s, sp.x, sp.y, 220)
 }
+
+/**
+ * Alles im Umkreis mit einem eigenen Platz aufreissen.
+ *
+ * Fuer "Aussetzer" und "Letzter Riss". Beide setzen *einen* Riss, keinen
+ * dritten - was dadurch zerspringt, hatte vorher schon zwei. Genau so soll es
+ * sein: Der Gegenstand belohnt einen gemischten Bau, er ersetzt ihn nicht.
+ */
+function reisseUmkreisAuf(s: Spielstand, x: number, y: number, radius: number): void {
+  gegnerImUmkreis(s, x, y, radius, aufreissZiele)
+  for (let i = 0; i < aufreissZiele.length; i++) {
+    const g = aufreissZiele[i]
+    rissSetzen(g, KRIT_PLATZ, s.spieler.rissDauer)
+    if (zersplitterBereit(g)) verletzeGegner(s, g, 1, KRIT_PLATZ, false, 0, 0)
+  }
+  legeEffekt(s, 'ring', x, y, radius, 0.4, FARBEN.treffer, 4)
+}
+
+/** Eigene Liste - diese Abfrage laeuft mitten in der Trefferkette. */
+const aufreissZiele: Gegner[] = []
 
 /** Bossgeschosse fliegen und pruefen gegen den Spieler - nicht gegen die Gegner. */
 function bewegeFeindSchuesse(s: Spielstand, dt: number): void {
@@ -1322,6 +1638,14 @@ function levelupTick(s: Spielstand, b: Befehle, dt: number): void {
 
 function schliesseLevelup(s: Spielstand): void {
   s.angebote = []
+
+  // Eine Tuer kann mehrere Karten einbringen. Solange noch eine offen ist,
+  // geht es direkt in den naechsten Bildschirm statt zurueck ins Getuemmel.
+  if (s.kartenSchuld > 0) {
+    naechsteKarte(s)
+    return
+  }
+
   s.bossKarte = false
   s.zeitskala = 1
   s.phase = 'laufend'

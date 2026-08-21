@@ -76,13 +76,16 @@ export const KASKADE_MAX_TIEFE = 3
  * Splitter erben den Platz ihres Verursachers, sonst waeren Bazooka-Geschoss
  * und Bazooka-Knall zwei verschiedene Waffen und die Regel waere ausgehebelt.
  */
-export function rissSetzen(g: Gegner, platz: number): boolean {
+export function rissSetzen(g: Gegner, platz: number, zusatz = 0): boolean {
   // Ein Bit je Guertelplatz. Ein `Set` pro Gegner waere bei 1400 Gegnern
   // genau die Sorte Muell, die die Pools an anderer Stelle vermeiden - fuenf
   // Plaetze passen in fuenf Bits, und Pruefen wie Setzen sind je eine
   // Operation.
   const bit = 1 << platz
-  g.risseZeit = RISS_FENSTER
+  // `zusatz` kommt vom Gegenstand "Nachhall". Er steht als Parameter da und
+  // nicht als Blick in den Spielstand, damit diese Datei rein bleibt: Sie
+  // rechnet Risse, sie kennt keinen Spieler.
+  g.risseZeit = RISS_FENSTER + zusatz
 
   if ((g.risseMaske & bit) !== 0) return false
   g.risseMaske |= bit

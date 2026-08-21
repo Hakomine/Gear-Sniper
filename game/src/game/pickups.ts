@@ -58,7 +58,10 @@ export function legeKristall(s: Spielstand, x: number, y: number, wert: number):
 export function aktualisiereKristalle(s: Spielstand, dt: number): number {
   const sp = s.spieler
   const liste = s.kristalle.aktiv
-  const magnet2 = sp.magnetRadius * sp.magnetRadius
+  // Sog: Wer stillsteht, zieht weiter. Passt zum Amboss und zu Standhaft -
+  // wer ohnehin stehenbleiben muss, bekommt einen Grund mehr dafuer.
+  const magnet = sp.magnetRadius + (sp.steht ? sp.sog : 0)
+  const magnet2 = magnet * magnet
   const aufsammeln = sp.radius + 12
   const aufsammeln2 = aufsammeln * aufsammeln
   let ausbeute = 0
@@ -91,7 +94,7 @@ export function aktualisiereKristalle(s: Spielstand, dt: number): number {
       const d = Math.sqrt(d2) || 1
       // Naeher = schneller. Der Kristall schnellt am Ende regelrecht heran,
       // und genau dieses Zuschnappen ist die Belohnung.
-      const zug = 620 + (1 - Math.min(1, d / sp.magnetRadius)) * 900
+      const zug = 620 + (1 - Math.min(1, d / magnet)) * 900
       k.vx += (dx / d) * zug * dt
       k.vy += (dy / d) * zug * dt
     } else {

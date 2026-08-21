@@ -1,5 +1,6 @@
 import { FARBEN } from '../render/palette'
 import { legeZahl, zerspringen } from './effects'
+import { heileSpieler } from './player'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import {
   BOSS_ZERSPLITTER_ANTEIL,
@@ -61,7 +62,15 @@ export const GEIST_PLATZ = MAX_WAFFEN + 1
 export const DORNEN_PLATZ = MAX_WAFFEN + 2
 
 /** Wie viele Platznummern es insgesamt gibt - Laenge der Auswertungs-Arrays. */
-export const PLATZ_ANZAHL = MAX_WAFFEN + 3
+/**
+ * Fehlschlag: Der zusaetzliche Riss aus einem kritischen Treffer.
+ *
+ * Ein eigener Platz, kein geliehener: Waere es der Platz der Waffe, zaehlte er
+ * gar nicht - die hat ihren Riss ja schon gesetzt.
+ */
+export const KRIT_PLATZ = MAX_WAFFEN + 3
+
+export const PLATZ_ANZAHL = MAX_WAFFEN + 4
 
 /**
  * Obergrenze fuer den aufgestauten Rueckstoss eines Gegners.
@@ -157,14 +166,31 @@ export function verletzeGegner(
   // greift.
   // Nur der *neue* Riss meldet sich - sonst knackst es bei jedem Treffer, und
   // das Geraeusch verliert genau die Bedeutung, die es tragen soll.
-  if (rissSetzen(g, platz)) s.klaenge.melde('riss')
+  const sp = s.spieler
+  if (rissSetzen(g, platz, sp.rissDauer)) {
+    s.klaenge.melde('riss')
+
+    // Kettenriss: Jeder n-te *frische* Riss springt auf einen Nachbarn ueber.
+    // Gezaehlt werden neue Risse, nicht Treffer - sonst laege die Wirkung bei
+    // einer schnellen Waffe zehnmal so hoch wie bei einer langsamen.
+    if (sp.kettenRiss > 0) {
+      sp.kettenZaehler++
+      if (sp.kettenZaehler >= sp.kettenRiss) {
+        sp.kettenZaehler = 0
+        springeWeiter(s, g, platz)
+      }
+    }
+  }
+
+  // Fehlschlag: Ein kritischer Treffer reisst zusaetzlich auf - unter einem
+  // eigenen Platz, denn den der Waffe hat sie eben selbst belegt.
+  if (krit && sp.kritRiss) rissSetzen(g, KRIT_PLATZ, sp.rissDauer)
 
   // Charakter "Riss": Drei Sekunden ohne Treffer, und jeder Schlag setzt
   // zusaetzlich einen Geisterriss - er zersplittert damit mit zwei Waffen
   // statt drei. Sauberes Ausweichen wird zur Waffe.
-  const sp = s.spieler
   if (sp.stillstandSchwelle > 0 && sp.stillstand >= sp.stillstandSchwelle) {
-    rissSetzen(g, GEIST_PLATZ)
+    rissSetzen(g, GEIST_PLATZ, sp.rissDauer)
   }
 
   // Schleiferin: Der aufgestapelte Schliff wirkt auf alles, was sie austeilt.
@@ -217,6 +243,34 @@ export function verletzeGegner(
 const nachbarn: Gegner[] = []
 
 /**
+ * Eigene Liste fuer den Kettenriss.
+ *
+ * Muss getrennt von `nachbarn` sein: Der Kettenriss fragt *mitten in einem
+ * Treffer* ab, und die Splitterkaskade laeuft ebenfalls durch Treffer. Beide
+ * dasselbe Array benutzen zu lassen waere genau die Sorte stiller Fehler, die
+ * man erst an falschen Zahlen bemerkt - dieselbe Ueberlegung wie bei `rohIds`
+ * ganz oben.
+ */
+const kettenZiele: Gegner[] = []
+
+/** Den Riss auf den naechsten anderen Gegner uebertragen. */
+function springeWeiter(s: Spielstand, von: Gegner, platz: number): void {
+  gegnerImUmkreis(s, von.x, von.y, 150, kettenZiele)
+  for (let i = 0; i < kettenZiele.length; i++) {
+    const n = kettenZiele[i]
+    if (n === von || n.tot) continue
+    if (!rissSetzen(n, platz, s.spieler.rissDauer)) continue
+
+    const e = legeEffekt(s, 'strich', von.x, von.y, 0, 0.18, FARBEN.treffer, 2)
+    if (e !== null) {
+      e.x2 = n.x
+      e.y2 = n.y
+    }
+    return
+  }
+}
+
+/**
  * Alle vorgemerkten Zersplitterungen abarbeiten.
  *
  * Bewusst **nicht** rekursiv: Zersplittern verletzt Nachbarn, das kann dort
@@ -240,7 +294,12 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
     if (g.tot) continue
 
     const istBoss = g.bossZustand !== null
-    const wucht = g.maxHp * (istBoss ? BOSS_ZERSPLITTER_ANTEIL : ZERSPLITTER_ANTEIL)
+    const sp = s.spieler
+    const weite = ZERSPLITTER_RADIUS * s.etappenWerte.splitterWeite * sp.zwillingsbruch
+    // Zwillingsbruch: doppelt so weit, dafuer halb so hart. Ein reiner Tausch -
+    // er belohnt einen Flaechenbau und bestraft einen auf Einzelziele.
+    const wucht =
+      (g.maxHp * (istBoss ? BOSS_ZERSPLITTER_ANTEIL : ZERSPLITTER_ANTEIL)) / sp.zwillingsbruch
     g.hp -= wucht
     s.statistik.schaden += wucht
     // Auf das Scherbenkonto, nicht auf das der ausloesenden Waffe: Die
@@ -259,15 +318,33 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
     }
 
     s.klaenge.melde('zersplittert', istBoss ? 1.4 : 1)
+    if (sp.blutglas > 0) heileSpieler(sp, sp.blutglas)
+    if (sp.splitterFeld > 0) {
+      // Splitterfeld: Was zerspringt, laesst Scherben liegen. Sie erben den
+      // Scherbenplatz, damit ihr Schaden in der Auswertung dort landet, wo er
+      // hingehoert - und nicht bei irgendeiner Waffe.
+      legeZone(
+        s,
+        'knall',
+        g.x,
+        g.y,
+        weite * 0.8,
+        sp.splitterFeld,
+        wucht * 0.14,
+        SPLITTER_PLATZ,
+        FARBEN.treffer,
+      )
+    }
+
     zerspringen(s, g.x, g.y, g.radius * 1.6, FARBEN.treffer)
-    legeEffekt(s, 'ring', g.x, g.y, ZERSPLITTER_RADIUS, 0.3, FARBEN.treffer, 3)
+    legeEffekt(s, 'ring', g.x, g.y, weite, 0.3, FARBEN.treffer, 3)
     s.trauma = Math.min(1, s.trauma + 0.06)
 
     // Tiefer als erlaubt darf die Welle keine neuen Zersplitterungen mehr
     // ausloesen - Schaden macht sie trotzdem.
     laufendeTiefe = tiefe + 1
 
-    gegnerImUmkreis(s, g.x, g.y, ZERSPLITTER_RADIUS, nachbarn)
+    gegnerImUmkreis(s, g.x, g.y, weite, nachbarn)
     const anteil = wucht * ZERSPLITTER_NACHBAR_ANTEIL
     for (let k = 0; k < nachbarn.length; k++) {
       const n = nachbarn[k]

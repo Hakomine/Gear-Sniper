@@ -2,6 +2,7 @@ import type { Charakter } from '../game/charaktere'
 import { CHARAKTERE } from '../game/charaktere'
 import type { PauseEintrag, Spielstand } from '../game/state'
 import { PAUSE_EINTRAEGE } from '../game/state'
+import { tuerMit } from '../game/etappen'
 import type { Aufwertung } from '../game/upgrades'
 import { SELTENHEIT_NAME } from '../game/weapons'
 import { DORNEN_PLATZ, GEIST_PLATZ, SPLITTER_PLATZ } from '../game/welt'
@@ -540,6 +541,121 @@ function zeichneFreischaltung(
   ctx.font = `700 22px ${SCHRIFT.mono}`
   ctx.fillStyle = SELTENHEIT_FARBE.legendaer
   ctx.fillText(namen, mx, y + 26)
+}
+
+// ---------------------------------------------------------------------------
+// Atempause zwischen zwei Etappen
+// ---------------------------------------------------------------------------
+
+/**
+ * Drei Türen, auf jeder steht Preis und Lohn.
+ *
+ * Der ganze Reiz haengt daran, dass **beides sichtbar ist, bevor man waehlt**.
+ * Eine Tuer, deren Preis man erst hinterher merkt, ist keine Entscheidung,
+ * sondern eine Falle - und der Lauf war vorher genau deshalb rhythmuslos: Es
+ * gab ueberhaupt keinen Moment, in dem man etwas abwaegen konnte.
+ */
+export function zeichneAtempause(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  breite: number,
+  hoehe: number,
+): void {
+  schleier(ctx, breite, hoehe, 0.86)
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `700 15px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 62)
+
+  ctx.font = `700 40px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textHervor
+  ctx.fillText(TEXTE.atempauseTitel, breite / 2, 100)
+
+  // Was die Etappe gekostet hat - dieselben Balken wie am Ende des Laufs.
+  zeichneSchadensBalken(ctx, s, breite / 2 - 200, 150)
+
+  const kb = 300
+  const kh = 210
+  const abstand = 30
+  const gesamt = s.tuerAngebot.length * kb + (s.tuerAngebot.length - 1) * abstand
+  const startX = (breite - gesamt) / 2
+  const y = hoehe - kh - 120
+
+  for (let i = 0; i < s.tuerAngebot.length; i++) {
+    zeichneTuer(ctx, s, i, startX + i * (kb + abstand), y, kb, kh)
+  }
+
+  ctx.textAlign = 'center'
+  ctx.font = `600 15px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  ctx.fillText(TEXTE.atempauseHinweis, breite / 2, hoehe - 52)
+  ctx.textBaseline = 'alphabetic'
+}
+
+function zeichneTuer(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  i: number,
+  x: number,
+  y: number,
+  b: number,
+  h: number,
+): void {
+  const tuer = tuerMit(s.tuerAngebot[i])
+  const gewaehlt = i === s.tuerWahl
+  const saat = 300 + i * 17
+
+  ctx.save()
+  ctx.translate(x + b / 2, y + h / 2)
+  ctx.rotate(neigung(saat))
+  ctx.scale(gewaehlt ? 1.04 : 1, gewaehlt ? 1.04 : 1)
+  ctx.translate(-b / 2, -h / 2)
+
+  scherbenPfad(ctx, 0, 0, b, h, saat)
+  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.96)
+  ctx.fill()
+  ctx.strokeStyle = gewaehlt ? tuer.farbe : mitAlpha(tuer.farbe, 0.4)
+  ctx.lineWidth = gewaehlt ? 2.6 : 1.4
+  ctx.stroke()
+
+  // Die Farbe der Tuer laeuft in den Bruchlinien, nicht in einem gleichmaessigen
+  // Rahmen - dieselbe Formsprache wie bei den Levelup-Karten.
+  ctx.save()
+  ctx.clip()
+  bruchLinien(ctx, 0, 0, b, h, saat, gewaehlt ? 4 : 2)
+  ctx.strokeStyle = mitAlpha(tuer.farbe, gewaehlt ? 0.5 : 0.2)
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.textAlign = 'left'
+  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = mitAlpha(FARBEN.textSchwach, 0.8)
+  ctx.fillText(String(i + 1), 18, 26)
+
+  ctx.textAlign = 'center'
+  ctx.font = `700 23px ${SCHRIFT.mono}`
+  ctx.fillStyle = tuer.farbe
+  ctx.fillText(tuer.name, b / 2, 44)
+
+  ctx.textAlign = 'left'
+  ctx.font = `600 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.9)
+  ctx.fillText(TEXTE.tuerPreis.toUpperCase(), 22, 84)
+  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.fillStyle = tuer.preis === '' ? FARBEN.textSchwach : FARBEN.text
+  umbrochenerLinks(ctx, tuer.preis === '' ? TEXTE.tuerOhnePreis : tuer.preis, 22, 104, b - 44, 18)
+
+  ctx.font = `600 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = mitAlpha(FARBEN.heilung, 0.9)
+  ctx.fillText(TEXTE.tuerLohn.toUpperCase(), 22, 148)
+  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.text
+  umbrochenerLinks(ctx, tuer.lohn, 22, 168, b - 44, 18)
+
+  ctx.restore()
 }
 
 // ---------------------------------------------------------------------------

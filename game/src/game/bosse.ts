@@ -179,8 +179,15 @@ export function findeBoss(s: Spielstand): Gegner | null {
 /** Bosswelle faellig? Dann setzen. */
 export function bossWelle(s: Spielstand): void {
   if (s.zeit < naechsteBossZeit(s.bossNummer)) return
-  // Nie zwei gleichzeitig: Der Takt schiebt sich, bis der aktuelle liegt.
+  // Nie zwei Wellen uebereinander: Der Takt schiebt sich, bis der aktuelle
+  // liegt. Die Tuer "Zwillinge" setzt beide Bosse in *derselben* Welle - das
+  // ist etwas anderes und laeuft unten ueber `etappenWerte.bosse`.
   if (findeBoss(s) !== null) return
+
+  for (let i = 0; i < s.etappenWerte.bosse; i++) setzeBoss(s)
+}
+
+function setzeBoss(s: Spielstand): void {
 
   const art = bossFuer(s.bossNummer)
 

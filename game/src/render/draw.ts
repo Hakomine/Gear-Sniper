@@ -1,8 +1,9 @@
 import { SCHILD_WINKEL } from '../game/gegnerVerhalten'
+import { schreinDef, SCHREIN_RADIUS } from '../game/schreine'
 import { STOSS_ABKLING } from '../game/player'
 import type { Effekt, Spielstand } from '../game/state'
 import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
-import { zeichneLevelup, zeichnePause, zeichneTitel, zeichneTod } from '../ui/menus'
+import { zeichneAtempause, zeichneLevelup, zeichnePause, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
 import { erschuetterung } from './juice'
 import { FARBEN, mitAlpha, SCHRIFT } from './palette'
@@ -106,6 +107,8 @@ export class Zeichner {
     // Bruchlinien direkt auf den Gegnern, Effekte ueber dem Getuemmel, der
     // Spieler zuletzt - er darf nie verdeckt sein.
     zeichneGitter(ctx, s)
+    // Schreine liegen wie Zonen im Untergrund: Sie sind Gelaende, kein Gegner.
+    zeichneSchreine(ctx, s)
     zeichneZonen(ctx, s)
     zeichneKristalle(ctx, s)
     zeichneGegner(ctx, s)
@@ -129,12 +132,132 @@ export class Zeichner {
 
     // Im Tod kein HUD: Uhr, Lebensbalken und Waffenleiste stehen sonst quer
     // durch die Auswertung, und der Lauf ist ohnehin vorbei.
-    if (s.phase !== 'titel' && s.phase !== 'tot') zeichneHud(ctx, s, VIRT_B, VIRT_H)
+    if (s.phase !== 'titel' && s.phase !== 'tot' && s.phase !== 'atempause') {
+      zeichneSchreinZeiger(ctx, s, VIRT_B, VIRT_H)
+      zeichneHud(ctx, s, VIRT_B, VIRT_H)
+    }
     if (s.phase === 'titel') zeichneTitel(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'levelup') zeichneLevelup(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'pause') zeichnePause(ctx, s, VIRT_B, VIRT_H)
+    if (s.phase === 'atempause') zeichneAtempause(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'tot') zeichneTod(ctx, s, VIRT_B, VIRT_H)
   }
+}
+
+/**
+ * Schreine auf dem Feld.
+ *
+ * Sie sind der einzige Grund, irgendwohin zu *wollen* statt nur wegzulaufen -
+ * also muessen sie auch von weitem als Angebot lesbar sein. Ein Ring am Boden,
+ * die Farbe der Art, und beim Amboss ein Bogen, der sich beim Stehen fuellt
+ * und beim Weitergehen sichtbar zurueckfaellt.
+ */
+function zeichneSchreine(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const liste = s.schreine.aktiv
+  for (let i = 0; i < liste.length; i++) {
+    const sch = liste[i]
+    const def = schreinDef(sch.art)
+    const r = 26
+
+    if (sch.benutzt) {
+      // Ruine: bleibt stehen, damit niemand denselben Schrein zweimal anlaeuft.
+      ctx.beginPath()
+      ctx.arc(sch.x, sch.y, r * 0.7, 0, Math.PI * 2)
+      ctx.strokeStyle = mitAlpha(FARBEN.textSchwach, 0.22)
+      ctx.lineWidth = 2
+      ctx.stroke()
+      continue
+    }
+
+    const puls = 0.5 + 0.5 * Math.sin(performance.now() / 420 + i)
+
+    // Der Wirkbereich - so weit muss man heran.
+    ctx.beginPath()
+    ctx.arc(sch.x, sch.y, SCHREIN_RADIUS, 0, Math.PI * 2)
+    ctx.strokeStyle = mitAlpha(def.farbe, 0.13 + puls * 0.08)
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    // Der Koerper: eine stehende Scherbe.
+    ctx.beginPath()
+    ctx.moveTo(sch.x, sch.y - r)
+    ctx.lineTo(sch.x + r * 0.62, sch.y - r * 0.1)
+    ctx.lineTo(sch.x + r * 0.3, sch.y + r * 0.8)
+    ctx.lineTo(sch.x - r * 0.34, sch.y + r * 0.8)
+    ctx.lineTo(sch.x - r * 0.62, sch.y - r * 0.16)
+    ctx.closePath()
+    ctx.fillStyle = mitAlpha(def.farbe, 0.28 + puls * 0.16)
+    ctx.fill()
+    ctx.strokeStyle = def.farbe
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    if (sch.art === 'amboss' && sch.ladung > 0) {
+      ctx.beginPath()
+      ctx.arc(sch.x, sch.y, r + 10, -Math.PI / 2, -Math.PI / 2 + sch.ladung * Math.PI * 2)
+      ctx.strokeStyle = def.farbe
+      ctx.lineWidth = 4
+      ctx.stroke()
+    }
+  }
+}
+
+/**
+ * Pfeile am Bildrand fuer Schreine ausserhalb des Bildes.
+ *
+ * Ohne sie findet man einen Schrein nur zufaellig, und dann ist er kein
+ * Angebot mehr, sondern eine Ueberraschung. Gezeichnet wird in
+ * Bildschirmkoordinaten, deshalb steht das hier ausserhalb der Kameratransform.
+ */
+function zeichneSchreinZeiger(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  breite: number,
+  hoehe: number,
+): void {
+  const liste = s.schreine.aktiv
+  const rand = 46
+
+  for (let i = 0; i < liste.length; i++) {
+    const sch = liste[i]
+    if (sch.benutzt) continue
+    const dx = sch.x - s.kamera.x
+    const dy = sch.y - s.kamera.y
+    const sx = breite / 2 + dx * WELT_ZOOM
+    const sy = hoehe / 2 + dy * WELT_ZOOM
+    if (sx > rand && sx < breite - rand && sy > rand && sy < hoehe - rand) continue
+
+    const winkel = Math.atan2(dy, dx)
+    const px = Math.max(rand, Math.min(breite - rand, sx))
+    const py = Math.max(rand, Math.min(hoehe - rand, sy))
+    const def = schreinDef(sch.art)
+
+    ctx.save()
+    ctx.translate(px, py)
+    ctx.rotate(winkel)
+    ctx.beginPath()
+    ctx.moveTo(11, 0)
+    ctx.lineTo(-8, 8)
+    ctx.lineTo(-4, 0)
+    ctx.lineTo(-8, -8)
+    ctx.closePath()
+    ctx.fillStyle = mitAlpha(def.farbe, 0.85)
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+/**
+ * Jede Etappe faerbt das Gitter anders.
+ *
+ * Der billigste Weg, Fortschritt sichtbar zu machen: Ohne ihn sieht Minute
+ * neun genauso aus wie Minute eins, und die Etappen bleiben eine Zahl im
+ * Menue statt einer Erfahrung. Der Farbton dreht sich in festen Schritten
+ * durch den Kreis, die Helligkeit bleibt - lesbar muss es ja bleiben.
+ */
+function etappenFarbe(etappe: number, stark: boolean): string {
+  const ton = (200 + (etappe - 1) * 47) % 360
+  return `hsla(${ton}, 40%, ${stark ? 34 : 26}%, ${stark ? 0.5 : 0.32})`
 }
 
 /**
@@ -172,7 +295,7 @@ function zeichneGitter(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       ctx.moveTo(linksX, y)
       ctx.lineTo(rechtsX, y)
     }
-    ctx.strokeStyle = stark ? FARBEN.gitterStark : FARBEN.gitter
+    ctx.strokeStyle = etappenFarbe(s.etappe, stark)
     ctx.lineWidth = 1
     ctx.stroke()
   }

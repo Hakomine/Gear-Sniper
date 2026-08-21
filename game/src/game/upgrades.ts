@@ -66,29 +66,24 @@ type PassivDef = {
  * "Schleifstein" ist dieselbe Zahl wie "+18 % Schaden" und trotzdem eine
  * andere Karte: Man merkt sich Dinge, keine Prozentsaetze.
  */
+/**
+ * Gegenstände, die Regeln ändern - nicht Zahlen.
+ *
+ * Vorher standen hier sieben Prozentwerte: "+18 % Schaden", "+7 % Krit". Das
+ * ist genau der Vorwurf, den Hakan in Runde zwei den *Waffen* gemacht hat -
+ * bei den Passiven stand er noch. Ein Gegenstand, der aendert, *wie* etwas
+ * funktioniert, ist eine Entscheidung; einer, der eine Zahl erhoeht, ist
+ * Buchhaltung.
+ *
+ * Drei Wertegegenstaende bleiben als Kitt: Leben, Tempo und eine Heilung
+ * braucht ein Bau, und nicht jede Karte darf eine Grundsatzfrage sein.
+ *
+ * Fast alle haengen an der Kernregel - Risse und Zersplitterung. Das ist
+ * Absicht: Ein Gegenstand, der den eigenen Bau umbaut, ist mehr wert als
+ * einer, der irgendein Nebensystem verbessert.
+ */
 export const PASSIVE: readonly PassivDef[] = [
-  {
-    id: 'schleifstein',
-    name: 'Schleifstein',
-    beschreibung: 'Alle Waffen +18 % Schaden',
-    seltenheit: 'gewoehnlich',
-    maxStufe: 6,
-    anwenden: (sp) => {
-      sp.schadenMult += 0.18
-    },
-  },
-  {
-    id: 'zuendspule',
-    name: 'Zündspule',
-    beschreibung: 'Alle Waffen feuern 10 % schneller',
-    seltenheit: 'gewoehnlich',
-    maxStufe: 6,
-    anwenden: (sp) => {
-      // Multiplikativ, nicht additiv: Additiv kaeme die sechste Stufe dem
-      // Nullpunkt gefaehrlich nahe, und die Schleife wuerde pro Tick fluten.
-      sp.abklingMult *= 0.9
-    },
-  },
+  // --- Der Kitt: drei ehrliche Werte ---------------------------------------
   {
     id: 'panzerplatte',
     name: 'Panzerplatte',
@@ -111,26 +106,6 @@ export const PASSIVE: readonly PassivDef[] = [
     },
   },
   {
-    id: 'magnetkern',
-    name: 'Magnetkern',
-    beschreibung: '+42 % Einzugsradius',
-    seltenheit: 'selten',
-    maxStufe: 4,
-    anwenden: (sp) => {
-      sp.magnetRadius *= 1.42
-    },
-  },
-  {
-    id: 'zielhilfe',
-    name: 'Zielhilfe',
-    beschreibung: '+7 % kritische Trefferchance',
-    seltenheit: 'selten',
-    maxStufe: 5,
-    anwenden: (sp) => {
-      sp.kritChance += 0.07
-    },
-  },
-  {
     id: 'notpflaster',
     name: 'Notpflaster',
     beschreibung: 'Heilt 35 % des Lebens',
@@ -145,7 +120,139 @@ export const PASSIVE: readonly PassivDef[] = [
     // eine verschenkte Wahl - und verschenkte Wahlen machen ein Menue oede.
     verfuegbar: (sp) => sp.hp < sp.maxHp * 0.92,
   },
+
+  // --- Zwölf, die Regeln ändern --------------------------------------------
+  {
+    id: 'nachhall',
+    name: 'Nachhall',
+    beschreibung: 'Risse halten eine Sekunde länger',
+    seltenheit: 'gewoehnlich',
+    maxStufe: 3,
+    anwenden: (sp) => {
+      // Der zugaenglichste der zwoelf: Er macht die Kernregel leichter zu
+      // treffen, ohne ihr etwas wegzunehmen.
+      sp.rissDauer += 1
+    },
+  },
+  {
+    id: 'kettenriss',
+    name: 'Kettenriss',
+    beschreibung: 'Jeder dritte Riss springt auf einen zweiten Gegner über',
+    seltenheit: 'selten',
+    maxStufe: 2,
+    anwenden: (sp) => {
+      // Stufe zwei macht daraus "jeder zweite".
+      sp.kettenRiss = sp.kettenRiss === 0 ? 3 : 2
+    },
+  },
+  {
+    id: 'splitterfeld',
+    name: 'Splitterfeld',
+    beschreibung: 'Zersplitterte hinterlassen drei Sekunden lang scharfe Scherben',
+    seltenheit: 'selten',
+    maxStufe: 3,
+    anwenden: (sp) => {
+      sp.splitterFeld += 3
+    },
+  },
+  {
+    id: 'blutglas',
+    name: 'Blutglas',
+    beschreibung: 'Jede Zersplitterung heilt dich um 1',
+    seltenheit: 'selten',
+    maxStufe: 4,
+    anwenden: (sp) => {
+      // Klingt nach wenig und ist es auch - bis der Bau zersplittert. Genau
+      // deshalb belohnt es die Kernregel statt rohen Schaden.
+      sp.blutglas += 1
+    },
+  },
+  {
+    id: 'fehlschlag',
+    name: 'Fehlschlag',
+    beschreibung: 'Kritische Treffer setzen einen zusätzlichen Riss',
+    seltenheit: 'episch',
+    maxStufe: 1,
+    anwenden: (sp) => {
+      sp.kritRiss = true
+    },
+  },
+  {
+    id: 'zwillingsbruch',
+    name: 'Zwillingsbruch',
+    beschreibung: 'Zersplitterung trifft doppelt so weit, aber halb so hart',
+    seltenheit: 'episch',
+    maxStufe: 1,
+    anwenden: (sp) => {
+      sp.zwillingsbruch = 2
+    },
+  },
+  {
+    id: 'standhaft',
+    name: 'Standhaft',
+    beschreibung: 'Zwei Sekunden stillstehen lädt einen Schild, der einen Treffer schluckt',
+    seltenheit: 'selten',
+    maxStufe: 2,
+    anwenden: (sp) => {
+      sp.standhaft = sp.standhaft === 0 ? 2 : 1.2
+    },
+  },
+  {
+    id: 'aussetzer',
+    name: 'Aussetzer',
+    beschreibung: 'Wirst du getroffen, zersplittert alles im Umkreis',
+    seltenheit: 'episch',
+    maxStufe: 1,
+    anwenden: (sp) => {
+      // Macht aus einem Fehler eine Chance - aber nur, wenn ringsum genug
+      // steht. Wer sauber spielt, sieht es nie.
+      sp.aussetzer = true
+    },
+  },
+  {
+    id: 'nachstoss',
+    name: 'Nachstoß',
+    beschreibung: 'Der Stoß lädt doppelt so schnell',
+    seltenheit: 'selten',
+    maxStufe: 2,
+    anwenden: (sp) => {
+      sp.stossLaden += 1
+    },
+  },
+  {
+    id: 'sog',
+    name: 'Sog',
+    beschreibung: 'Kristalle kommen zu dir, solange du stillstehst',
+    seltenheit: 'gewoehnlich',
+    maxStufe: 3,
+    anwenden: (sp) => {
+      // Passt zum Amboss und zu Standhaft: Wer ohnehin stehenbleiben muss,
+      // bekommt einen Grund mehr dafuer.
+      sp.sog += 260
+    },
+  },
+  {
+    id: 'zeitlupe',
+    name: 'Zeitlupe',
+    beschreibung: 'Unter 30 % Leben läuft alles andere 20 % langsamer',
+    seltenheit: 'episch',
+    maxStufe: 2,
+    anwenden: (sp) => {
+      sp.zeitlupe += 0.2
+    },
+  },
+  {
+    id: 'letzterriss',
+    name: 'Letzter Riss',
+    beschreibung: 'Fällt ein Boss, reißt es alles im Bild auf',
+    seltenheit: 'legendaer',
+    maxStufe: 1,
+    anwenden: (sp) => {
+      sp.letzterRiss = true
+    },
+  },
 ]
+
 
 // ---------------------------------------------------------------------------
 // Ziehung

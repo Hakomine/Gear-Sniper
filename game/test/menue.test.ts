@@ -111,6 +111,33 @@ describe('Pause', () => {
   })
 })
 
+describe('Stummschalten', () => {
+  it('geht mit M, ohne das Menü zu öffnen', () => {
+    const s = laufenderStand()
+    expect(s.tonAus).toBe(false)
+
+    druecke(s, { stumm: true })
+    expect(s.tonAus).toBe(true)
+    expect(s.phase).toBe('laufend')
+
+    druecke(s, { stumm: true })
+    expect(s.tonAus).toBe(false)
+  })
+
+  it('geht auch im Titelbild und im Pausenmenü', () => {
+    const s = erzeugeSpielstand(2)
+    expect(s.phase).toBe('titel')
+    druecke(s, { stumm: true })
+    expect(s.tonAus).toBe(true)
+
+    starteLauf(s, 2, charakterMit('splitter'))
+    druecke(s, { pause: true })
+    druecke(s, { stumm: true })
+    expect(s.tonAus).toBe(false)
+    expect(s.phase).toBe('pause')
+  })
+})
+
 describe('Der Stoß', () => {
   it('setzt die Figur ein Stück weiter und macht dabei unverwundbar', () => {
     const s = laufenderStand()

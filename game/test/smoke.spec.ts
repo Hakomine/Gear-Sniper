@@ -51,7 +51,12 @@ type Spiel = {
   charakterWahl: number
   offen: string[]
   bossNummer: number
+  etappe: number
+  tuerAngebot: string[]
+  schreine: { anzahl: number; aktiv: SchreinLose[] }
 }
+
+type SchreinLose = { art: string; x: number; y: number; ladung: number; benutzt: boolean }
 
 /** So weit, wie der Test an einen Gegner herangeht. */
 type GegnerLose = {
@@ -222,12 +227,15 @@ test('Todesbildschirm zeigt das Ergebnis', async ({ page }) => {
   // eines offen, ruht die Simulation - dann kann der Spieler gar nicht
   // sterben und das Warten laeuft in die Zeitgrenze. Genau daran ist der Test
   // zuerst gescheitert, nachdem die Aufstiegskurve schneller wurde.
+  // Jede Menuephase wegklicken, nicht nur das Levelup: Seit es Schreine gibt,
+  // kann mitten im Warten eine Karte aufgehen, und seit es Etappen gibt auch
+  // eine Atempause. Wer nur auf 'levelup' hoert, wartet in die Zeitgrenze.
   const frist = Date.now() + 30_000
   while (Date.now() < frist) {
     const zustand = await lies(page)
     if (zustand.phase === 'tot') break
-    if (zustand.phase === 'levelup') await page.keyboard.press('Digit1')
-    else await page.waitForTimeout(200)
+    if (zustand.phase === 'laufend') await page.waitForTimeout(150)
+    else await page.keyboard.press('Digit1')
   }
 
   await page.waitForTimeout(400)
@@ -449,12 +457,99 @@ test('Todesbildschirm wertet aus, woran sie gestorben sind', async ({ page }) =>
   while (Date.now() < frist) {
     const zustand = await lies(page)
     if (zustand.phase === 'tot') break
-    if (zustand.phase === 'levelup') await page.keyboard.press('Digit1')
-    else await page.waitForTimeout(200)
+    if (zustand.phase === 'laufend') await page.waitForTimeout(150)
+    else await page.keyboard.press('Digit1')
   }
 
   // Kurz warten, damit der Sprung im Glas seine volle Groesse erreicht hat.
   await page.waitForTimeout(1200)
   await page.screenshot({ path: 'screenshots/11-auswertung.png' })
   expect((await lies(page)).phase).toBe('tot')
+})
+
+test('Pausenmenü hält an und lässt sich bedienen', async ({ page }) => {
+  await starte(page)
+  await spiele(page, 3)
+
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.phase === 'pause',
+    undefined,
+    { timeout: 10_000 },
+  )
+  await page.screenshot({ path: 'screenshots/12-pause.png' })
+
+  // Die Simulation steht wirklich still.
+  const zeit = (await lies(page)).zeit
+  await page.waitForTimeout(700)
+  expect((await lies(page)).zeit).toBe(zeit)
+
+  // Und dieselbe Taste gibt wieder frei.
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  expect((await lies(page)).phase).toBe('laufend')
+})
+
+test('Schreine stehen im Feld und zeigen sich am Rand', async ({ page }) => {
+  await starte(page)
+
+  const schreine = await page.evaluate(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.schreine.anzahl,
+  )
+  expect(schreine).toBeGreaterThanOrEqual(2)
+
+  // Einen Schrein direkt neben den Spieler holen, damit er im Bild steht -
+  // sonst zeigt der Screenshot nur den Randpfeil.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    const sch = s.schreine.aktiv[0]
+    sch.art = 'amboss'
+    sch.x = s.spieler.x + 40
+    sch.y = s.spieler.y
+  })
+
+  // Stillstehen laedt den Amboss - der Ring soll auf dem Bild zu sehen sein.
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: 'screenshots/13-schrein.png' })
+})
+
+test('Atempause zeigt drei Türen mit Preis und Lohn', async ({ page }) => {
+  await starte(page)
+
+  // Boss herholen und umbringen: Das ist der Weg in die Atempause.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.zeit = 90
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+  })
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand !== null,
+      ),
+    undefined,
+    { timeout: 30_000 },
+  )
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    for (const g of s.gegner.aktiv) if (g.bossZustand !== null) g.hp = 1
+  })
+
+  await page.waitForFunction(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.phase === 'atempause',
+    undefined,
+    { timeout: 30_000 },
+  )
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'screenshots/14-atempause.png' })
+
+  const tueren = await page.evaluate(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.tuerAngebot,
+  )
+  expect(tueren.length).toBe(3)
+  expect(tueren).toContain('ruhe')
 })

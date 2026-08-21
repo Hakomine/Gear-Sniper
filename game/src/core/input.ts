@@ -22,6 +22,7 @@ export type Aktion =
   | 'bestaetigen'
   | 'zurueck'
   | 'pause'
+  | 'stumm'
   | 'wahl1'
   | 'wahl2'
   | 'wahl3'
@@ -39,6 +40,7 @@ const TASTEN: Record<string, Aktion> = {
   Enter: 'bestaetigen',
   Escape: 'zurueck',
   KeyP: 'pause',
+  KeyM: 'stumm',
   Digit1: 'wahl1',
   Digit2: 'wahl2',
   Digit3: 'wahl3',

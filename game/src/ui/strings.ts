@@ -32,6 +32,13 @@ export const TEXTE = {
   gesperrt: 'GESPERRT',
   punkteFaktor: 'Punkte-Faktor',
 
+  atempauseTitel: 'ETAPPE GESCHAFFT',
+  atempauseHinweis: 'A / D wählt · LEERTASTE bestätigt · oder 1 2 3',
+  tuerPreis: 'Kostet',
+  tuerLohn: 'Bringt',
+  tuerOhnePreis: 'Nichts wird schwerer',
+  etappe: 'ETAPPE',
+
   pauseTitel: 'ANGEHALTEN',
   pauseWeiter: 'Weiter',
   pauseTon: 'Ton',

@@ -159,19 +159,38 @@ describe('Waffeninstanz', () => {
 })
 
 describe('Passive Gegenstaende', () => {
-  it('veraendern genau den Wert, den sie versprechen', () => {
-    const sp = erzeugeSpieler()
-    const vorher = sp.schadenMult
-    PASSIVE.find((p) => p.id === 'schleifstein')!.anwenden(sp)
-    expect(sp.schadenMult).toBeCloseTo(vorher + 0.18)
+  it('sind ueberwiegend Regeln und nicht Prozente', () => {
+    /*
+     * Der Vorwurf aus Runde zwei galt den Waffen: "die Upgrades mit Wucht und
+     * Abklingzeit sind ziemlich langweilig". Bei den Passiven stand er noch -
+     * sieben Eintraege, alle reine Zahlen. Dieser Test haelt fest, dass die
+     * Mehrheit jetzt etwas *anderes* macht statt nur mehr.
+     */
+    const werte = new Set(['panzerplatte', 'laufsohlen', 'notpflaster'])
+    const regeln = PASSIVE.filter((p) => !werte.has(p.id))
+    expect(regeln.length).toBeGreaterThanOrEqual(12)
+    expect(regeln.length).toBeGreaterThan(werte.size * 2)
   })
 
-  it('halten die Abklingzeit auch voll ausgereizt ueber null', () => {
+  it('greifen jede einzeln messbar', () => {
+    // Ein Gegenstand, dessen Wirkung sich nicht am Spieler ablesen laesst,
+    // waere reine Beschriftung.
+    for (const p of PASSIVE) {
+      const sp = erzeugeSpieler()
+      // Angeschlagen starten: Eine Heilung bei vollem Leben aendert nichts -
+      // genau deshalb hat sie ihre `verfuegbar`-Sperre.
+      sp.hp = sp.maxHp * 0.5
+      const vorher = JSON.stringify(sp)
+      p.anwenden(sp)
+      expect(JSON.stringify(sp), p.id).not.toBe(vorher)
+    }
+  })
+
+  it('haelt den Nachhall am Riss und nicht am Schaden fest', () => {
     const sp = erzeugeSpieler()
-    const spule = PASSIVE.find((p) => p.id === 'zuendspule')!
-    for (let i = 0; i < spule.maxStufe; i++) spule.anwenden(sp)
-    expect(sp.abklingMult).toBeGreaterThan(0.3)
-    expect(sp.abklingMult).toBeLessThan(1)
+    PASSIVE.find((p) => p.id === 'nachhall')!.anwenden(sp)
+    expect(sp.rissDauer).toBe(1)
+    expect(sp.schadenMult).toBe(1)
   })
 
   it('heilen nie ueber das Maximum hinaus', () => {

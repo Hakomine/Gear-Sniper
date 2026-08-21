@@ -81,7 +81,10 @@ describe('Bossauftritt', () => {
     expect(boss.maxHp).toBeGreaterThan(staerkster * 10)
   })
 
-  it('reicht die Bosskarte durch, wenn er faellt', () => {
+  it('beendet die Etappe, wenn er faellt', () => {
+    // Frueher gab ein gefallener Boss sofort eine Karte. Die Belohnung steckt
+    // jetzt in den Tueren der Atempause - der Boss oeffnet sie, statt selbst
+    // auszuzahlen.
     const s = leererLauf()
     const { boss } = setzeBoss(s)
     gitterAufbauen(s)
@@ -92,7 +95,8 @@ describe('Bossauftritt', () => {
     // Gezaehlt wird beim Aufraeumen, nicht beim Schaden - also einmal ticken.
     tick(s, RUHE, TICK_DT)
     expect(s.statistik.bosse).toBe(1)
-    expect(s.bossKarte).toBe(true)
+    expect(s.phase).toBe('atempause')
+    expect(s.tuerAngebot.length).toBe(3)
   })
 })
 

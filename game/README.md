@@ -20,8 +20,10 @@ npm run dev        # http://localhost:5173
 ```
 
 Auf dem Titelbild wählt man mit A/D den Charakter und startet mit Leertaste.
-WASD oder Pfeiltasten bewegen, Gamepad geht auch. Beim Levelup wählt man mit
-A/D und bestätigt mit Leertaste — oder drückt gleich 1, 2 oder 3.
+WASD oder Pfeiltasten bewegen, Gamepad geht auch. **Leertaste stößt** — ein
+kurzer Satz, bei dem man unverwundbar ist, mit 2,5 s Abklingzeit. **Escape**
+hält an. Beim Levelup wählt man mit A/D und bestätigt mit Leertaste — oder
+drückt gleich 1, 2 oder 3.
 
 ## Was daran eigen ist: Risse und Zersplitterung
 
@@ -63,8 +65,14 @@ Die Klinge haut rundum statt nach vorn, der Prismastrahl feuert als Kreuz, die
 Bazooka wirft drei Granaten nach, der Sternenschlucker lässt ein Trümmerfeld
 zurück.
 
-Passive Gegenstände (Schleifstein, Zündspule, Panzerplatte …) gibt es weiter,
-aber deutlich seltener. Sie sind der Kitt für einen Bau, nie der Bau.
+Passive Gegenstände gibt es weiter, aber deutlich seltener — und sie sind
+inzwischen **Regeln statt Prozente**. Drei bleiben schlichte Werte (Leben,
+Tempo, Heilung); zwölf ändern, *wie* etwas funktioniert: Risse halten länger,
+jeder dritte Riss springt weiter, Zersplitterte lassen Scherben liegen,
+kritische Treffer reißen zusätzlich auf, Stillstehen lädt einen Schild, ein
+Treffer lässt alles ringsum zerspringen. Fast alle hängen an der Kernregel —
+ein Gegenstand, der den eigenen Bau umbaut, ist mehr wert als einer, der
+irgendein Nebensystem verbessert.
 
 **Eine Karte betrifft immer eine Waffe**, solange überhaupt eine möglich ist.
 Ein reiner Statistik-Bildschirm soll gar nicht erst vorkommen.
@@ -90,6 +98,99 @@ und kommen kein zweites Mal, wenn das Ergebnis schon im Gürtel liegt.
 
 Kurzfristig kostet eine Fusion **einen Riss** — zwei Waffen werden zu einer. Der
 frei gewordene Platz nimmt dafür etwas Neues auf. Eine Abwägung, kein Geschenk.
+
+## Neun Gegner, neun Köpfe
+
+Lange Zeit gab es drei Gegnerarten, und alle drei liefen durch dieselben acht
+Zeilen: Richtung zum Spieler, Tempo drauf, fertig. Der „Elite" war ein Sechseck
+mit mehr Trefferpunkten. Die Waffen waren verschieden — alles, worauf sie
+zielten, war identisch. Genau daran lag es, dass sich Minute zehn anfühlte wie
+Minute eins.
+
+Die Arten liegen als Daten in `enemies.ts`, ihr Verhalten als Registratur in
+`gegnerVerhalten.ts` — dieselbe Aufteilung wie bei Waffen und Feuerarten.
+
+| Art | Verhalten |
+|---|---|
+| **Splitter** | geradeaus, die Grundmasse |
+| **Brocken** | langsam, zäh — der Amboss, an dem man Risse setzt |
+| **Kantiger** | geradeaus, schwer wegzuschubsen |
+| **Schwärmer** | kreist auf Abstand und schließt in Wellen |
+| **Stürmer** | hält an, kündigt eine Bahn an, zieht sie durch |
+| **Speier** | bleibt weit weg und schießt |
+| **Teiler** | zerfällt beim Tod in zwei Bruchstücke |
+| **Kitt** | **schließt Risse bei allen Gegnern um sich herum** |
+| **Schildträger** | von vorn fast unverwundbar, dreht sich nur langsam mit |
+
+Zwei tragen den Rest:
+
+Der **Kitt** löscht in seinem Umkreis Risse — also genau das, worauf jeder Bau
+beruht. Damit stellt das Spiel zum ersten Mal die Frage *wen zuerst?*.
+
+Der **Speier** dreht die Fluchtrichtung um. Bisher war jede Bewegung ein
+Wegrennen; ein Gegner, der auf Distanz bleibt und trifft, ist der erste Grund,
+sich in etwas hinein zu bewegen.
+
+Der **Stürmer** hält seine angekündigte Bahn und lenkt nicht nach. Ein Sturm,
+der mitzieht, ließe sich nicht ausweichen — dann wäre die Vorwarnung eine Lüge.
+
+## Der Stoß
+
+Leertaste: kurzer Satz in Laufrichtung, dabei unverwundbar, 2,5 s Abklingzeit,
+Ring am Spieler. Er setzt **keinen Riss** — bewusst: Der Stoß bleibt reines
+Ausweichen und hängt sich nicht an die Kernregel.
+
+Ohne ihn wären Stürmer und Speier nur Ärger. Mit ihm sind sie das, was ein
+telegrafierter Angriff sein soll: lesbar, und man kann etwas dagegen tun.
+
+## Etappen, Türen und Schreine
+
+Der Lauf war ein durchgehender Strom ohne eine einzige Pause. Jetzt endet jede
+Etappe mit ihrem Boss, das Spiel hält an, und man wählt, **wie** die nächste
+aussehen soll. Auf jeder Tür steht Preis *und* Lohn — man sieht die Belohnung,
+bevor man bezahlt.
+
+| Tür | Kostet | Bringt |
+|---|---|---|
+| **Ruhe** | nichts | eine Karte |
+| **Gedränge** | doppelter Nachschub | zwei Karten |
+| **Gepanzertes Glas** | Gegner +60 % Leben | eine bessere Karte |
+| **Zwillinge** | zwei Bosse statt einem | zwei bessere Karten |
+| **Dünnhäutig** | doppelter Schaden, dauerhaft | ein Waffenplatz mehr, dauerhaft |
+| **Sprödigkeit** | Risse verfallen doppelt so schnell | Zersplitterung trifft doppelt so weit |
+
+„Sprödigkeit" ist die interessanteste: Sie greift die Kernregel an und belohnt
+sie zugleich. Wer gemischt gebaut hat, nimmt sie gern; wer auf zwei Waffen
+sitzt, kann sie nicht bezahlen.
+
+Dazu **Schreine** im Feld — zwei bis drei je Etappe, am Bildrand angezeigt:
+
+| Schrein | Kostet | Bringt |
+|---|---|---|
+| **Amboss** | drei Sekunden stillstehen, mitten im Getümmel | eine Karte |
+| **Gierscherbe** | die Etappe wird 25 % schwerer | sofort eine Stufe |
+| **Bruchmal** | ruft sofort einen zweiten Boss | eine bessere Karte |
+
+Der Amboss ist der beste der drei, weil Stillstehen hier genau das ist, was
+einen umbringt — und weil er mit dem Charakter *Riss* kollidiert, dessen
+Geisterriss drei Sekunden **ohne Treffer** verlangt.
+
+## Ton — ohne eine einzige Datei
+
+Das Spiel zeichnet sich aus Code. Der Ton entsteht genauso: WebAudio,
+Oszillator, Rauschen, Hüllkurve. Kein Sample, keine Lizenzfrage, keine
+Ladezeit.
+
+Die Simulation **meldet** nur in einen Ringpuffer (`game/klaenge.ts`),
+`main.ts` leert ihn je Bild und `audio/ton.ts` macht daraus Klang. So bleibt
+`src/game/` browserfrei — darauf beruhen alle Tests ohne Fenster und
+`npm run perf`. Ein Test hält die Grenze fest.
+
+Tonhöhe streut je Auslösung um ±12 %, je Klangart gilt eine Mindestpause, und
+höchstens 24 Stimmen laufen gleichzeitig — sonst wird aus fünf Waffen an 1400
+Gegnern weißes Rauschen. Der Kristallklang steigt beim Sammeln an.
+
+**M** oder das Pausenmenü schaltet stumm.
 
 ## Bosse
 
@@ -163,7 +264,7 @@ und auf den Todesbildschirm, der von der Stelle des Todes aus zerspringt.
 
 ```bash
 npm run check      # TypeScript
-npm run test       # 102 Tests: Waffen, Karten, Risse, Bosse, Charaktere, Determinismus
+npm run test       # 173 Tests: Waffen, Karten, Risse, Gegner, Bosse, Etappen, Ton, Determinismus
 npm run perf       # Simulation ohne Zeichnen, misst ms pro Tick
 npm run smoke      # startet das Spiel im Browser, legt Screenshots ab
 ```
@@ -244,10 +345,17 @@ bestückten Waffen**, 3000 Ticks, ohne zu zeichnen. Budget: 5 ms pro Tick, bei
 | 1400 Gegner, eine Waffe | 1,8 ms | 2,4 ms |
 | 1400 Gegner, fünf Waffen | 1,8 ms | 2,7 ms |
 | 1400 Gegner, fünf Waffen **und dauernd ein Boss** | 1,6 ms | 2,5 ms |
+| 1400 Gegner **aus allen neun Arten**, fünf Waffen, ein Boss | 1,5 ms | 2,2 ms |
 | 2000 Gegner | 4,5 ms | 5,8 ms |
 
-Das ganze Waffensystem kostet also praktisch nichts, Bosse ebenso wenig. Die
+Das ganze Waffensystem kostet also praktisch nichts, Bosse ebenso wenig — und
+neun Gegnerverhalten statt einem kosten rund zwei Zehntel Millisekunden. Die
 Obergrenze steht bei 1400, weil bei 2000 der p95 das Budget reißt.
+
+Die Messung füllt bewusst mit **allen** Arten gemischt. Vorher lief sie nur mit
+Splittern und sah von den neuen Verhalten deshalb nichts: keine kreisenden
+Schwärmer, keine Vorwarnungen, keine Speier-Geschosse, keine Umkreisabfragen
+des Kitts.
 
 Beim Messen kam eine Sache heraus, die man nicht vermutet: Das
 Auseinanderdrücken der Gegner **spart** Rechenzeit. Wird die Trennkraft
@@ -287,6 +395,24 @@ Und in der dritten Runde, mit Bossen und Auswertung:
 - **Dieselbe Fusion lag zweimal im Gürtel.** Wer die Ausgangswaffen später neu
   zieht und wieder ausreizt, bekam eine zweite Kopie.
 
+Und in der vierten Runde, mit Gegnerverhalten, Stoß und Ton:
+
+- **Frisch gespawnte Gegner erbten die Risse ihres Vorgängers.** Der Pool gibt
+  gebrauchte Objekte heraus, und `legeGegner` hat die Riss-Felder nie geleert.
+  Mal kam ein Gegner mit zwei Rissen zur Welt und zersprang beim ersten
+  Treffer, mal trug er das `zersplittert` seines Vorgängers und konnte nie
+  wieder zerspringen. Die Kernregel war damit teilweise ein Würfelwurf statt
+  eine Folge des eigenen Baus — und das gehört mit zu „alles fühlt sich gleich
+  an".
+- **`new AudioContext()` riss den ganzen Tick mit.** Im Testbrowser ohne
+  Audiogerät flog die Ausnahme aus dem Tick-Callback, und der Lauf fror ein.
+  Kein Ton ist ein Schönheitsfehler, ein stehendes Spiel nicht — die Synthese
+  ist jetzt gekapselt.
+- **Ein sechster Waffenplatz kollidierte mit dem Scherbenplatz.** Die Tür
+  „Dünnhäutig" gibt einen Platz dazu; die reservierten Riss-Bits beginnen aber
+  direkt hinter `MAX_WAFFEN`. Ohne Grenze hätten eine Waffe und die Scherben
+  dasselbe Bit geteilt und die Kernregel wäre still ausgehebelt gewesen.
+
 Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
 
 - **Bosse liefen auf der Schwarmkurve mit.** Die ist quadratisch und ergibt in
@@ -301,10 +427,10 @@ Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
 
 ## Was noch fehlt
 
-- **Ton.** Kein einziger. In diesem Genre fehlt damit ein guter Teil der Wucht.
-- **Ein Ende.** Der Lauf hört auf, wenn man stirbt — sonst nie. Bosse alle 90
-  Sekunden geben ihm jetzt einen Takt, aber kein Ziel. Ein Endgegner oder ein
-  Zeitlimit fehlt weiterhin.
+- **Ein Ende.** Der Lauf hört auf, wenn man stirbt — sonst nie. Etappen und
+  Bosse geben ihm einen Takt, aber kein Ziel. Ein Endgegner oder ein Zeitlimit
+  fehlt weiterhin.
+- **Musik.** Klänge gibt es, einen Soundtrack nicht.
 - **Bossbalance.** Gemessen über fünf Läufe schwankt ein Bosskampf zwischen 4
   und 100 Sekunden — je nachdem, ob der Bau Einzelziel-Schaden hat. Dass ein
   Flächenbau sich am Boss schwertut, ist gewollt; diese Spanne ist zu groß. Und

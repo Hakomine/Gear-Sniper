@@ -111,6 +111,7 @@ const schleife = new Schleife({
     befehle.runter = eingabe.getippt('runter')
     // Escape und Start fuehren beide ins Pausenmenue - und wieder heraus.
     befehle.pause = eingabe.getippt('zurueck') || eingabe.getippt('pause')
+    befehle.stumm = eingabe.getippt('stumm')
     befehle.wahl = eingabe.getippt('wahl1')
       ? 0
       : eingabe.getippt('wahl2')

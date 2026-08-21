@@ -58,7 +58,7 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.art = art
   // Skalierung einmal beim Spawn festschreiben statt jeden Tick neu zu
   // rechnen - und ein Gegner behaelt damit die Werte, mit denen er kam.
-  g.maxHp = art.hp * hpFaktor(s.zeit)
+  g.maxHp = art.hp * hpFaktor(s.zeit) * s.etappenWerte.zaehigkeit
   g.hp = g.maxHp
   g.radius = art.radius
   g.tempo = art.tempo * tempoFaktor(s.zeit)
@@ -140,7 +140,7 @@ export function startWelle(s: Spielstand): void {
 }
 
 export function spawne(s: Spielstand, dt: number): void {
-  s.spawnSpeicher += spawnRate(s.zeit) * dt
+  s.spawnSpeicher += spawnRate(s.zeit) * s.etappenWerte.nachschub * dt
   while (s.spawnSpeicher >= 1) {
     s.spawnSpeicher -= 1
     const p = ringPunkt(s, s.rng.next() * Math.PI * 2)

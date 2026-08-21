@@ -388,7 +388,16 @@ export const WAFFEN: readonly WaffenDef[] = [
 export const WAFFE_START = WAFFEN[0]
 
 /** Wie viele Waffen gleichzeitig getragen werden koennen. */
-export const MAX_WAFFEN = 5
+/**
+ * Die harte Obergrenze des Guertels.
+ *
+ * Nicht dasselbe wie `spieler.maxWaffen`: Die Charaktere tragen drei bis
+ * fuenf, und die Tuer "Duennhaeutig" legt einen drauf. **Diese** Zahl ist die
+ * Grenze, hinter der die reservierten Riss-Plaetze beginnen - wer sie
+ * ueberschreitet, laesst eine Waffe und die Scherben dasselbe Bit teilen, und
+ * die Kernregel waere im Spiel unsichtbar ausgehebelt.
+ */
+export const MAX_WAFFEN = 6
 
 /**
  * Der kleinste freie Guertelplatz.

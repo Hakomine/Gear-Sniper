@@ -32,6 +32,24 @@ export function erzeugeSpieler(): Spieler {
     kritFaktor: 2.1,
     xpMult: 1,
     maxWaffen: 5,
+    schadenNimmt: 1,
+    // Regelveraendernde Gegenstaende - siehe upgrades.ts. Alle aus, bis einer
+    // gezogen wird.
+    rissDauer: 0,
+    kettenRiss: 0,
+    kettenZaehler: 0,
+    splitterFeld: 0,
+    blutglas: 0,
+    kritRiss: false,
+    zwillingsbruch: 1,
+    standhaft: 0,
+    schild: false,
+    stehZeit: 0,
+    steht: false,
+    aussetzer: false,
+    sog: 0,
+    zeitlupe: 0,
+    letzterRiss: false,
     // Charakter-Mechaniken. Bei allen anderen bleiben sie auf null und kosten
     // genau eine Abfrage pro Tick - siehe charaktere.ts.
     schliffProNah: 0,

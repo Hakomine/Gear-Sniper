@@ -90,6 +90,12 @@ export function zeichneHud(
   ctx.fillStyle = FARBEN.text
   ctx.fillText(zahlText(s.statistik.kills), breite - 26, 46)
 
+  // Etappe neben der Uhr: Die Uhr sagt, wie lange - die Etappe, wie weit.
+  ctx.textAlign = 'center'
+  ctx.font = `600 13px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 62)
+
   // --- Lebensbalken, unten mittig ------------------------------------------
   const bw = 360
   const bh = 16
