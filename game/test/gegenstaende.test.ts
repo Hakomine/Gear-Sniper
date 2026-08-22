@@ -7,7 +7,7 @@ import { legeGegner } from '../src/game/spawner'
 import type { Befehle, Gegner, Spielstand } from '../src/game/state'
 import { erzeugeSpielstand, gitterAufbauen, leereBefehle, starteLauf, tick } from '../src/game/state'
 import { PASSIVE } from '../src/game/upgrades'
-import { arbeiteKaskadeAb, verletzeGegner } from '../src/game/welt'
+import { arbeiteKaskadeAb, MAX_ZONEN, verletzeGegner } from '../src/game/welt'
 
 /**
  * Gegenstände, die Regeln ändern.
@@ -201,5 +201,41 @@ describe('Keiner ist nur eine Zahl', () => {
       expect(sp.schadenMult, p.id).toBe(1)
       expect(sp.kritChance, p.id).toBeCloseTo(erzeugeSpieler().kritChance, 6)
     }
+  })
+})
+
+describe('Der Deckel auf Zonen', () => {
+  it('laesst das Splitterfeld die Karte nicht zutapezieren', () => {
+    /*
+     * Gefunden von der Messung, nicht vom Auge.
+     *
+     * Mit drei Stapeln bleibt jede Zersplitterung neun Sekunden lang als Zone
+     * liegen, und jede Zone fragt pro Tick ihren Umkreis im Gitter ab. Gemessen
+     * standen **460 Stueck gleichzeitig** - der teuerste Posten der ganzen
+     * Simulation, ausgeloest von einem Gegenstand, den man dreimal zieht, ohne
+     * etwas zu ahnen. Im Bild sah man nur, dass viel los ist.
+     */
+    const s = leeresFeld()
+    s.spieler.splitterFeld = 9
+
+    for (let runde = 0; runde < 40; runde++) {
+      for (let i = 0; i < 12; i++) {
+        const g = setze(s, i * 40 - 200, runde * 30 - 500, 10)
+        g.zersplittert = true
+        g.maxHp = 10
+        // Direkt in die Warteschlange: Der Weg ueber drei Waffen ist hier
+        // nicht der Punkt, die Zahl der entstehenden Zonen schon.
+        verletzeGegner(s, g, 1, 0, false, 0, 0)
+        g.zersplittert = false
+        g.risse = 3
+        g.risseMaske = 0b111
+        verletzeGegner(s, g, 1, 1, false, 0, 0)
+      }
+      arbeiteKaskadeAb(s)
+      expect(s.zonen.anzahl).toBeLessThanOrEqual(MAX_ZONEN)
+    }
+    // Und der Deckel wird auch wirklich erreicht - sonst prueft der Test nur,
+    // dass nichts passiert ist.
+    expect(s.zonen.anzahl).toBe(MAX_ZONEN)
   })
 })

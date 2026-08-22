@@ -36,6 +36,7 @@ import { risseAblaufen, rissSetzen, zersplitterBereit } from './risse'
 import type { Bewegung } from './gegnerVerhalten'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
+import { loeseZeichen, ZEICHEN } from './zeichen'
 import type { Aufwertung } from './upgrades'
 import { zieheAngebote } from './upgrades'
 import { detoniere, VERHALTEN } from './verhalten'
@@ -199,6 +200,20 @@ export type Spieler = {
    */
   blickX: number
   blickY: number
+
+  // --- Was die Zeichen am Spieler anrichten ---------------------------------
+
+  /** Restzeit der Frostmal-Bremse. Groesser als 0 heisst: langsamer unterwegs. */
+  gebremst: number
+  /**
+   * Zug aller Zieher in diesem Tick, aufsummiert.
+   *
+   * Gesammelt statt sofort angewendet, weil er *einmal* gedeckelt werden muss:
+   * Ein Zieher ist ein Aergernis, das man wegstoesst, vier gleichzeitig waeren
+   * eine Fessel. `bewegeSpieler` deckelt und leert ihn.
+   */
+  zugX: number
+  zugY: number
 }
 
 export type Gegner = {
@@ -253,6 +268,16 @@ export type Gegner = {
    */
   frost: number
   /**
+   * Welches Zeichen er traegt - Index in `ZEICHEN`, `-1` heisst keins.
+   *
+   * Eine Ganzzahl und kein Objekt: `if (g.zeichen < 0)` ist damit der
+   * vollstaendige Aufwand fuer alle ungezeichneten Gegner, und das sind bei
+   * jeder Anteilskurve die allermeisten. Siehe `zeichen.ts`.
+   */
+  zeichen: number
+  /** Arbeitsspeicher des Zeichens - beim Zunder der Takt seiner Brandspur. */
+  zeichenTakt: number
+  /**
    * Nur bei Bossen gesetzt.
    *
    * Bosse laufen bewusst im normalen Gegner-Pool mit, statt einen eigenen zu
@@ -305,7 +330,7 @@ export type Geschoss = {
 
 /** Ein wirksames Feld: Sog des Sternenschluckers, Truemmerfeld nach dem Platzen. */
 export type Zone = {
-  art: 'sog' | 'knall'
+  art: 'sog' | 'knall' | 'brand'
   x: number
   y: number
   radius: number
@@ -499,6 +524,28 @@ export type Spielstand = {
   /** Gesetzt, sobald der letzte Boss der Etappe liegt - `laufendTick` haelt dann an. */
   etappeVorbei: boolean
   /**
+   * Wie oft dieser Lauf schon am Kern vorbeigegangen ist.
+   *
+   * 0 heisst: erste Runde. Jede Stufe macht Gegner zaeher, setzt mehr Zeichen,
+   * ab der zweiten einen Boss mehr - und multipliziert die Punkte. Das ist die
+   * Schleife, die eine Bestenliste nach oben offen haelt, ohne dass jemand
+   * vier Stunden sitzen muss.
+   */
+  zerruettung: number
+  /** Wie viele gezeichnete Gegner gerade auf dem Feld stehen - siehe `zeichen.ts`. */
+  gezeichnet: number
+  /** Faktor auf den Zeichen-Anteil. Die Verhexung "Gezeichnet" verdoppelt ihn. */
+  zeichenMult: number
+  /**
+   * Wurde der Kern gelegt?
+   *
+   * Bewusst eine Flagge auf der Phase `'tot'` und kein eigener Phasenwert: Ein
+   * siebter Wert in `Phase` haette jede `switch`-Anweisung im Spiel angefasst,
+   * ohne dass sich am Ablauf etwas aendert. Der Abschlussbildschirm verzweigt
+   * an genau einer Stelle.
+   */
+  gewonnen: boolean
+  /**
    * Wie viele Kartenbildschirme noch offen sind.
    *
    * Eine Tuer kann zwei Karten einbringen; statt zwei Angebote nebeneinander
@@ -605,6 +652,10 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     tuerWahl: 0,
     kartenSchuld: 0,
     etappeVorbei: false,
+    zerruettung: 0,
+    gezeichnet: 0,
+    zeichenMult: 1,
+    gewonnen: false,
     bossNummer: 0,
     bossKarte: false,
     charakter: charakterMit('splitter'),
@@ -664,6 +715,10 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.tuerWahl = 0
   s.kartenSchuld = 0
   s.etappeVorbei = false
+  s.zerruettung = 0
+  s.gezeichnet = 0
+  s.zeichenMult = 1
+  s.gewonnen = false
   s.bossNummer = 0
   s.bossKarte = false
   s.angebote = []
@@ -1087,7 +1142,21 @@ function bewegeGegner(s: Spielstand, dt: number): void {
 
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
-    risseAblaufen(g, dt * s.etappenWerte.rissZerfall)
+
+    /*
+     * Zeichen: eine Ganzzahlpruefung fuer alle, echte Arbeit fuer wenige.
+     *
+     * Der Rissverfall geht durch dieselbe Verzweigung, statt eine zweite
+     * Abfrage zu kosten - die Klammer ist nichts anderes als ein dritter
+     * Faktor auf einer Zahl, die hier ohnehin schon multipliziert wird.
+     */
+    let zerfall = s.etappenWerte.rissZerfall
+    if (g.zeichen >= 0) {
+      const z = ZEICHEN[g.zeichen]
+      zerfall *= z.rissZerfall
+      z.tick?.(s, g, dt)
+    }
+    risseAblaufen(g, dt * zerfall)
     if (g.frost > 0) g.frost -= dt
 
     // Bosse bewegen sich nach eigenem Muster und draengen sich nicht: Sie sind
@@ -1416,6 +1485,10 @@ function raeumeTote(s: Spielstand): void {
      * ganz normal drankommt; nur mitdenken muss man es.
      */
     GEGNER_VERHALTEN[g.art.verhalten].beiTod?.(s, g)
+    // Und was sein Zeichen beim Sterben noch anstellt - dieselbe Stelle,
+    // dieselbe Vorsicht: `legeGegner` haengt hinten an, die Schleife laeuft
+    // rueckwaerts.
+    if (g.zeichen >= 0) ZEICHEN[g.zeichen].beiTod?.(s, g)
 
     // Schleiferin: Nur Kills in Reichweite zaehlen. Das ist der ganze Punkt -
     // der Bonus zwingt dazu, im Gedraenge zu bleiben statt es zu umlaufen.
@@ -1444,6 +1517,7 @@ function raeumeTote(s: Spielstand): void {
       if (findeBoss(s) === null) s.etappeVorbei = true
     }
 
+    loeseZeichen(s, g)
     s.gegner.freigeben(i)
   }
 }
@@ -1704,6 +1778,8 @@ function leererGegner(): Gegner {
     merkY: 0,
     blick: 0,
     frost: 0,
+    zeichen: -1,
+    zeichenTakt: 0,
   }
 }
 

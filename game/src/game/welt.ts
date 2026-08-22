@@ -332,7 +332,7 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
 
     s.klaenge.melde('zersplittert', istBoss ? 1.4 : 1)
     if (sp.blutglas > 0) heileSpieler(sp, sp.blutglas)
-    if (sp.splitterFeld > 0) {
+    if (sp.splitterFeld > 0 && s.zonen.anzahl < MAX_ZONEN) {
       // Splitterfeld: Was zerspringt, laesst Scherben liegen. Sie erben den
       // Scherbenplatz, damit ihr Schaden in der Auswertung dort landet, wo er
       // hingehoert - und nicht bei irgendeiner Waffe.
@@ -395,6 +395,23 @@ export function nimmGeschoss(s: Spielstand): Geschoss {
   p.kollaps = false
   return p
 }
+
+/**
+ * Wie viele Zonen hoechstens gleichzeitig stehen duerfen.
+ *
+ * Die Messung hat hier einen Fehler gefunden, den kein Bild gezeigt haette:
+ * Mit drei Stapeln "Splitterfeld" bleibt jede Zersplitterung neun Sekunden
+ * lang als Zone liegen - gemessen **460 Stueck gleichzeitig**, und jede
+ * einzelne fragt pro Tick ihren Umkreis im Gitter ab. Das war der teuerste
+ * Posten der ganzen Simulation, ausgeloest von einem Gegenstand, den man
+ * dreimal zieht, ohne etwas zu ahnen.
+ *
+ * Der Deckel gilt fuer die *selbsttaetigen* Quellen - Splitterfeld und die
+ * Brandspur des Zunders. Waffenzonen (Sternenschlucker, Kollaps) pruefen ihn
+ * nicht: Es gibt je Schuss genau eine, ihre Zahl haengt an der Abklingzeit
+ * und ist damit von sich aus begrenzt.
+ */
+export const MAX_ZONEN = 80
 
 export function legeZone(
   s: Spielstand,

@@ -8,6 +8,7 @@ import {
   verfuegbareArten,
 } from './enemies'
 import type { Gegner, Spielstand } from './state'
+import { loeseZeichen, OHNE_ZEICHEN, setzeLeger, setzeZeichen, waehleZeichen } from './zeichen'
 
 /**
  * Obergrenze zum Schutz der Bildrate. Darueber spawnt nichts mehr nach.
@@ -94,8 +95,37 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.merkY = 0
   g.blick = 0
   g.frost = 0
+  // Das Zeichen des Vorbesitzers steht sonst noch drin. Der Zaehler faellt
+  // nicht hier, sondern beim Freigeben - siehe `loeseZeichen`.
+  g.zeichen = OHNE_ZEICHEN
+  g.zeichenTakt = 0
   return g
 }
+
+/**
+ * Ein Gegner mit Zeichen, wenn der Wurf eines will.
+ *
+ * Getrennt von `legeGegner`, weil nicht jeder Weg ein Zeichen ziehen darf:
+ * Bruchstuecke des Teilers, Kopien des Echos und die Ringe, die der Kern
+ * ausspuckt, kommen bewusst blank - sonst wuerde sich ein Zeichen ueber seine
+ * eigenen Nachkommen vervielfaeltigen.
+ */
+function legeGezeichnet(s: Spielstand, art: GegnerArt, x: number, y: number): Gegner | null {
+  const g = legeGegner(s, art, x, y)
+  if (g === null) return null
+  const z = waehleZeichen(s)
+  if (z !== OHNE_ZEICHEN) setzeZeichen(s, g, z)
+  return g
+}
+
+/**
+ * Eine blanke Kopie eines Gegners danebensetzen - fuer das Echo.
+ *
+ * Wird `zeichen.ts` einmal beim Laden hereingereicht, damit die beiden
+ * Dateien sich nicht gegenseitig importieren. Der Rest des Spiels ruft das
+ * nie auf.
+ */
+setzeLeger((s, g, dx, dy) => legeGegner(s, g.art, g.x + dx, g.y + dy))
 
 function waehleArt(s: Spielstand): GegnerArt {
   const arten = verfuegbareArten(s.zeit)
@@ -145,7 +175,7 @@ export function spawne(s: Spielstand, dt: number): void {
   while (s.spawnSpeicher >= 1) {
     s.spawnSpeicher -= 1
     const p = ringPunkt(s, s.rng.next() * Math.PI * 2)
-    legeGegner(s, waehleArt(s), p.x, p.y)
+    legeGezeichnet(s, waehleArt(s), p.x, p.y)
   }
 
   if (s.zeit >= s.naechsterSchwarm) {
@@ -183,7 +213,7 @@ function schwarm(s: Spielstand): void {
     const p = ringPunkt(s, winkel)
     // Leicht gestaffelt, damit der Pulk als Welle ankommt und nicht als Wand.
     const tiefe = s.rng.range(0, 190)
-    legeGegner(
+    legeGezeichnet(
       s,
       art,
       p.x + Math.cos(winkel) * tiefe,
@@ -214,6 +244,11 @@ export function entferneVerlorene(s: Spielstand): void {
     if (g.bossZustand !== null) continue
     const dx = g.x - px
     const dy = g.y - py
-    if (dx * dx + dy * dy > grenze2) s.gegner.freigeben(i)
+    if (dx * dx + dy * dy <= grenze2) continue
+    // Der Zaehler der Gezeichneten faellt an *jedem* Weg zurueck in den Pool.
+    // Laeuft er auseinander, haebelt er still den Deckel aus - entweder gibt
+    // es dann gar keine Zeichen mehr oder beliebig viele.
+    loeseZeichen(s, g)
+    s.gegner.freigeben(i)
   }
 }

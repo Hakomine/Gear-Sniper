@@ -6,6 +6,7 @@ import { legeGegner, MAX_GEGNER } from '../src/game/spawner'
 import { ruesteAus, WAFFEN, werteAuf } from '../src/game/weapons'
 import type { Befehle } from '../src/game/state'
 import { erzeugeSpielstand, leereBefehle, starteLauf, tick } from '../src/game/state'
+import { MAX_GEZEICHNET, setzeZeichen, ZEICHEN } from '../src/game/zeichen'
 
 /**
  * Leistungsmessung ohne Browser.
@@ -86,6 +87,8 @@ function messen(): void {
   console.log(`  Kills            ${s.statistik.kills}`)
   console.log(`  Bosse erlegt     ${s.statistik.bosse}`)
   console.log(`  Feindgeschosse   ${feindSpitze} (Spitze)`)
+  console.log(`  Gezeichnete      ${s.gezeichnet}`)
+  console.log(`  Zonen            ${s.zonen.anzahl}`)
   console.log('')
   console.log(`  Mittel           ${(summe / TICKS).toFixed(3)} ms/Tick`)
   console.log(`  Median           ${p(0.5).toFixed(3)} ms/Tick`)
@@ -165,8 +168,22 @@ function auffuellen(s: ReturnType<typeof erzeugeSpielstand>): void {
     const art = MISCHUNG[s.gegner.anzahl % MISCHUNG.length]
     const w = s.rng.next() * Math.PI * 2
     const r = s.rng.range(60, s.sichtRadius)
-    if (legeGegner(s, art, s.spieler.x + Math.cos(w) * r, s.spieler.y + Math.sin(w) * r) === null) {
-      break
+    const g = legeGegner(s, art, s.spieler.x + Math.cos(w) * r, s.spieler.y + Math.sin(w) * r)
+    if (g === null) break
+
+    /*
+     * Bis an den Deckel gezeichnet - der teuerste Zustand, den es gibt.
+     *
+     * Der Spawner zieht Zeichen nach einer Anteilskurve, die erst in spaeten
+     * Etappen und unter Zerruettung ihren Hoechstwert erreicht. Hier wird
+     * dieser Hoechstwert *erzwungen*, weil eine Messung, die den schlimmsten
+     * Fall nie sieht, genau den Fall nicht misst, in dem die Bildrate bricht:
+     * siebzig Brandspuren, Zieher am Spieler, Echos beim Sterben.
+     *
+     * Reihum durch alle Zeichen, damit keines fehlt.
+     */
+    if (s.gezeichnet < MAX_GEZEICHNET) {
+      setzeZeichen(s, g, s.gegner.anzahl % ZEICHEN.length)
     }
   }
 }

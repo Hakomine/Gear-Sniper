@@ -3,6 +3,7 @@ import { schreinDef, SCHREIN_RADIUS } from '../game/schreine'
 import { STOSS_ABKLING } from '../game/player'
 import type { Effekt, Spielstand } from '../game/state'
 import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
+import { ZEICHEN } from '../game/zeichen'
 import { zeichneAtempause, zeichneLevelup, zeichnePause, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
 import { erschuetterung } from './juice'
@@ -325,8 +326,17 @@ function zeichneGitter(ctx: CanvasRenderingContext2D, s: Spielstand): void {
 /** Wer gerade einen Schildbogen braucht - wiederverwendet, kein Muell je Bild. */
 const schildTraeger: number[] = []
 
+/**
+ * Ein Eimer je Zeichen, damit auch die Ringe artweise gezeichnet werden.
+ *
+ * Fuenf Pfadaufbauten fuer das ganze Feld statt einer je gezeichnetem Gegner -
+ * dieselbe Rechnung wie bei den Koerpern selbst.
+ */
+const zeichenEimer: number[][] = ZEICHEN.map(() => [])
+
 function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   for (const liste of gegnerEimer.values()) liste.length = 0
+  for (const liste of zeichenEimer) liste.length = 0
   blitzende.length = 0
   schildTraeger.length = 0
 
@@ -341,6 +351,8 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     liste.push(i)
     if (gegner[i].blitz > 0) blitzende.push(i)
     if (gegner[i].art.verhalten === 'schild') schildTraeger.push(i)
+    const z = gegner[i].zeichen
+    if (z >= 0) zeichenEimer[z].push(i)
   }
 
   const drehung = s.zeit * 0.7
@@ -386,6 +398,8 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     trennKante(ctx)
   }
 
+  zeichneZeichenRinge(ctx, s, drehung)
+
   // Der Trefferblitz *ueberlagert* die Farbe, er ersetzt sie nicht.
   //
   // Zuerst kamen frisch getroffene Gegner in einen eigenen weissen Durchgang.
@@ -403,6 +417,47 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   }
   ctx.fillStyle = mitAlpha('#ffffff', 0.45)
   ctx.fill()
+}
+
+/**
+ * Der Ring um einen gezeichneten Gegner.
+ *
+ * Zwei Ringe statt einem: ein dunkler darunter, damit der helle sich auch vor
+ * einem hellen Koerper abhebt - dieselbe Konturregel wie ueberall. Der aeussere
+ * pulsiert, weil ein starrer Kreis wie ein Aufkleber wirkt und weil das Auge
+ * Bewegung im Pulk schneller findet als Farbe.
+ *
+ * Bewusst *ausserhalb* des Koerpers und nicht als zweite Fuellung: Die Farbe
+ * eines Gegners sagt, was er ist, und die darf ein Zeichen nicht ueberschreiben
+ * - sonst waeren neun Arten mal fuenf Zeichen wieder fuenf Arten.
+ */
+function zeichneZeichenRinge(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  drehung: number,
+): void {
+  if (s.gezeichnet === 0) return
+  const gegner = s.gegner.aktiv
+  const puls = 1 + Math.sin(drehung * 2.4) * 0.06
+
+  for (let z = 0; z < zeichenEimer.length; z++) {
+    const liste = zeichenEimer[z]
+    if (liste.length === 0) continue
+
+    ctx.beginPath()
+    for (let k = 0; k < liste.length; k++) {
+      const g = gegner[liste[k]]
+      if (g === undefined) continue
+      ctx.moveTo(g.x + g.radius * 1.6 * puls, g.y)
+      ctx.arc(g.x, g.y, g.radius * 1.6 * puls, 0, Math.PI * 2)
+    }
+    ctx.lineWidth = 5
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.stroke()
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = ZEICHEN[z].farbe
+    ctx.stroke()
+  }
 }
 
 /**
@@ -866,14 +921,19 @@ function zeichneZonen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       continue
     }
 
+    // Die Brandspur des Zunders flackert und liegt kraeftiger auf: Sie
+    // verletzt den Spieler, nicht die Gegner, und muss deshalb aussehen wie
+    // etwas, in das man nicht hineinlaeuft - nicht wie ein Waffeneffekt.
+    const brand = z.art === 'brand'
+    const flackern = brand ? 0.86 + Math.sin(performance.now() / 70 + z.x) * 0.14 : 1
     ctx.beginPath()
-    ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2)
-    ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.24 * rest)
+    ctx.arc(z.x, z.y, z.radius * (brand ? flackern : 1), 0, Math.PI * 2)
+    ctx.fillStyle = mitAlpha(FARBEN.kontur, (brand ? 0.34 : 0.24) * rest)
     ctx.fill()
-    ctx.fillStyle = mitAlpha(z.farbe, 0.18 * rest)
+    ctx.fillStyle = mitAlpha(z.farbe, (brand ? 0.34 : 0.18) * rest)
     ctx.fill()
-    ctx.lineWidth = 2.5
-    ctx.strokeStyle = mitAlpha(z.farbe, 0.75 * rest)
+    ctx.lineWidth = brand ? 3 : 2.5
+    ctx.strokeStyle = mitAlpha(z.farbe, (brand ? 0.95 : 0.75) * rest)
     ctx.stroke()
   }
 }

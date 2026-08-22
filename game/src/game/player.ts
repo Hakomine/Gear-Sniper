@@ -64,6 +64,9 @@ export function erzeugeSpieler(): Spieler {
     stossLaden: 1,
     blickX: 1,
     blickY: 0,
+    gebremst: 0,
+    zugX: 0,
+    zugY: 0,
   }
 }
 
@@ -137,13 +140,47 @@ export function bewegeSpieler(sp: Spieler, bx: number, by: number, dt: number): 
   if (sp.stossRest > 0) {
     sp.x += sp.stossVx * dt
     sp.y += sp.stossVy * dt
+    // Waehrend des Stosses greift kein Zieher. Das ist die ganze Gegenwehr:
+    // Der Stoss reisst sich los, und weil er eine Abklingzeit hat, kostet
+    // dieses Losreissen etwas.
+    sp.zugX = 0
+    sp.zugY = 0
     return
   }
 
-  const tempo = sp.tempo * sp.tempoMult
+  if (sp.gebremst > 0) sp.gebremst -= dt
+  // Das Frostmal bremst, es haelt nicht fest: Wer bei 45 Prozent Tempo nicht
+  // mehr wegkommt, stand ohnehin zu tief drin.
+  const tempo = sp.tempo * sp.tempoMult * (sp.gebremst > 0 ? 0.45 : 1)
   sp.x += bx * tempo * dt
   sp.y += by * tempo * dt
+
+  /*
+   * Der gesammelte Zug aller Zieher - einmal gedeckelt, dann angewendet.
+   *
+   * Die Summe zu deckeln statt jeden einzelnen Zieher ist der Unterschied
+   * zwischen einem Gegner und einer Strafe: Einzeln zieht er spuerbar, zu
+   * viert zoege er staerker, als der Spieler laufen kann, und dann gaebe es
+   * gegen ihn keine Handlung mehr.
+   */
+  const zug = Math.hypot(sp.zugX, sp.zugY)
+  if (zug > 0) {
+    const anteil = zug > ZIEHER_DECKEL ? ZIEHER_DECKEL / zug : 1
+    sp.x += sp.zugX * anteil * dt
+    sp.y += sp.zugY * anteil * dt
+  }
+  sp.zugX = 0
+  sp.zugY = 0
 }
+
+/**
+ * Deckel auf den gesammelten Zug.
+ *
+ * Steht hier und nicht in `zeichen.ts`, damit `player.ts` weiterhin nur Typen
+ * importiert - die Datei ist die eine Stelle, an der sich der Spieler bewegt,
+ * und sie soll ohne halbes Spiel im Ruecken lesbar bleiben.
+ */
+const ZIEHER_DECKEL = 95
 
 export function verletzeSpieler(sp: Spieler, schaden: number): void {
   sp.hp = Math.max(0, sp.hp - schaden)
