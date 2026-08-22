@@ -47,7 +47,7 @@ scheinbar grundlos.
 
 ## Der Waffenkasten
 
-Fünf Plätze, acht Waffen, vier Seltenheiten.
+Sechs Plätze, **zwanzig Waffen**, sechs Fusionen, vier Seltenheiten.
 
 | Waffe | Seltenheit | Was sie tut |
 |---|---|---|
@@ -77,6 +77,34 @@ irgendein Nebensystem verbessert.
 **Eine Karte betrifft immer eine Waffe**, solange überhaupt eine möglich ist.
 Ein reiner Statistik-Bildschirm soll gar nicht erst vorkommen.
 
+### Zwölf, die je etwas Eigenes tun
+
+Acht plus sechs Fusionen war für dieses Genre wenig, und die Hälfte davon waren
+Varianten von „fliegt und trifft". Diese zwölf machen jeweils etwas, das keine
+andere tut — und die meisten hängen an der Riss-Regel, statt danebenzustehen.
+Ein Test hält fest, dass sich **keine zwei Waffen ein Verhalten teilen**.
+
+| Waffe | Seltenheit | Was sie tut |
+|---|---|---|
+| **Schleifband** | gewöhnlich | zieht eine schneidende Spur hinter dir her |
+| **Stimmgabel** | gewöhnlich | Schallwelle ringsum — trifft härter, was schneller läuft |
+| **Fadenkreuz** | selten | bohrt am zähesten Gegner und lädt sich dabei auf |
+| **Spiegelscherbe** | selten | wirft feindliche Geschosse zurück, schneller und schärfer |
+| **Frostkeil** | selten | vereist — und Vereistes zerspringt mit **zwei** Waffen statt drei |
+| **Ankerhaken** | selten | zieht den *entferntesten* Gegner mitten in deinen Bau |
+| **Bohrkopf** | episch | bleibt stecken und reißt seinen Riss immer wieder neu auf |
+| **Glockenturm** | episch | ein Schlag setzt bei allem im Bild einen Riss |
+| **Saatgut** | episch | träge Knospe, die erst am Ende ihres Wegs aufgeht |
+| **Schwarzband** | episch | schneidet alles zwischen dem nächsten und dem fernsten Gegner |
+| **Kaleidoskop** | legendär | löst eine andere deiner Waffen ein zweites Mal aus |
+| **Sanduhr** | legendär | alles im Umkreis läuft rückwärts — auch feindliche Geschosse |
+
+Drei davon greifen direkt in die Kernregel: Der **Frostkeil** senkt die Schwelle,
+statt Schaden zu erhöhen. Der **Glockenturm** allein tötet nichts — in einem Bau
+mit zwei weiteren Waffen lässt er das halbe Bild zerspringen. Und das
+**Kaleidoskop** hat als einzige Waffe *keinen eigenen Schaden*: Ihr Wert hängt
+ausschließlich davon ab, was sonst noch im Gürtel liegt.
+
 ### Verschmelzungen
 
 Stehen **beide** Ausgangswaffen auf Maxstufe, kann eine Fusionskarte kommen.
@@ -98,6 +126,46 @@ und kommen kein zweites Mal, wenn das Ergebnis schon im Gürtel liegt.
 
 Kurzfristig kostet eine Fusion **einen Riss** — zwei Waffen werden zu einer. Der
 frei gewordene Platz nimmt dafür etwas Neues auf. Eine Abwägung, kein Geschenk.
+
+## Die Bildsprache: massiv
+
+Nach der vierten Runde kam die Rückmeldung „das Design gefällt mir überhaupt
+nicht" und „das Spiel ist unübersichtlich". Beides stimmte, und beides hatte
+**eine** Ursache: Die Bruchlinien liefen quer durch die Schrift. Auf der Tür
+„Ruhe" war „Nichts wird schwerer" durchgestrichen, der Titel hatte einen Strich
+mitten durchs Wort. Ein Strich durch Text heißt überall *gelöscht* — das Auge
+kann gar nicht anders, als das als kaputt zu lesen.
+
+Aus drei vorgelegten Richtungen fiel die Wahl auf **massiv**:
+
+| Regel | Vorher | Jetzt |
+|---|---|---|
+| Spielfeld | fast schwarz | **heller als die Figuren** (`#2a2f3e`) |
+| Gegner | gefüllt, dünne Kante in Grundfarbe | gefüllt, **3 px dunkle Kontur**, Schlagschatten |
+| Karten | durchscheinende Umrisse mit Linien im Text | **massive Platten** mit Kante, Schatten, Akzentbalken oben |
+| Bruchlinien | quer über die Fläche | nur im **Kopfstreifen**, nie in der Textfläche |
+| Spieler | kleiner Punkt unter tausend | größer, cremig, eigene Kontur — als Einziger rund |
+
+Der Griff dahinter ist die Umkehr: Ein mittelheller Grund trägt gefüllte Körper
+mit dunkler Kontur, und jede Silhouette schneidet sich von selbst frei. Bei
+tausend Gegnern bleiben es tausend Gegner statt eines Teppichs.
+
+Die Charakterauswahl zeigt jetzt ein **Wappen** statt nur Text: denselben
+Körper, den man gleich steuert, plus ein Zeichen, das die Mechanik andeutet —
+der Bogenhieb der Schleiferin, die Dornen des Kolosses, der gebrochene Strahl
+der Prismatikerin.
+
+## Die Minikarte
+
+Oben rechts, und sie zeigt **vier** Dinge — mehr wäre wieder Rauschen:
+
+- **Du**, mit Blickrichtung
+- **Der Boss** als Keil, der in seine Richtung zeigt, auch weit außerhalb
+- **Offene Schreine** als Bernsteinraute
+- **Das Getümmel** als Wolke, nicht als 1400 Punkte Konfetti
+
+Was außerhalb der Reichweite liegt, klemmt am Rand. Ein Boss, den man nicht
+sieht, ist die wichtigste Information von allen.
 
 ## Neun Gegner, neun Köpfe
 
@@ -264,7 +332,7 @@ und auf den Todesbildschirm, der von der Stelle des Todes aus zerspringt.
 
 ```bash
 npm run check      # TypeScript
-npm run test       # 173 Tests: Waffen, Karten, Risse, Gegner, Bosse, Etappen, Ton, Determinismus
+npm run test       # 195 Tests: Waffen, Karten, Risse, Gegner, Bosse, Etappen, Ton, Determinismus
 npm run perf       # Simulation ohne Zeichnen, misst ms pro Tick
 npm run smoke      # startet das Spiel im Browser, legt Screenshots ab
 ```
@@ -346,6 +414,7 @@ bestückten Waffen**, 3000 Ticks, ohne zu zeichnen. Budget: 5 ms pro Tick, bei
 | 1400 Gegner, fünf Waffen | 1,8 ms | 2,7 ms |
 | 1400 Gegner, fünf Waffen **und dauernd ein Boss** | 1,6 ms | 2,5 ms |
 | 1400 Gegner **aus allen neun Arten**, fünf Waffen, ein Boss | 1,5 ms | 2,2 ms |
+| dieselbe Mischung, **gewichtet wie im Spiel** | 2,2 ms | 3,8 ms |
 | 2000 Gegner | 4,5 ms | 5,8 ms |
 
 Das ganze Waffensystem kostet also praktisch nichts, Bosse ebenso wenig — und
@@ -413,6 +482,27 @@ Und in der vierten Runde, mit Gegnerverhalten, Stoß und Ton:
   direkt hinter `MAX_WAFFEN`. Ohne Grenze hätten eine Waffe und die Scherben
   dasselbe Bit geteilt und die Kernregel wäre still ausgehebelt gewesen.
 
+Und in der fünften Runde, beim Umbau der Bildsprache:
+
+- **Der Schwarmtakt holte jeden verpassten Termin nach.** `naechsterSchwarm +=
+  TAKT` statt „ab jetzt": Springt die Spielzeit — beim Vorspulen, beim
+  Bruchmal, das eine Bosswelle heranzieht, oder nach einem langen Ruckler —
+  kamen dutzende Schwärme in aufeinanderfolgenden Ticks. Gemessen bestanden
+  danach **40 % des Feldes aus einer einzigen Gegnerart**, wo die Gewichte drei
+  Prozent vorsehen. Das war ein guter Teil des „unübersichtlich".
+- **Kitte deckten sich gegenseitig.** Zwei nebeneinander konnten beide nicht
+  mehr zerspringen, lebten dadurch deutlich länger als alles andere und häuften
+  sich an. Ein Flicker flickt jetzt keinen Flicker.
+- **1871 Feindgeschosse gleichzeitig.** Ohne Deckel wurde aus dem
+  telegrafierten Schuss des Speiers eine Wand, die man nicht mehr lesen, nur
+  noch erleiden kann. Jetzt bei 260 gedeckelt — wer nicht schießen darf, lädt
+  einfach weiter.
+- **Die Messung maß einen unmöglichen Zustand.** Sie füllte reihum durch alle
+  Arten, damit bestand ein Sechstel des Feldes aus Speiern. Jetzt gewichtet sie
+  wie das Spiel.
+- **Der Kitt war cremefarben** — dieselbe Farbe wie der Spieler, und es gibt ihn
+  hundertfach. Das brach genau die Regel, die die eigene Figur auffindbar macht.
+
 Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
 
 - **Bosse liefen auf der Schwarmkurve mit.** Die ist quadratisch und ergibt in
@@ -431,6 +521,9 @@ Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
   Bosse geben ihm einen Takt, aber kein Ziel. Ein Endgegner oder ein Zeitlimit
   fehlt weiterhin.
 - **Musik.** Klänge gibt es, einen Soundtrack nicht.
+- **Der Todesbildschirm und die Waffenleiste** sind noch in der alten
+  Formsprache. Sie funktionieren, aber sie tragen die massiven Platten noch
+  nicht durchgehend.
 - **Bossbalance.** Gemessen über fünf Läufe schwankt ein Bosskampf zwischen 4
   und 100 Sekunden — je nachdem, ob der Bau Einzelziel-Schaden hat. Dass ein
   Flächenbau sich am Boss schwertut, ist gewollt; diese Spanne ist zu groß. Und

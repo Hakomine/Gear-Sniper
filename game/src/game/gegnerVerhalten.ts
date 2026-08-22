@@ -65,6 +65,20 @@ const STURM_DAUER = 0.42
 const STURM_TEMPO = 4.2
 const STURM_PAUSE = 1.7
 
+/**
+ * Wie viele Feindgeschosse hoechstens gleichzeitig fliegen duerfen.
+ *
+ * Gemessen ohne Deckel: 1871 Stueck gleichzeitig. Das ist zweierlei Problem -
+ * es kostet Rechenzeit (jedes wird pro Tick gegen den Spieler geprueft), und
+ * es ist vor allem *unlesbar*. Eine Wand aus zweitausend Kugeln kann man nicht
+ * mehr lesen, nur noch erleiden, und dann ist der telegrafierte Schuss des
+ * Speiers keine Ansage mehr, sondern Rauschen.
+ *
+ * Der Deckel greift beim Schuetzen, nicht beim Pool: Wer nicht schiessen darf,
+ * laedt einfach weiter - es geht nichts verloren ausser der Menge.
+ */
+export const MAX_FEIND_SCHUESSE = 260
+
 /** Wunschabstand des Speiers und sein Schusstakt. */
 const SPEIER_ABSTAND = 340
 const SPEIER_TAKT = 2.2
@@ -218,6 +232,9 @@ export const GEGNER_VERHALTEN: Record<GegnerVerhaltenId, GegnerVerhalten> = {
       aus.vy = (zielY * radial + ty * seite * 0.4) * g.tempo
 
       if (g.takt > 0 || abstand > SPEIER_ABSTAND * 1.6) return
+      // Am Deckel wird nicht geschossen, aber weiter geladen: Der naechste
+      // Schuss kommt, sobald wieder Platz ist.
+      if (s.feindSchuesse.anzahl >= MAX_FEIND_SCHUESSE) return
       g.takt = SPEIER_TAKT
 
       const p = s.feindSchuesse.nimm()
@@ -271,9 +288,19 @@ export const GEGNER_VERHALTEN: Record<GegnerVerhaltenId, GegnerVerhalten> = {
     bewege(s, g, dt, aus) {
       g.takt -= dt
       const abstand = zumSpieler(s, g, aus)
-      // Haelt sich hinter der Front: nah genug, um zu wirken, weit genug, um
-      // nicht als Erster zu fallen.
-      const radial = Math.max(-1, Math.min(1, (abstand - 210) / 80))
+      /*
+       * Direkt hinter der Front, nicht dahinter geparkt.
+       *
+       * Zuerst stand er auf 210 Punkten - und damit ausserhalb dessen, worauf
+       * die Waffen zielen, denn die nehmen sich den *naechsten* Gegner.
+       * Gemessen: 228 Kitte auf dem Feld, wo die Gewichte 18 vorsehen. Sie
+       * starben nie und liefen nie weg, also haeuften sie sich an, bis das
+       * halbe Bild aus ihnen bestand.
+       *
+       * Auf 120 steht er mitten in der Reichweite. Er bleibt ein Stoerer, den
+       * man wegmachen *muss* - aber einer, den man wegmachen *kann*.
+       */
+      const radial = Math.max(-1, Math.min(1, (abstand - 120) / 70))
       aus.vx *= g.tempo * radial
       aus.vy *= g.tempo * radial
 
@@ -284,6 +311,16 @@ export const GEGNER_VERHALTEN: Record<GegnerVerhaltenId, GegnerVerhalten> = {
       for (let i = 0; i < nachbarn.length; i++) {
         const n = nachbarn[i]
         if (n === g || n.risse === 0) continue
+        /*
+         * Ein Kitt flickt keinen anderen Kitt.
+         *
+         * Ohne diese Zeile decken sich zwei Kitte gegenseitig: Keiner von
+         * beiden kann mehr zerspringen, und weil sie damit deutlich laenger
+         * leben als alles andere, haeufen sie sich an. Gemessen bestand das
+         * halbe Feld nach vier Minuten aus ihnen. Der Gegner soll eine
+         * Zielfrage stellen, keine unangreifbare Mauer bilden.
+         */
+        if (n.art.verhalten === 'kitt') continue
         risseLoeschen(n)
       }
       legeEffekt(s, 'ring', g.x, g.y, KITT_RADIUS, 0.35, g.art.farbe, 2)

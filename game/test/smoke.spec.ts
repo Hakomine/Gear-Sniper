@@ -192,6 +192,10 @@ test('Getuemmel in der spaeten Phase bleibt lesbar', async ({ page }) => {
     s.zeit = 240
     s.spieler.maxHp = 1e9
     s.spieler.hp = 1e9
+    // Bosswelle weit nach hinten schieben: Faellt hier ein Boss, oeffnet sich
+    // die Atempause und verdeckt genau das Getuemmel, das dieses Bild zeigen
+    // soll.
+    s.bossNummer = 40
   })
 
   // Stehen bleiben und nur die Levelup-Menues wegraeumen.
@@ -217,10 +221,19 @@ test('Todesbildschirm zeigt das Ergebnis', async ({ page }) => {
   // Das Abnehmen ist noetig geworden, seit die Waffen etwas taugen: Ein
   // stehender Spieler mit zwei Waffen raeumt alles weg, bevor es ihn
   // beruehrt, und wartet dreissig Sekunden vergeblich auf seinen Tod.
+  /*
+   * Leben direkt auf null statt auf eins.
+   *
+   * Vorher wartete der Test darauf, dass zufaellig ein Gegner vorbeikommt -
+   * allein lief er durch, im Gesamtlauf fiel er sporadisch um, weil der
+   * Spieler nach dem Herumlaufen manchmal in einer leeren Ecke stand. Dass ein
+   * Treffer toetet, pruefen die Modultests; dieser Test ist fuer den
+   * *Bildschirm* da, und der soll verlaesslich kommen.
+   */
   await page.evaluate(() => {
     const sp = (window as unknown as Fenster).__scherbenfeld.spiel.spieler
     sp.waffen.length = 0
-    sp.hp = 1
+    sp.hp = 0
   })
 
   // Nicht stumpf warten, sondern weiter Levelup-Menues wegraeumen: Steht
@@ -264,6 +277,8 @@ test('Voller Waffenbau zeigt alle Wirkungen', async ({ page }) => {
     s.zeit = 500
     s.spieler.maxHp = 1e9
     s.spieler.hp = 1e9
+    // Kein Boss - siehe oben.
+    s.bossNummer = 40
 
     const wunsch = ['klinge', 'bazooka', 'trabanten', 'prisma', 'schlucker']
     s.spieler.waffen = wunsch.map((id, platz) => {
@@ -450,7 +465,7 @@ test('Todesbildschirm wertet aus, woran sie gestorben sind', async ({ page }) =>
     const sp = (window as unknown as Fenster).__scherbenfeld.spiel.spieler
     sp.waffen.length = 0
     sp.maxHp = 100
-    sp.hp = 1
+    sp.hp = 0
   })
 
   const frist = Date.now() + 30_000

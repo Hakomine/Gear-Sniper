@@ -1,4 +1,5 @@
 import { berechneSchaden } from './damage'
+import { rissSetzen } from './risse'
 import { funken } from './effects'
 import type { Gegner, Spielstand } from './state'
 import type { VerhaltenId, WaffenInstanz } from './weapons'
@@ -733,6 +734,421 @@ function bogenlicht(s: Spielstand, w: WaffenInstanz): boolean {
   return true
 }
 
+
+// ---------------------------------------------------------------------------
+// Runde fuenf: zwoelf Waffen, die jeweils etwas tun, das keine andere tut
+// ---------------------------------------------------------------------------
+
+/** Eigene Liste - diese Verhalten fragen mitten in einer Schleife nach. */
+const neueZiele: Gegner[] = []
+
+/**
+ * Schleifband: zieht eine Spur hinter dir her.
+ *
+ * Die erste Waffe, die belohnt, *wohin* man laeuft statt nur wie schnell. Wer
+ * eine Schneise durch den Pulk zieht, macht mehr Schaden als wer aussen
+ * herumrennt.
+ */
+function schleifband(s: Spielstand, w: WaffenInstanz, dt: number): void {
+  w.merkZeit -= dt
+  if (w.merkZeit > 0) return
+  w.merkZeit = 0.12
+
+  const sp = s.spieler
+  legeZone(
+    s,
+    'knall',
+    sp.x,
+    sp.y,
+    w.werte.radius,
+    w.werte.lebensdauer,
+    w.werte.schaden * sp.schadenMult,
+    w.platz,
+    w.def.farbe,
+  )
+}
+
+/**
+ * Stimmgabel: trifft, was rennt.
+ *
+ * Der Schaden waechst mit dem Tempo des Ziels. Damit ist sie gegen die
+ * schnellen Splitter und den preschenden Stuermer stark und gegen den zaehen
+ * Brocken schwach - eine Waffe, die sich am Gegner ausrichtet statt an einer
+ * Zahl.
+ */
+function stimmgabel(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.reichweite, treffer)
+  if (treffer.length === 0) return false
+
+  for (let i = 0; i < treffer.length; i++) {
+    const g = treffer[i]
+    // Bezugstempo 78 ist der Splitter - er ist der Massstab, an dem sich
+    // "schnell" in diesem Spiel misst.
+    const faktor = 0.35 + Math.min(2.2, g.tempo / 78)
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(s, g, wurf.wert * faktor, w.platz, wurf.krit, 0, 0)
+  }
+  legeEffekt(s, 'ring', sp.x, sp.y, w.werte.reichweite, 0.3, w.def.farbe, 3)
+  return true
+}
+
+/**
+ * Fadenkreuz: bohrt dauerhaft am zaehesten Gegner im Bild.
+ *
+ * Die Antwort auf ein Problem, das der Bau sonst nicht loesen kann: Eine
+ * Flaechenwaffe raeumt tausend Splitter weg und kratzt am Boss nicht. Das
+ * Fadenkreuz sucht sich genau das Gegenteil.
+ */
+function fadenkreuz(s: Spielstand, w: WaffenInstanz, dt: number): void {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.reichweite, treffer)
+
+  let ziel: Gegner | null = null
+  let beste = -1
+  for (let i = 0; i < treffer.length; i++) {
+    if (treffer[i].hp > beste) {
+      beste = treffer[i].hp
+      ziel = treffer[i]
+    }
+  }
+  if (ziel === null) {
+    w.merkZeit = 0
+    return
+  }
+
+  // Aufladung: Bleibt dasselbe Ziel, wird der Strahl staerker. Wechselt es,
+  // faengt sie von vorn an - das belohnt, den dicken Brocken auszuhalten.
+  w.merkZeit = ziel.id === w.merkId ? Math.min(3, w.merkZeit + dt) : 0
+  w.merkId = ziel.id
+
+  verletzeGegner(s, ziel, w.werte.schaden * sp.schadenMult * (1 + w.merkZeit) * dt, w.platz, false, 0, 0)
+  const e = legeEffekt(s, 'strich', sp.x, sp.y, 0, 0.06, w.def.farbe, 2 + w.merkZeit)
+  if (e !== null) {
+    e.x2 = ziel.x
+    e.y2 = ziel.y
+  }
+}
+
+/**
+ * Spiegelscherbe: wirft Feindgeschosse zurueck.
+ *
+ * Dreht den Speier gegen sich selbst - und ist die erste Waffe, die *nichts*
+ * tut, wenn niemand auf einen schiesst. Genau deshalb ist sie interessant: Sie
+ * ist eine Antwort, keine Grundausstattung.
+ */
+function spiegel(s: Spielstand, w: WaffenInstanz, dt: number): void {
+  w.merkZeit -= dt
+  const sp = s.spieler
+  const liste = s.feindSchuesse.aktiv
+
+  for (let i = liste.length - 1; i >= 0; i--) {
+    const f = liste[i]
+    const dx = f.x - sp.x
+    const dy = f.y - sp.y
+    if (dx * dx + dy * dy > w.werte.radius * w.werte.radius) continue
+
+    const p = nimmGeschoss(s)
+    p.x = f.x
+    p.y = f.y
+    // Zurueck, woher es kam, und schneller: Ein Spiegel gibt zurueck, was er
+    // bekommt, nicht weniger.
+    p.vx = -f.vx * 1.5
+    p.vy = -f.vy * 1.5
+    p.schaden = (f.schaden + w.werte.schaden) * sp.schadenMult
+    p.krit = false
+    p.radius = f.radius
+    p.durchschlag = w.werte.durchschlag
+    p.leben = w.werte.lebensdauer
+    p.rueckstoss = w.werte.rueckstoss
+    p.platz = w.platz
+    p.farbe = w.def.farbe
+    s.feindSchuesse.freigeben(i)
+    funken(s, f.x, f.y, w.def.farbe, 5)
+  }
+}
+
+/**
+ * Frostkeil: friert ein - und Gefrorenes zerspringt mit zwei Rissen.
+ *
+ * Der direkteste Eingriff in die Kernregel, den eine Waffe machen kann. Sie
+ * senkt die Schwelle, statt Schaden zu erhoehen: Ein Bau mit Frostkeil braucht
+ * eine Waffe weniger, um dieselbe Wirkung zu erzielen.
+ */
+function frost(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  gegnerImUmkreis(s, ziel.x, ziel.y, w.werte.radius, treffer)
+  for (let i = 0; i < treffer.length; i++) {
+    const g = treffer[i]
+    g.frost = w.werte.extra
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(s, g, wurf.wert, w.platz, wurf.krit, 0, 0)
+  }
+  legeEffekt(s, 'ring', ziel.x, ziel.y, w.werte.radius, 0.4, w.def.farbe, 3)
+  return true
+}
+
+/**
+ * Ankerhaken: zieht einen weit entfernten Gegner heran.
+ *
+ * Sucht bewusst den *entferntesten* statt des naechsten - damit ist sie die
+ * Antwort auf den Speier, der auf Abstand bleibt, und auf den Schwaermer, der
+ * kreist. Was herangezogen wird, steht danach mitten im eigenen Bau.
+ */
+function anker(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.reichweite, treffer)
+
+  let ziel: Gegner | null = null
+  let weiteste = -1
+  for (let i = 0; i < treffer.length; i++) {
+    const g = treffer[i]
+    const d = Math.hypot(g.x - sp.x, g.y - sp.y)
+    if (d > weiteste) {
+      weiteste = d
+      ziel = g
+    }
+  }
+  if (ziel === null || weiteste < 120) return false
+
+  const dx = sp.x - ziel.x
+  const dy = sp.y - ziel.y
+  const laenge = Math.hypot(dx, dy) || 1
+  const wurf = schadenWurf(s, w)
+  verletzeGegner(
+    s,
+    ziel,
+    wurf.wert,
+    w.platz,
+    wurf.krit,
+    (dx / laenge) * w.werte.rueckstoss,
+    (dy / laenge) * w.werte.rueckstoss,
+  )
+
+  const e = legeEffekt(s, 'strich', sp.x, sp.y, 0, 0.18, w.def.farbe, 3)
+  if (e !== null) {
+    e.x2 = ziel.x
+    e.y2 = ziel.y
+  }
+  return true
+}
+
+/**
+ * Bohrkopf: bleibt stecken und reisst immer wieder neu auf.
+ *
+ * Die einzige Waffe, die ihren Riss *erneuert*, statt ihn einmal zu setzen.
+ * An einem Boss, der mehrfach zerspringen kann, ist genau das viel wert.
+ */
+function bohrkopf(s: Spielstand, w: WaffenInstanz, dt: number): void {
+  const sp = s.spieler
+  const liste = s.gegner.aktiv
+
+  let ziel: Gegner | null = null
+  for (let i = 0; i < liste.length; i++) {
+    if (liste[i].id === w.merkId && !liste[i].tot) {
+      ziel = liste[i]
+      break
+    }
+  }
+  if (ziel === null) {
+    ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+    if (ziel === null) return
+    w.merkId = ziel.id
+    w.merkZeit = 0
+  }
+
+  w.merkZeit -= dt
+  verletzeGegner(s, ziel, w.werte.schaden * sp.schadenMult * dt, w.platz, false, 0, 0)
+  if (w.merkZeit > 0) return
+
+  // Der eigentliche Trick: Riss loeschen und sofort neu setzen. Damit laeuft
+  // das Zeitfenster der Kernregel an diesem Gegner nie ab.
+  w.merkZeit = w.werte.extra
+  rissSetzen(ziel, w.platz, sp.rissDauer)
+  funken(s, ziel.x, ziel.y, w.def.farbe, 4)
+}
+
+/**
+ * Glockenturm: ein Schlag, der alles im Bild anhebt.
+ *
+ * Setzt einen Riss bei *jedem* sichtbaren Gegner. Allein toetet sie nichts -
+ * in einem Bau mit zwei weiteren Waffen laesst sie das halbe Bild zerspringen.
+ * Die reinste Fassung der Kernregel, die es als Waffe geben kann.
+ */
+function glocke(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, s.sichtRadius, treffer)
+  if (treffer.length === 0) return false
+
+  for (let i = 0; i < treffer.length; i++) {
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(s, treffer[i], wurf.wert, w.platz, wurf.krit, 0, 0)
+  }
+  legeEffekt(s, 'ring', sp.x, sp.y, s.sichtRadius, 0.5, w.def.farbe, 4)
+  s.trauma = Math.min(1, s.trauma + 0.12)
+  return true
+}
+
+/**
+ * Saatgut: eine Knospe, die erst spaeter aufgeht.
+ *
+ * Sie fliegt langsam, trifft niemanden - und platzt am Ende ihrer Lebensdauer
+ * in einen Ring aus Scherben. Wer sie in die Laufrichtung des Pulks setzt,
+ * bekommt viel; wer sie hinterherwirft, nichts.
+ */
+function saatgut(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const ziel = naechsterGegner(s, sp.x, sp.y, w.werte.reichweite)
+  if (ziel === null) return false
+
+  const winkel = Math.atan2(ziel.y - sp.y, ziel.x - sp.x)
+  const wurf = schadenWurf(s, w)
+  const p = nimmGeschoss(s)
+  p.x = sp.x
+  p.y = sp.y
+  p.vx = Math.cos(winkel) * w.werte.tempo
+  p.vy = Math.sin(winkel) * w.werte.tempo
+  p.schaden = wurf.wert
+  p.krit = wurf.krit
+  p.radius = w.werte.radius
+  // Kein Durchschlag und kein Treffer unterwegs: Die Knospe *ist* die
+  // Wartezeit. Ihre ganze Wirkung steckt im Knall am Ende.
+  p.durchschlag = 0
+  p.leben = w.werte.lebensdauer
+  p.explosionsRadius = w.werte.extra
+  p.nachwurf = Math.max(0, Math.floor(w.werte.anzahl) - 1)
+  p.platz = w.platz
+  p.farbe = w.def.farbe
+  return true
+}
+
+/**
+ * Schwarzband: ein Schnitt zwischen zwei Gegnern.
+ *
+ * Sucht den naechsten und den entferntesten und schneidet alles auf der
+ * Strecke dazwischen. Je weiter der Pulk auseinandersteht, desto laenger die
+ * Linie - eine Waffe, die aus der *Anordnung* des Feldes Schaden macht.
+ */
+function schwarzband(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.reichweite, treffer)
+  if (treffer.length < 2) return false
+
+  let nah = treffer[0]
+  let fern = treffer[0]
+  let dNah = 1e9
+  let dFern = -1
+  for (let i = 0; i < treffer.length; i++) {
+    const d = Math.hypot(treffer[i].x - sp.x, treffer[i].y - sp.y)
+    if (d < dNah) { dNah = d; nah = treffer[i] }
+    if (d > dFern) { dFern = d; fern = treffer[i] }
+  }
+  if (nah === fern) return false
+
+  const ax = nah.x
+  const ay = nah.y
+  const bx = fern.x - ax
+  const by = fern.y - ay
+  const laenge2 = bx * bx + by * by || 1
+
+  // Alle in einem Schlauch um die Strecke - die Mitte der beiden Punkte als
+  // Abfragezentrum, damit eine Umkreisabfrage reicht.
+  gegnerImUmkreis(s, ax + bx / 2, ay + by / 2, Math.sqrt(laenge2) / 2 + w.werte.radius, neueZiele)
+  for (let i = 0; i < neueZiele.length; i++) {
+    const g = neueZiele[i]
+    const t = Math.max(0, Math.min(1, ((g.x - ax) * bx + (g.y - ay) * by) / laenge2))
+    const abstand = Math.hypot(g.x - (ax + bx * t), g.y - (ay + by * t))
+    if (abstand > w.werte.radius) continue
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(s, g, wurf.wert, w.platz, wurf.krit, 0, 0)
+  }
+
+  const e = legeEffekt(s, 'strich', ax, ay, 0, 0.22, w.def.farbe, w.werte.radius * 0.5)
+  if (e !== null) {
+    e.x2 = fern.x
+    e.y2 = fern.y
+  }
+  return true
+}
+
+/**
+ * Kaleidoskop: spiegelt eine andere Waffe mit.
+ *
+ * Sie hat kein eigenes Geschoss - sie loest eine zufaellige andere Waffe des
+ * Guertels ein zweites Mal aus. Damit ist sie die einzige Waffe, deren Wert
+ * ausschliesslich davon abhaengt, was sonst noch getragen wird.
+ *
+ * Der Riss kommt dabei von der *gespiegelten* Waffe, nicht vom Kaleidoskop:
+ * Sonst waere sie ein zusaetzlicher Riss fuer lau und haette die Kernregel
+ * ausgehebelt.
+ */
+function kaleidoskop(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  const andere: WaffenInstanz[] = []
+  for (let i = 0; i < sp.waffen.length; i++) {
+    const x = sp.waffen[i]
+    if (x !== w && x.def.verhalten !== 'kaleidoskop') andere.push(x)
+  }
+  if (andere.length === 0) return false
+
+  const gewaehlt = s.rng.pick(andere)
+  const v = VERHALTEN[gewaehlt.def.verhalten]
+  if (v.feuern === undefined) return false
+
+  // Schwaecher spiegeln: Der Schadensfaktor wird kurz gesenkt und danach
+  // sauber zurueckgesetzt - so gilt er wirklich nur fuer diesen einen Schuss.
+  const vorher = sp.schadenMult
+  sp.schadenMult = vorher * w.werte.extra
+  const ausgeloest = v.feuern(s, gewaehlt)
+  sp.schadenMult = vorher
+  return ausgeloest
+}
+
+/**
+ * Sanduhr: alles im Umkreis laeuft rueckwaerts.
+ *
+ * Gegner werden zurueckgeschoben, Feindgeschosse kehren um. Sie macht kaum
+ * Schaden - sie kauft Zeit und Raum, und in einem Spiel, das nur aus
+ * Ausweichen besteht, ist das die knappste Waehrung ueberhaupt.
+ */
+function sanduhr(s: Spielstand, w: WaffenInstanz): boolean {
+  const sp = s.spieler
+  gegnerImUmkreis(s, sp.x, sp.y, w.werte.radius, treffer)
+
+  for (let i = 0; i < treffer.length; i++) {
+    const g = treffer[i]
+    const dx = g.x - sp.x
+    const dy = g.y - sp.y
+    const laenge = Math.hypot(dx, dy) || 1
+    const wurf = schadenWurf(s, w)
+    verletzeGegner(
+      s,
+      g,
+      wurf.wert,
+      w.platz,
+      wurf.krit,
+      (dx / laenge) * w.werte.rueckstoss,
+      (dy / laenge) * w.werte.rueckstoss,
+    )
+  }
+
+  const liste = s.feindSchuesse.aktiv
+  for (let i = 0; i < liste.length; i++) {
+    const f = liste[i]
+    const dx = f.x - sp.x
+    const dy = f.y - sp.y
+    if (dx * dx + dy * dy > w.werte.radius * w.werte.radius) continue
+    f.vx = -f.vx
+    f.vy = -f.vy
+  }
+
+  legeEffekt(s, 'ring', sp.x, sp.y, w.werte.radius, 0.45, w.def.farbe, 3)
+  return treffer.length > 0
+}
+
 export const VERHALTEN: Record<VerhaltenId, Verhalten> = {
   gerade: { feuern: gerade },
   schwung: { feuern: schwung },
@@ -749,4 +1165,17 @@ export const VERHALTEN: Record<VerhaltenId, Verhalten> = {
   schwarmnadeln: { feuern: schwarmnadeln },
   kollaps: { feuern: kollaps },
   bogenlicht: { feuern: bogenlicht },
+
+  schleifband: { dauernd: schleifband },
+  stimmgabel: { feuern: stimmgabel },
+  fadenkreuz: { dauernd: fadenkreuz },
+  spiegel: { dauernd: spiegel },
+  frost: { feuern: frost },
+  anker: { feuern: anker },
+  bohrkopf: { dauernd: bohrkopf },
+  glocke: { feuern: glocke },
+  saatgut: { feuern: saatgut },
+  schwarzband: { feuern: schwarzband },
+  kaleidoskop: { feuern: kaleidoskop },
+  sanduhr: { feuern: sanduhr },
 }

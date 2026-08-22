@@ -1,6 +1,7 @@
 import { TICK_DT } from '../src/core/loop'
 import { bossWelle, findeBoss, naechsteBossZeit } from '../src/game/bosse'
-import { GEGNER_ARTEN } from '../src/game/enemies'
+import type { GegnerArt } from '../src/game/enemies'
+import { GEGNER_ARTEN, gewichtFuer } from '../src/game/enemies'
 import { legeGegner, MAX_GEGNER } from '../src/game/spawner'
 import { ruesteAus, WAFFEN, werteAuf } from '../src/game/weapons'
 import type { Befehle } from '../src/game/state'
@@ -131,7 +132,24 @@ function bossHalten(s: ReturnType<typeof erzeugeSpielstand>): void {
  * entsteht ausschliesslich, wenn ein Teiler zerfaellt, und darf die Messung
  * nicht kuenstlich verduennen.
  */
-const MISCHUNG = GEGNER_ARTEN.filter((a) => a.gewicht > 0)
+/*
+ * Gewichtet wie im Spiel, nicht gleichverteilt.
+ *
+ * Zuerst lief die Messung reihum durch alle Arten - damit bestand ein Sechstel
+ * des Feldes aus Speiern, die es im Spiel nie in dieser Menge gibt. Gemessen
+ * wurden so 1871 Feindgeschosse gleichzeitig und ein p95 von 4,5 ms: ein
+ * Zustand, den das Spiel gar nicht erreichen kann. Eine Messung an einem
+ * unmoeglichen Zustand beweist nichts.
+ *
+ * Die Gewichte der zehnten Minute, weil dort die Mischung am schwersten ist.
+ */
+const SPAETE_ZEIT = 600
+const MISCHUNG: GegnerArt[] = []
+for (const art of GEGNER_ARTEN) {
+  if (art.gewicht <= 0) continue
+  const anteil = Math.max(1, Math.round(gewichtFuer(art, SPAETE_ZEIT) / 4))
+  for (let i = 0; i < anteil; i++) MISCHUNG.push(art)
+}
 
 /**
  * Nachlegen, bis wieder die Zielzahl steht - gemessen wird der Dauerzustand.

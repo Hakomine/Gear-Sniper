@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Rng } from '../src/core/rng'
 import { berechneSchaden, xpFuerLevel } from '../src/game/damage'
 import { erzeugeSpieler } from '../src/game/player'
+import { VERHALTEN } from '../src/game/verhalten'
 import { PASSIVE } from '../src/game/upgrades'
 import {
   istVollendet,
@@ -57,10 +58,39 @@ describe('XP-Schwellen', () => {
 describe('Waffendaten', () => {
   it('sind alle plausibel', () => {
     for (const def of WAFFEN) {
-      expect(def.basis.schaden, def.id).toBeGreaterThan(0)
-      expect(def.basis.abklingzeit, def.id).toBeGreaterThan(0)
       expect(def.maxStufe, def.id).toBeGreaterThanOrEqual(2)
       expect(def.farbe, def.id).toMatch(/^#[0-9a-f]{6}$/i)
+      // Jede Kennung muss auch ein Verhalten haben, sonst feuert die Waffe nie.
+      expect(VERHALTEN[def.verhalten], def.id).toBeDefined()
+    }
+  })
+
+  it('geben jeder Waffe mit Abklingzeit auch etwas zu tun', () => {
+    /*
+     * Nur Waffen, die *auf Abklingzeit* ausloesen, brauchen eine. Schleifband,
+     * Fadenkreuz, Spiegelscherbe und Bohrkopf wirken in jedem Tick - fuer sie
+     * waere eine Abklingzeit eine Zahl ohne Wirkung, und eine Zahl ohne
+     * Wirkung ist schlimmer als keine.
+     */
+    for (const def of WAFFEN) {
+      const v = VERHALTEN[def.verhalten]
+      if (v.feuern === undefined) {
+        expect(v.dauernd, `${def.id} tut gar nichts`).toBeDefined()
+        continue
+      }
+      expect(def.basis.abklingzeit, def.id).toBeGreaterThan(0)
+    }
+  })
+
+  it('geben jeder Waffe eigenen Schaden - ausser dem Kaleidoskop', () => {
+    // Das Kaleidoskop ist die eine bewusste Ausnahme: Es hat keinen eigenen
+    // Schaden, weil es fremden austeilt. Genau das ist seine Idee.
+    for (const def of WAFFEN) {
+      if (def.verhalten === 'kaleidoskop') {
+        expect(def.basis.schaden, def.id).toBe(0)
+        continue
+      }
+      expect(def.basis.schaden, def.id).toBeGreaterThan(0)
     }
   })
 
@@ -86,6 +116,9 @@ describe('Waffendaten', () => {
 describe('Stufenwerte', () => {
   it('steigern den Schaden streng monoton', () => {
     for (const def of WAFFEN) {
+      // Das Kaleidoskop hat keinen eigenen Schaden - es waechst ueber seine
+      // Spiegelstaerke, und die wird gleich darunter geprueft.
+      if (def.basis.schaden === 0) continue
       for (let stufe = 1; stufe < def.maxStufe; stufe++) {
         expect(werteFuer(def, stufe + 1).schaden, `${def.id} ${stufe}`).toBeGreaterThan(
           werteFuer(def, stufe).schaden,

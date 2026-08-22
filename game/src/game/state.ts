@@ -245,6 +245,14 @@ export type Gegner = {
   merkY: number
   blick: number
   /**
+   * Restzeit der Vereisung (Waffe "Frostkeil").
+   *
+   * Groesser als 0 heisst: langsamer *und* eine Riss-Schwelle niedriger. Der
+   * Frostkeil erhoeht keinen Schaden, er senkt die Huerde der Kernregel - das
+   * ist der direkteste Eingriff, den eine Waffe machen kann.
+   */
+  frost: number
+  /**
    * Nur bei Bossen gesetzt.
    *
    * Bosse laufen bewusst im normalen Gegner-Pool mit, statt einen eigenen zu
@@ -1078,6 +1086,7 @@ function bewegeGegner(s: Spielstand, dt: number): void {
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
     risseAblaufen(g, dt * s.etappenWerte.rissZerfall)
+    if (g.frost > 0) g.frost -= dt
 
     // Bosse bewegen sich nach eigenem Muster und draengen sich nicht: Sie sind
     // zu gross und zu schwer, um von der Trennkraft sinnvoll geschoben zu
@@ -1100,6 +1109,11 @@ function bewegeGegner(s: Spielstand, dt: number): void {
     GEGNER_VERHALTEN[g.art.verhalten].bewege(s, g, dt, wunsch)
     let vx = wunsch.vx
     let vy = wunsch.vy
+    // Vereist heisst zaeh unterwegs - der sichtbare Teil des Frostkeils.
+    if (g.frost > 0) {
+      vx *= 0.35
+      vy *= 0.35
+    }
 
     // Auseinanderdruecken. Ohne das laufen alle Gegner exakt uebereinander,
     // und aus tausend Feinden wird optisch einer: Man sieht die Gefahr nicht
@@ -1687,6 +1701,7 @@ function leererGegner(): Gegner {
     merkX: 0,
     merkY: 0,
     blick: 0,
+    frost: 0,
   }
 }
 

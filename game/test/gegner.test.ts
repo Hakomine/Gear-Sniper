@@ -101,6 +101,24 @@ describe('Der Kitt', () => {
     expect(kitt.risse).toBe(2)
   })
 
+  it('flickt keinen anderen Kitt', () => {
+    /*
+     * Sonst decken sich zwei Kitte gegenseitig, koennen beide nicht mehr
+     * zerspringen und haeufen sich an - gemessen bestand das halbe Feld nach
+     * vier Minuten aus ihnen.
+     */
+    const s = leeresFeld()
+    const opfer = setze(s, 'kitt', 40, 0)
+    rissSetzen(opfer, 0)
+    rissSetzen(opfer, 1)
+
+    const kitt = setze(s, 'kitt', 0, 0)
+    gitterAufbauen(s)
+    kitt.takt = 0
+    bewege(s, kitt)
+    expect(opfer.risse).toBe(2)
+  })
+
   it('reicht nicht weiter, als sein Ring zeigt', () => {
     const s = leeresFeld()
     const fern = setze(s, 'splitter', KITT_RADIUS * 2.5, 0)

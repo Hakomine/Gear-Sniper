@@ -53,6 +53,19 @@ export type VerhaltenId =
   | 'schwarmnadeln'
   | 'kollaps'
   | 'bogenlicht'
+  // Runde fuenf: zwoelf, die jeweils etwas tun, das keine andere tut.
+  | 'schleifband'
+  | 'stimmgabel'
+  | 'fadenkreuz'
+  | 'spiegel'
+  | 'frost'
+  | 'anker'
+  | 'bohrkopf'
+  | 'glocke'
+  | 'saatgut'
+  | 'schwarzband'
+  | 'kaleidoskop'
+  | 'sanduhr'
 
 /**
  * Alle Zahlen, die eine Waffe ausmachen.
@@ -383,8 +396,311 @@ export const WAFFEN: readonly WaffenDef[] = [
     proStufe: { schaden: 11, abklingzeit: -0.35, extra: 18, lebensdauer: 0.2 },
     vollendung: { text: 'Zieht doppelt so weit und lässt ein Trümmerfeld zurück' },
   },
+  // --- Runde fuenf ---------------------------------------------------------
+  // Zwoelf, die jeweils etwas tun, das keine andere tut. Die meisten haengen
+  // an der Riss-Regel, statt danebenzustehen: Wer eine davon zieht, aendert
+  // seinen Bau, nicht seine Zahlen.
+  {
+    id: 'schleifband',
+    name: 'Schleifband',
+    beschreibung: 'Zieht eine schneidende Spur hinter dir her',
+    seltenheit: 'gewoehnlich',
+    verhalten: 'schleifband',
+    farbe: '#ffb04d',
+    maxStufe: 5,
+    extraName: 'Spurbreite',
+    basis: {
+      schaden: 16,
+      abklingzeit: 0.5,
+      anzahl: 1,
+      reichweite: 0,
+      radius: 30,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0.9,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 7, radius: 5, lebensdauer: 0.12 },
+    vollendung: { text: 'Die Spur bleibt doppelt so lange liegen', werte: { lebensdauer: 2.6 } },
+  },
+  {
+    id: 'stimmgabel',
+    name: 'Stimmgabel',
+    beschreibung: 'Schallwelle ringsum — trifft härter, was schneller läuft',
+    seltenheit: 'gewoehnlich',
+    verhalten: 'stimmgabel',
+    farbe: '#7ee8e0',
+    maxStufe: 5,
+    extraName: 'Nachhall',
+    basis: {
+      schaden: 13,
+      abklingzeit: 1.05,
+      anzahl: 1,
+      reichweite: 170,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 6, reichweite: 26, abklingzeit: -0.07 },
+    vollendung: { text: 'Reicht über den halben Bildschirm', werte: { reichweite: 420 } },
+  },
+  {
+    id: 'fadenkreuz',
+    name: 'Fadenkreuz',
+    beschreibung: 'Bohrt am zähesten Gegner und lädt sich dabei auf',
+    seltenheit: 'selten',
+    verhalten: 'fadenkreuz',
+    farbe: '#ff5c7a',
+    maxStufe: 5,
+    extraName: 'Aufladung',
+    basis: {
+      schaden: 42,
+      abklingzeit: 0,
+      anzahl: 1,
+      reichweite: 520,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 22, reichweite: 40 },
+    vollendung: { text: 'Sucht sich sein Ziel über das ganze Feld', werte: { reichweite: 1400 } },
+  },
+  {
+    id: 'spiegel',
+    name: 'Spiegelscherbe',
+    beschreibung: 'Wirft feindliche Geschosse zurück — schneller und schärfer',
+    seltenheit: 'selten',
+    verhalten: 'spiegel',
+    farbe: '#cfe9f2',
+    maxStufe: 4,
+    extraName: 'Fangradius',
+    basis: {
+      schaden: 30,
+      abklingzeit: 0,
+      anzahl: 1,
+      reichweite: 0,
+      radius: 96,
+      tempo: 0,
+      durchschlag: 2,
+      lebensdauer: 2.4,
+      rueckstoss: 90,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 22, radius: 22, durchschlag: 1 },
+    vollendung: { text: 'Zurückgeworfenes durchschlägt alles', werte: { durchschlag: 99 } },
+  },
+  {
+    id: 'frost',
+    name: 'Frostkeil',
+    beschreibung: 'Vereist — und Vereistes zerspringt mit zwei Waffen statt drei',
+    seltenheit: 'selten',
+    verhalten: 'frost',
+    farbe: '#8fd8ff',
+    maxStufe: 5,
+    extraName: 'Frostdauer',
+    basis: {
+      schaden: 18,
+      abklingzeit: 1.5,
+      anzahl: 1,
+      reichweite: 420,
+      radius: 90,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 2.2,
+    },
+    proStufe: { schaden: 8, radius: 14, extra: 0.4, abklingzeit: -0.1 },
+    vollendung: { text: 'Vereist das halbe Feld auf einmal', werte: { radius: 320 } },
+  },
+  {
+    id: 'anker',
+    name: 'Ankerhaken',
+    beschreibung: 'Zieht den entferntesten Gegner mitten in deinen Bau',
+    seltenheit: 'selten',
+    verhalten: 'anker',
+    farbe: '#c9b08a',
+    maxStufe: 5,
+    extraName: 'Zugkraft',
+    basis: {
+      schaden: 34,
+      abklingzeit: 1.2,
+      anzahl: 1,
+      reichweite: 620,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 900,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 16, rueckstoss: 160, abklingzeit: -0.09 },
+    vollendung: { text: 'Reisst gleich einen ganzen Pulk heran', werte: { rueckstoss: 2200 } },
+  },
+  {
+    id: 'bohrkopf',
+    name: 'Bohrkopf',
+    beschreibung: 'Bleibt stecken und reisst seinen Riss immer wieder neu auf',
+    seltenheit: 'episch',
+    verhalten: 'bohrkopf',
+    farbe: '#ff9d3d',
+    maxStufe: 4,
+    extraName: 'Risstakt',
+    basis: {
+      schaden: 55,
+      abklingzeit: 0,
+      anzahl: 1,
+      reichweite: 400,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0.8,
+    },
+    proStufe: { schaden: 28, extra: -0.14, reichweite: 40 },
+    vollendung: { text: 'Reisst in jedem Augenblick neu auf', werte: { extra: 0.12 } },
+  },
+  {
+    id: 'glocke',
+    name: 'Glockenturm',
+    beschreibung: 'Ein Schlag setzt bei allem im Bild einen Riss',
+    seltenheit: 'episch',
+    verhalten: 'glocke',
+    farbe: '#ffd98a',
+    maxStufe: 4,
+    extraName: 'Wucht',
+    basis: {
+      schaden: 20,
+      abklingzeit: 4,
+      anzahl: 1,
+      reichweite: 0,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 14, abklingzeit: -0.5 },
+    vollendung: { text: 'Schlägt doppelt so oft', werte: { abklingzeit: 1.2 } },
+  },
+  {
+    id: 'saatgut',
+    name: 'Saatgut',
+    beschreibung: 'Eine träge Knospe, die erst am Ende ihres Wegs aufgeht',
+    seltenheit: 'episch',
+    verhalten: 'saatgut',
+    farbe: '#9be87d',
+    maxStufe: 4,
+    extraName: 'Blüte',
+    basis: {
+      schaden: 70,
+      abklingzeit: 2.2,
+      anzahl: 4,
+      reichweite: 500,
+      radius: 7,
+      tempo: 120,
+      durchschlag: 0,
+      lebensdauer: 1.8,
+      rueckstoss: 200,
+      streuung: 0,
+      extra: 130,
+    },
+    proStufe: { schaden: 34, extra: 26, anzahl: 1 },
+    vollendung: { text: 'Die Blüte wirft eine zweite Saat aus', werte: { anzahl: 9 } },
+  },
+  {
+    id: 'schwarzband',
+    name: 'Schwarzband',
+    beschreibung: 'Schneidet alles zwischen dem nächsten und dem fernsten Gegner',
+    seltenheit: 'episch',
+    verhalten: 'schwarzband',
+    farbe: '#b98cff',
+    maxStufe: 4,
+    extraName: 'Bandbreite',
+    basis: {
+      schaden: 46,
+      abklingzeit: 1.6,
+      anzahl: 1,
+      reichweite: 560,
+      radius: 34,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 24, radius: 8, reichweite: 50 },
+    vollendung: { text: 'Spannt sich über das ganze Feld', werte: { reichweite: 1400 } },
+  },
+  {
+    id: 'kaleidoskop',
+    name: 'Kaleidoskop',
+    beschreibung: 'Löst eine andere deiner Waffen ein zweites Mal aus',
+    seltenheit: 'legendaer',
+    verhalten: 'kaleidoskop',
+    farbe: '#fff2c4',
+    maxStufe: 5,
+    extraName: 'Spiegelstärke',
+    basis: {
+      schaden: 0,
+      abklingzeit: 1.1,
+      anzahl: 1,
+      reichweite: 0,
+      radius: 0,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 0,
+      streuung: 0,
+      extra: 0.4,
+    },
+    proStufe: { extra: 0.1, abklingzeit: -0.12 },
+    vollendung: { text: 'Spiegelt in voller Stärke', werte: { extra: 1 } },
+  },
+  {
+    id: 'sanduhr',
+    name: 'Sanduhr',
+    beschreibung: 'Alles im Umkreis läuft rückwärts — auch feindliche Geschosse',
+    seltenheit: 'legendaer',
+    verhalten: 'sanduhr',
+    farbe: '#e0c9ff',
+    maxStufe: 5,
+    extraName: 'Umkehr',
+    basis: {
+      schaden: 14,
+      abklingzeit: 2.6,
+      anzahl: 1,
+      reichweite: 0,
+      radius: 200,
+      tempo: 0,
+      durchschlag: 0,
+      lebensdauer: 0,
+      rueckstoss: 720,
+      streuung: 0,
+      extra: 0,
+    },
+    proStufe: { schaden: 7, radius: 30, rueckstoss: 130, abklingzeit: -0.22 },
+    vollendung: { text: 'Dreht die Zeit im ganzen Bild zurück', werte: { radius: 700 } },
+  },
 ]
-
 export const WAFFE_START = WAFFEN[0]
 
 /** Wie viele Waffen gleichzeitig getragen werden koennen. */
@@ -434,6 +750,16 @@ export type WaffenInstanz = {
   platz: number
   /** Beim Aufwerten einmal ausgerechnet, nicht in jedem Tick neu. */
   werte: WaffenWerte
+  /**
+   * Arbeitsspeicher des Verhaltens.
+   *
+   * Der Bohrkopf merkt sich sein Opfer, das Schleifband seinen Taktzaehler,
+   * das Fadenkreuz seine Aufladung. Zwei Zahlen an hoechstens sechs Waffen -
+   * ein eigenes Zustandsobjekt je Verhalten waere sauberer zu lesen und hier
+   * schlicht ueberdimensioniert.
+   */
+  merkId: number
+  merkZeit: number
 }
 
 export function ruesteAus(def: WaffenDef, platz: number): WaffenInstanz {
@@ -446,6 +772,8 @@ export function ruesteAus(def: WaffenDef, platz: number): WaffenInstanz {
     winkel: 0,
     platz,
     werte: werteFuer(def, 1),
+    merkId: -1,
+    merkZeit: 0,
   }
 }
 

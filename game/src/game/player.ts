@@ -14,7 +14,7 @@ export function erzeugeSpieler(): Spieler {
     y: 0,
     hp: 100,
     maxHp: 100,
-    radius: 11,
+    radius: 13,
     tempo: 218,
     level: 1,
     xp: 0,

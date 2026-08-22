@@ -6,7 +6,7 @@ import { tuerMit } from '../game/etappen'
 import type { Aufwertung } from '../game/upgrades'
 import { SELTENHEIT_NAME } from '../game/weapons'
 import { DORNEN_PLATZ, GEIST_PLATZ, SPLITTER_PLATZ } from '../game/welt'
-import { bruchLinien, neigung, scherbenPfad, schraegBalken, sprungOverlay } from '../render/glas'
+import { massivePlatte, randSpruenge, schraegBalken, sprungOverlay } from '../render/glas'
 import { FARBEN, mitAlpha, SCHRIFT, SELTENHEIT_FARBE } from '../render/palette'
 import { TEXTE, zahlText, zeitText } from './strings'
 
@@ -41,8 +41,8 @@ export function zeichneTitel(
 
   const gewaehlt = CHARAKTERE[s.charakterWahl] ?? CHARAKTERE[0]
   const offen = s.offen.includes(gewaehlt.id)
-  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 200)
-  zeichnePunkte(ctx, s, breite / 2, hoehe - 92)
+  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 232)
+  zeichnePunkte(ctx, s, breite / 2, hoehe - 132)
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
@@ -59,31 +59,38 @@ export function zeichneTitel(
  * als die Buchstaben von Hand nachzubauen.
  */
 function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number): void {
+  /*
+   * Kein Strich mehr durch das Wort.
+   *
+   * Vorher war der Titel waagerecht durchgeschnitten und die Haelften
+   * gegeneinander versetzt - gemeint als Sprung im Glas, gelesen als
+   * Rendering-Fehler oder als Durchstreichung. Ein Strich durch Text heisst
+   * ueberall *ungueltig*, und beim eigenen Spieltitel ist das die denkbar
+   * schlechteste Ansage.
+   *
+   * Der Bruch steckt jetzt in der *Tiefe*: eine harte dunkle Versatzschicht
+   * unter der Schrift, wie bei allen Platten dieser Bildsprache. Das Wort
+   * bleibt ganz und bekommt trotzdem Gewicht.
+   */
   const text = TEXTE.titel
   ctx.font = `700 78px ${SCHRIFT.mono}`
+  ctx.textAlign = 'center'
 
-  for (const oben of [true, false]) {
-    ctx.save()
-    ctx.beginPath()
-    // Der Sprung sitzt leicht ausserhalb der Mitte - genau mittig wirkt wie
-    // ein Layoutfehler, leicht daneben wie Absicht.
-    const schnitt = my + 6
-    if (oben) ctx.rect(mx - 460, my - 70, 920, schnitt - (my - 70))
-    else ctx.rect(mx - 460, schnitt, 920, 160)
-    ctx.clip()
-    ctx.fillStyle = FARBEN.spieler
-    ctx.fillText(text, mx + (oben ? -4 : 5), my)
-    ctx.restore()
-  }
+  ctx.fillStyle = FARBEN.kontur
+  ctx.fillText(text, mx + 5, my + 6)
 
-  // Die Bruchkante selbst.
+  ctx.fillStyle = FARBEN.spieler
+  ctx.fillText(text, mx, my)
+
+  // Zwei kurze Sprünge, die den Titel *streifen*, statt ihn zu teilen: unter
+  // der Grundlinie, ausserhalb der Buchstaben.
   ctx.beginPath()
-  ctx.moveTo(mx - 300, my + 12)
-  ctx.lineTo(mx - 60, my + 4)
-  ctx.lineTo(mx + 90, my + 11)
-  ctx.lineTo(mx + 300, my + 2)
-  ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.5)
-  ctx.lineWidth = 1.5
+  ctx.moveTo(mx - 268, my + 26)
+  ctx.lineTo(mx - 96, my + 20)
+  ctx.moveTo(mx + 104, my + 22)
+  ctx.lineTo(mx + 276, my + 27)
+  ctx.strokeStyle = mitAlpha(FARBEN.spielerRing, 0.85)
+  ctx.lineWidth = 3
   ctx.stroke()
 
   ctx.font = `400 19px ${SCHRIFT.mono}`
@@ -91,8 +98,9 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
   ctx.fillText(TEXTE.untertitel, mx, my + 58)
 }
 
+/** Groesse der Charakterplatte auf dem Titelbild. */
 const PLATTE_B = 560
-const PLATTE_H = 250
+const PLATTE_H = 224
 
 function zeichneCharakterPlatte(
   ctx: CanvasRenderingContext2D,
@@ -106,63 +114,54 @@ function zeichneCharakterPlatte(
   const rand = offen ? c.farbe : FARBEN.textSchwach
 
   ctx.save()
-  ctx.translate(mx, y + PLATTE_H / 2)
-  ctx.rotate(neigung(saat))
-  ctx.translate(-mx, -(y + PLATTE_H / 2))
 
-  scherbenPfad(ctx, x, y, PLATTE_B, PLATTE_H, saat)
-  ctx.fillStyle = mitAlpha(FARBEN.kartenGrund, 0.95)
-  ctx.fill()
-  ctx.lineWidth = 2
-  ctx.strokeStyle = mitAlpha(rand, offen ? 0.9 : 0.4)
-  ctx.stroke()
+  massivePlatte(ctx, x, y, PLATTE_B, PLATTE_H, {
+    grund: offen ? FARBEN.kartenGrund : FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: rand,
+    aktiv: offen,
+  })
+  // Die Sprünge sitzen im oberen Streifen, weit ueber jeder Textzeile.
+  randSpruenge(ctx, x, y, PLATTE_B, 26, saat, mitAlpha(rand, 0.45))
 
-  // Die Sprünge tragen die Farbe, nicht der Rahmen. Genau das unterscheidet
-  // die Platte von einer Karte mit farbigem Rand.
-  ctx.save()
-  scherbenPfad(ctx, x, y, PLATTE_B, PLATTE_H, saat)
-  ctx.clip()
-  bruchLinien(ctx, x, y, PLATTE_B, PLATTE_H, saat, 3)
-  ctx.strokeStyle = mitAlpha(rand, offen ? 0.3 : 0.15)
-  ctx.lineWidth = 1.2
-  ctx.stroke()
-  ctx.restore()
+  // Das Wappen: derselbe Koerper, den man gleich spielt, in Gross.
+  zeichneWappen(ctx, c, offen, x + 82, y + PLATTE_H / 2 + 6)
 
   ctx.textAlign = 'center'
   ctx.font = `700 34px ${SCHRIFT.mono}`
   ctx.fillStyle = offen ? c.farbe : FARBEN.textSchwach
-  ctx.fillText(c.name, mx, y + 52)
+  ctx.fillText(c.name, mx + 46, y + 52)
 
   if (!offen && c.bedingung !== null) {
     ctx.font = `700 13px ${SCHRIFT.mono}`
     ctx.fillStyle = FARBEN.gefahr
-    ctx.fillText(TEXTE.gesperrt, mx, y + 88)
+    ctx.fillText(TEXTE.gesperrt, mx + 46, y + 92)
     ctx.font = `400 17px ${SCHRIFT.mono}`
     ctx.fillStyle = FARBEN.textSchwach
-    umbrochenerText(ctx, c.bedingung.text, mx, y + 126, PLATTE_B - 80, 24)
+    umbrochenerText(ctx, c.bedingung.text, mx + 46, y + 130, PLATTE_B - 200, 24)
     ctx.restore()
     return
   }
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
-  umbrochenerText(ctx, c.beschreibung, mx, y + 84, PLATTE_B - 70, 22)
+  umbrochenerText(ctx, c.beschreibung, mx + 46, y + 84, PLATTE_B - 210, 22)
 
   ctx.textAlign = 'left'
-  const lx = x + 42
+  const lx = x + 172
   ctx.font = `700 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.heilung
   ctx.fillText(TEXTE.vorteil.toUpperCase(), lx, y + 138)
   ctx.font = `400 15px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.text
-  umbrochenerLinks(ctx, c.vorteil, lx, y + 160, PLATTE_B - 84, 20)
+  umbrochenerLinks(ctx, c.vorteil, lx, y + 160, PLATTE_B - 214, 20)
 
   ctx.font = `700 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.gefahr
   ctx.fillText(TEXTE.nachteil.toUpperCase(), lx, y + 196)
   ctx.font = `400 15px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.text
-  umbrochenerLinks(ctx, c.nachteil, lx, y + 218, PLATTE_B - 84, 20)
+  umbrochenerLinks(ctx, c.nachteil, lx, y + 218, PLATTE_B - 214, 20)
 
   ctx.textAlign = 'right'
   ctx.font = `600 14px ${SCHRIFT.mono}`
@@ -172,6 +171,145 @@ function zeichneCharakterPlatte(
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.punkteFaktor, x + PLATTE_B - 42, y + 68)
 
+  ctx.restore()
+}
+
+/**
+ * Das Wappen eines Charakters.
+ *
+ * Vorher stand auf der Auswahl nur Text - man waehlte eine Beschreibung, keine
+ * Figur. Hier steht jetzt derselbe Koerper, den man gleich steuert: cremiger
+ * Kreis, dunkle Kontur, Ring in der Charakterfarbe. Dazu ein Zeichen, das die
+ * Mechanik andeutet, statt sie nur zu behaupten.
+ *
+ * Gezeichnet und nicht gemalt: Das Spiel hat keine Bilddateien, und das soll
+ * so bleiben - eine Figur aus Pfaden skaliert auf jeden Bildschirm und wiegt
+ * nichts.
+ */
+function zeichneWappen(
+  ctx: CanvasRenderingContext2D,
+  c: Charakter,
+  offen: boolean,
+  x: number,
+  y: number,
+): void {
+  const r = 34
+  const farbe = offen ? c.farbe : FARBEN.textSchwach
+
+  // Hof in der Charakterfarbe - er traegt das Wappen und trennt es vom Grund.
+  ctx.beginPath()
+  ctx.arc(x, y, r * 1.85, 0, Math.PI * 2)
+  ctx.fillStyle = mitAlpha(farbe, offen ? 0.16 : 0.07)
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.arc(x, y, r * 1.5, 0, Math.PI * 2)
+  ctx.strokeStyle = mitAlpha(farbe, offen ? 0.85 : 0.35)
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  zeichneWappenZeichen(ctx, c.id, x, y, r, farbe, offen)
+
+  // Der Koerper zuletzt, damit er auf allem liegt - genau wie im Spiel.
+  ctx.beginPath()
+  ctx.arc(x, y + 4, r * 0.92, 0, Math.PI * 2)
+  ctx.fillStyle = FARBEN.schatten
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.arc(x, y, r * 0.9, 0, Math.PI * 2)
+  ctx.fillStyle = offen ? FARBEN.spieler : FARBEN.kartenGrund
+  ctx.fill()
+  ctx.lineWidth = 4
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(x, y, r * 0.32, 0, Math.PI * 2)
+  ctx.fillStyle = offen ? farbe : FARBEN.textSchwach
+  ctx.fill()
+}
+
+/** Je Charakter ein Zeichen, das seine Mechanik andeutet. */
+function zeichneWappenZeichen(
+  ctx: CanvasRenderingContext2D,
+  id: string,
+  x: number,
+  y: number,
+  r: number,
+  farbe: string,
+  offen: boolean,
+): void {
+  ctx.save()
+  ctx.strokeStyle = mitAlpha(farbe, offen ? 0.9 : 0.4)
+  ctx.fillStyle = mitAlpha(farbe, offen ? 0.9 : 0.4)
+  ctx.lineWidth = 3
+  ctx.lineCap = 'round'
+  const weit = r * 1.5
+
+  switch (id) {
+    case 'schleiferin':
+      // Ein Bogenhieb - die Klinge, mit der sie startet.
+      ctx.beginPath()
+      ctx.arc(x, y, weit * 0.78, -0.9, 0.9)
+      ctx.stroke()
+      break
+    case 'sammler':
+      // Kristalle, die hereinfliegen.
+      for (let i = 0; i < 3; i++) {
+        const w = -0.7 + i * 0.7
+        const d = weit * (0.72 + i * 0.1)
+        ctx.beginPath()
+        ctx.moveTo(x + Math.cos(w) * d, y + Math.sin(w) * d - 5)
+        ctx.lineTo(x + Math.cos(w) * d + 5, y + Math.sin(w) * d)
+        ctx.lineTo(x + Math.cos(w) * d, y + Math.sin(w) * d + 5)
+        ctx.lineTo(x + Math.cos(w) * d - 5, y + Math.sin(w) * d)
+        ctx.closePath()
+        ctx.fill()
+      }
+      break
+    case 'riss':
+      // Der Geisterriss: drei Sprünge, die vom Koerper wegzeigen.
+      ctx.beginPath()
+      for (let i = 0; i < 3; i++) {
+        const w = -2.2 + i * 1.5
+        ctx.moveTo(x + Math.cos(w) * r * 1.0, y + Math.sin(w) * r * 1.0)
+        ctx.lineTo(x + Math.cos(w + 0.2) * weit, y + Math.sin(w + 0.2) * weit)
+      }
+      ctx.stroke()
+      break
+    case 'koloss':
+      // Dornen ringsum.
+      ctx.beginPath()
+      for (let i = 0; i < 8; i++) {
+        const w = (i / 8) * Math.PI * 2
+        ctx.moveTo(x + Math.cos(w) * weit * 0.98, y + Math.sin(w) * weit * 0.98)
+        ctx.lineTo(x + Math.cos(w) * weit * 1.3, y + Math.sin(w) * weit * 1.3)
+      }
+      ctx.stroke()
+      break
+    case 'prismatikerin': {
+      // Ein Strahl, der sich bricht.
+      ctx.beginPath()
+      ctx.moveTo(x - weit * 1.25, y + weit * 0.5)
+      ctx.lineTo(x, y)
+      for (let i = 0; i < 3; i++) {
+        ctx.moveTo(x, y)
+        ctx.lineTo(x + weit * 1.25, y - weit * 0.45 + i * weit * 0.45)
+      }
+      ctx.stroke()
+      break
+    }
+    default:
+      // Splitter: der Grundzustand, ein schlichter Ring.
+      ctx.beginPath()
+      ctx.arc(x, y, weit * 1.2, 0, Math.PI * 2)
+      ctx.setLineDash([6, 10])
+      ctx.lineWidth = 2
+      ctx.stroke()
+      ctx.setLineDash([])
+      break
+  }
   ctx.restore()
 }
 
@@ -257,33 +395,23 @@ function zeichneKarte(
   const mx = x + KARTE_B / 2
 
   ctx.save()
-  ctx.translate(mx, oben + KARTE_H / 2)
-  ctx.rotate(gewaehlt ? neigung(saat) * 0.3 : neigung(saat))
-  ctx.translate(-mx, -(oben + KARTE_H / 2))
 
   if (besonders || a.seltenheit === 'legendaer') {
+    // Ein Schein ringsum statt Linien darin - die seltene Karte darf leuchten,
+    // aber nicht auf Kosten ihrer Lesbarkeit.
     const puls = 0.3 + 0.3 * Math.sin(performance.now() / 260 + index)
-    scherbenPfad(ctx, x - 6, oben - 6, KARTE_B + 12, KARTE_H + 12, saat)
-    ctx.fillStyle = mitAlpha(rand, puls * 0.3)
-    ctx.fill()
+    ctx.fillStyle = mitAlpha(rand, puls * 0.35)
+    ctx.fillRect(x - 7, oben - 7, KARTE_B + 14, KARTE_H + 14)
   }
 
-  scherbenPfad(ctx, x, oben, KARTE_B, KARTE_H, saat)
-  ctx.fillStyle = gewaehlt ? '#141f36' : FARBEN.kartenGrund
-  ctx.fill()
-  ctx.lineWidth = gewaehlt ? 2.5 : 1.4
-  ctx.strokeStyle = mitAlpha(rand, gewaehlt ? 1 : 0.55)
-  ctx.stroke()
-
-  // Seltenheitsfarbe laeuft in den Bruchlinien statt in einem Rahmen.
-  ctx.save()
-  scherbenPfad(ctx, x, oben, KARTE_B, KARTE_H, saat)
-  ctx.clip()
-  bruchLinien(ctx, x, oben, KARTE_B, KARTE_H, saat, gewaehlt ? 4 : 2)
-  ctx.strokeStyle = mitAlpha(rand, gewaehlt ? 0.45 : 0.22)
-  ctx.lineWidth = 1.2
-  ctx.stroke()
-  ctx.restore()
+  massivePlatte(ctx, x, oben, KARTE_B, KARTE_H, {
+    grund: gewaehlt ? FARBEN.kartenGrund : FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: rand,
+    aktiv: gewaehlt,
+  })
+  // Sprünge nur im Kopfstreifen - der Text darunter bleibt unberuehrt.
+  randSpruenge(ctx, x, oben, KARTE_B, 30, saat, mitAlpha(rand, gewaehlt ? 0.5 : 0.25))
 
   ctx.font = `700 15px ${SCHRIFT.mono}`
   ctx.fillStyle = gewaehlt ? rand : FARBEN.textSchwach
@@ -608,27 +736,19 @@ function zeichneTuer(
   const saat = 300 + i * 17
 
   ctx.save()
-  ctx.translate(x + b / 2, y + h / 2)
-  ctx.rotate(neigung(saat))
-  ctx.scale(gewaehlt ? 1.04 : 1, gewaehlt ? 1.04 : 1)
-  ctx.translate(-b / 2, -h / 2)
+  // Gewaehlte Tuer hebt sich, statt sich zu drehen: Eine schiefe Karte mit
+  // vier Textzeilen liest sich schlechter, nicht interessanter.
+  const hebung = gewaehlt ? 10 : 0
+  ctx.translate(x, y - hebung)
 
-  scherbenPfad(ctx, 0, 0, b, h, saat)
-  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.96)
-  ctx.fill()
-  ctx.strokeStyle = gewaehlt ? tuer.farbe : mitAlpha(tuer.farbe, 0.4)
-  ctx.lineWidth = gewaehlt ? 2.6 : 1.4
-  ctx.stroke()
-
-  // Die Farbe der Tuer laeuft in den Bruchlinien, nicht in einem gleichmaessigen
-  // Rahmen - dieselbe Formsprache wie bei den Levelup-Karten.
-  ctx.save()
-  ctx.clip()
-  bruchLinien(ctx, 0, 0, b, h, saat, gewaehlt ? 4 : 2)
-  ctx.strokeStyle = mitAlpha(tuer.farbe, gewaehlt ? 0.5 : 0.2)
-  ctx.lineWidth = 1
-  ctx.stroke()
-  ctx.restore()
+  massivePlatte(ctx, 0, 0, b, h, {
+    grund: gewaehlt ? FARBEN.kartenGrund : FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: tuer.farbe,
+    aktiv: gewaehlt,
+    ecke: 22,
+  })
+  randSpruenge(ctx, 0, 0, b, 28, saat, mitAlpha(tuer.farbe, gewaehlt ? 0.5 : 0.24))
 
   ctx.textAlign = 'left'
   ctx.font = `700 12px ${SCHRIFT.mono}`
@@ -683,24 +803,15 @@ export function zeichnePause(
   const y = (hoehe - h) / 2
 
   ctx.save()
-  ctx.translate(x + b / 2, y + h / 2)
-  ctx.rotate(neigung(7))
-  ctx.translate(-b / 2, -h / 2)
+  ctx.translate(x, y)
 
-  scherbenPfad(ctx, 0, 0, b, h, 7)
-  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.95)
-  ctx.fill()
-  ctx.strokeStyle = mitAlpha(FARBEN.text, 0.35)
-  ctx.lineWidth = 1.6
-  ctx.stroke()
-
-  ctx.save()
-  ctx.clip()
-  bruchLinien(ctx, 0, 0, b, h, 7, 3)
-  ctx.strokeStyle = mitAlpha(FARBEN.text, 0.12)
-  ctx.lineWidth = 1
-  ctx.stroke()
-  ctx.restore()
+  massivePlatte(ctx, 0, 0, b, h, {
+    grund: FARBEN.kartenGrund,
+    kontur: FARBEN.kontur,
+    akzent: FARBEN.spielerRing,
+    aktiv: true,
+  })
+  randSpruenge(ctx, 0, 0, b, 26, 7, mitAlpha(FARBEN.spielerRing, 0.4))
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -713,11 +824,12 @@ export function zeichnePause(
     const zy = 108 + i * 44
 
     if (gewaehlt) {
-      // Die Auswahl liegt auf einer eigenen kleinen Scherbe, statt nur die
-      // Farbe zu wechseln - sonst sieht die Liste aus wie eine Webseite.
-      scherbenPfad(ctx, 34, zy - 17, b - 68, 34, 20 + i)
-      ctx.fillStyle = mitAlpha(FARBEN.textHervor, 0.14)
-      ctx.fill()
+      // Volle Flaeche mit Kante links - deutlicher als ein Farbwechsel und
+      // ohne eine Linie, die durch die Schrift laeuft.
+      ctx.fillStyle = mitAlpha(FARBEN.spielerRing, 0.16)
+      ctx.fillRect(28, zy - 17, b - 56, 34)
+      ctx.fillStyle = FARBEN.spielerRing
+      ctx.fillRect(28, zy - 17, 4, 34)
     }
 
     ctx.font = `${gewaehlt ? 700 : 400} 18px ${SCHRIFT.mono}`
@@ -764,7 +876,10 @@ function schleier(
 ): void {
   // Das Spielfeld bleibt sichtbar durchscheinen: Ein voll deckender Schleier
   // schneidet den Lauf gefuehlt ab, ein halbdurchsichtiger haelt die Spannung.
-  ctx.fillStyle = mitAlpha(FARBEN.grund, staerke)
+  // In der *Konturfarbe*, nicht in der Grundfarbe: Seit das Spielfeld hell
+  // ist, wuerde ein Schleier in Grundfarbe das Bild aufhellen statt es
+  // zurueckzunehmen - das Getuemmel bliebe genauso laut wie vorher.
+  ctx.fillStyle = mitAlpha(FARBEN.kontur, staerke)
   ctx.fillRect(0, 0, breite, hoehe)
 }
 

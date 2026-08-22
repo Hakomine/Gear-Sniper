@@ -93,6 +93,7 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.merkX = 0
   g.merkY = 0
   g.blick = 0
+  g.frost = 0
   return g
 }
 
@@ -149,7 +150,17 @@ export function spawne(s: Spielstand, dt: number): void {
 
   if (s.zeit >= s.naechsterSchwarm) {
     schwarm(s)
-    s.naechsterSchwarm += SCHWARM_TAKT
+    /*
+     * Vom *Jetzt* aus weiterzaehlen, nicht vom letzten Termin aus.
+     *
+     * Mit `+= SCHWARM_TAKT` holt der Zaehler jeden verpassten Termin nach.
+     * Springt die Spielzeit - beim Vorspulen im Test, beim Bruchmal, das eine
+     * Bosswelle heranzieht, oder nach einem langen Ruckler - kommen dutzende
+     * Schwaerme in aufeinanderfolgenden Ticks. Gemessen bestanden danach 40
+     * Prozent des Feldes aus *einer* Gegnerart, wo die Gewichte drei Prozent
+     * vorsehen. Ein Schwarm ist ein Ereignis, kein Guthaben.
+     */
+    s.naechsterSchwarm = s.zeit + SCHWARM_TAKT
   }
 }
 

@@ -129,6 +129,7 @@ export function zeichneHud(
   ctx.fillStyle = FARBEN.grund
   ctx.fillText(`${Math.ceil(sp.hp)} / ${Math.ceil(sp.maxHp)}`, breite / 2, by + bh / 2 + 1)
 
+  zeichneMinikarte(ctx, s, breite)
   zeichneWaffenLeiste(ctx, s, hoehe)
   zeichneBossLeiste(ctx, s, breite)
 
@@ -273,4 +274,147 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
   ctx.fillStyle = FARBEN.text
   ctx.fillText(z.phase === 1 ? z.art.name : `${z.art.name} — PHASE 2`, breite / 2, by - 8)
   ctx.textBaseline = 'alphabetic'
+}
+
+
+/** Kantenlaenge der Minikarte und wie viel Welt sie zeigt. */
+const KARTE_GROESSE = 148
+const KARTE_REICHWEITE = 1500
+
+/**
+ * Die Minikarte.
+ *
+ * Sie zeigt **vier** Dinge, und das ist Absicht: dich, die Richtung des
+ * Bosses, offene Schreine, und wo es dicht wird. Alles andere waere wieder
+ * Rauschen - und Rauschen ist genau das Problem, das sie loesen soll.
+ *
+ * Das Getuemmel steht als *Wolke*, nicht als Punktemenge. 1400 Einzelpunkte
+ * auf 148 Pixeln waeren Konfetti; eine Handvoll weicher Flecken sagt, wo es
+ * eng wird, und genau das ist die Frage, die man an eine Karte hat.
+ *
+ * Was ausserhalb der Reichweite liegt, wird an den Rand geklemmt - ein Boss,
+ * den man nicht sieht, ist die wichtigste Information von allen.
+ */
+function zeichneMinikarte(ctx: CanvasRenderingContext2D, s: Spielstand, breite: number): void {
+  const rand = 22
+  const x = breite - KARTE_GROESSE - rand
+  const y = 84
+  const mx = x + KARTE_GROESSE / 2
+  const my = y + KARTE_GROESSE / 2
+  const massstab = KARTE_GROESSE / 2 / KARTE_REICHWEITE
+  const sp = s.spieler
+
+  ctx.save()
+
+  // Platte in derselben Sprache wie jede Karte im Spiel.
+  ctx.fillStyle = FARBEN.kontur
+  ctx.fillRect(x - 3, y - 3, KARTE_GROESSE + 6, KARTE_GROESSE + 6)
+  ctx.fillStyle = mitAlpha(FARBEN.kartenGrundTief, 0.92)
+  ctx.fillRect(x, y, KARTE_GROESSE, KARTE_GROESSE)
+
+  ctx.beginPath()
+  ctx.rect(x, y, KARTE_GROESSE, KARTE_GROESSE)
+  ctx.clip()
+
+  // Wo es dicht wird. Ein grosser weicher Fleck je Gegner summiert sich von
+  // selbst zu einer Wolke - billiger und lesbarer als jede echte Dichtekarte.
+  const gegner = s.gegner.aktiv
+  //
+  // Ein Pfad fuer alle, ein einziges `fill`. Bei 1400 Gegnern waeren 1400
+  // Fuellaufrufe je Bild die teuerste Zeile im ganzen Zeichencode - dieselbe
+  // Buendelung wie bei Gegnern und Geschossen.
+  ctx.beginPath()
+  for (let i = 0; i < gegner.length; i++) {
+    const g = gegner[i]
+    if (g.bossZustand !== null) continue
+    const px = mx + (g.x - sp.x) * massstab
+    const py = my + (g.y - sp.y) * massstab
+    ctx.moveTo(px + 7, py)
+    ctx.arc(px, py, 7, 0, Math.PI * 2)
+  }
+  ctx.fillStyle = mitAlpha(FARBEN.splitter, 0.14)
+  ctx.fill()
+
+  // Offene Schreine als Bernsteinraute - der einzige Grund, irgendwohin zu
+  // *wollen*, also gehoeren sie auf jede Karte.
+  const schreine = s.schreine.aktiv
+  for (let i = 0; i < schreine.length; i++) {
+    const sch = schreine[i]
+    if (sch.benutzt) continue
+    const p = aufKarte(sch.x - sp.x, sch.y - sp.y, massstab, mx, my)
+    ctx.save()
+    ctx.translate(p.x, p.y)
+    ctx.rotate(Math.PI / 4)
+    ctx.fillStyle = FARBEN.textHervor
+    ctx.fillRect(-4, -4, 8, 8)
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(-4, -4, 8, 8)
+    ctx.restore()
+  }
+
+  // Der Boss als Keil, der in seine Richtung zeigt - auch weit ausserhalb.
+  const boss = findeBoss(s)
+  if (boss !== null) {
+    const dx = boss.x - sp.x
+    const dy = boss.y - sp.y
+    const p = aufKarte(dx, dy, massstab, mx, my)
+    ctx.save()
+    ctx.translate(p.x, p.y)
+    ctx.rotate(Math.atan2(dy, dx))
+    ctx.beginPath()
+    ctx.moveTo(8, 0)
+    ctx.lineTo(-6, 6)
+    ctx.lineTo(-6, -6)
+    ctx.closePath()
+    ctx.fillStyle = FARBEN.gefahr
+    ctx.fill()
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // Du, mit Blickrichtung. Zuletzt, damit nichts dich verdeckt.
+  ctx.beginPath()
+  ctx.moveTo(mx, my)
+  ctx.lineTo(mx + sp.blickX * 13, my + sp.blickY * 13)
+  ctx.strokeStyle = FARBEN.spieler
+  ctx.lineWidth = 2.5
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(mx, my, 4.5, 0, Math.PI * 2)
+  ctx.fillStyle = FARBEN.spieler
+  ctx.fill()
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
+  ctx.restore()
+}
+
+/**
+ * Weltversatz auf Kartenkoordinaten - was zu weit weg ist, klemmt am Rand.
+ *
+ * Das Klemmen ist der Punkt: Ein Boss, der ausserhalb der Reichweite steht,
+ * verschwaende sonst genau dann von der Karte, wenn man am dringendsten wissen
+ * will, aus welcher Richtung er kommt.
+ */
+function aufKarte(
+  dx: number,
+  dy: number,
+  massstab: number,
+  mx: number,
+  my: number,
+): { x: number; y: number } {
+  const grenze = KARTE_GROESSE / 2 - 9
+  let px = dx * massstab
+  let py = dy * massstab
+  const laenge = Math.hypot(px, py)
+  if (laenge > grenze) {
+    px = (px / laenge) * grenze
+    py = (py / laenge) * grenze
+  }
+  return { x: mx + px, y: my + py }
 }

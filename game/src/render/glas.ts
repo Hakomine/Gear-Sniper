@@ -193,3 +193,104 @@ export function schraegBalken(
   ctx.lineTo(x, y + h)
   ctx.closePath()
 }
+
+
+/**
+ * Eine massive Platte - der Karten-Baustein dieser Bildsprache.
+ *
+ * Loest den schwerwiegendsten Fehler der vorherigen Runde ab. Damals wurden
+ * Karten als duenne Umrisse mit Bruchlinien *quer durch die Textflaeche*
+ * gezeichnet. Auf der Tuer "Ruhe" war dadurch "Nichts wird schwerer"
+ * durchgestrichen, und der Titel hatte einen Strich mitten durchs Wort. Ein
+ * Strich durch Text bedeutet ueberall *geloescht* oder *ungueltig* - das Auge
+ * kann gar nicht anders, als das als kaputt zu lesen.
+ *
+ * Deshalb hier: volle Fuellung, dicke dunkle Kontur, harter Schlagschatten,
+ * und die Akzentfarbe als Balken **oben**. Die Textflaeche bleibt frei. Die
+ * Scherben-Herkunft steckt nur noch in der abgeschnittenen Ecke unten rechts -
+ * ein Zitat, kein Zerstoerungswerk.
+ */
+export function massivePlatte(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  b: number,
+  h: number,
+  opt: {
+    grund: string
+    kontur: string
+    akzent: string
+    /** Ausgewaehlt: dickere Kontur, hoeherer Balken, tieferer Schatten. */
+    aktiv?: boolean
+    /** Wie tief die Ecke unten rechts abgeschnitten ist. */
+    ecke?: number
+  },
+): void {
+  const ecke = opt.ecke ?? 18
+  const aktiv = opt.aktiv === true
+  const tiefe = aktiv ? 7 : 5
+
+  const pfad = (vx: number, vy: number): void => {
+    ctx.beginPath()
+    ctx.moveTo(x + vx, y + vy)
+    ctx.lineTo(x + b + vx, y + vy)
+    ctx.lineTo(x + b + vx, y + h - ecke + vy)
+    ctx.lineTo(x + b - ecke + vx, y + h + vy)
+    ctx.lineTo(x + vx, y + h + vy)
+    ctx.closePath()
+  }
+
+  // Harter Schatten statt weichem Verlauf: Er sitzt in der Konturfarbe direkt
+  // unter der Platte und macht sie zu einem Gegenstand, der auf dem Feld
+  // liegt. Ein weicher Schatten waere hier nur Dunst.
+  pfad(0, tiefe)
+  ctx.fillStyle = opt.kontur
+  ctx.fill()
+
+  pfad(0, 0)
+  ctx.fillStyle = opt.grund
+  ctx.fill()
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = aktiv ? 3.5 : 2.5
+  ctx.strokeStyle = opt.kontur
+  ctx.stroke()
+
+  // Der Akzentbalken traegt die Farbe - Seltenheit, Tuerart, Charakter. Oben,
+  // waagerecht, ausserhalb jeder Textzeile.
+  ctx.save()
+  pfad(0, 0)
+  ctx.clip()
+  ctx.fillStyle = opt.akzent
+  ctx.fillRect(x, y, b, aktiv ? 8 : 5)
+  ctx.restore()
+}
+
+/**
+ * Bruchlinien als Randzier - nur im oberen Streifen, nie in der Textflaeche.
+ *
+ * Damit bleibt die Herkunft sichtbar, ohne dass eine Linie je ein Wort
+ * durchschneidet. Wer sie tiefer setzen will, muss vorher pruefen, wo der Text
+ * beginnt.
+ */
+export function randSpruenge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  b: number,
+  hoehe: number,
+  saat: number,
+  farbe: string,
+): void {
+  ctx.save()
+  ctx.beginPath()
+  for (let i = 0; i < 3; i++) {
+    const sx = x + streu(saat, i * 3 + 40) * b
+    const tief = hoehe * (0.35 + streu(saat, i * 3 + 41) * 0.55)
+    ctx.moveTo(sx, y)
+    ctx.lineTo(sx + (streu(saat, i * 3 + 42) - 0.5) * 26, y + tief)
+  }
+  ctx.strokeStyle = farbe
+  ctx.lineWidth = 1.2
+  ctx.stroke()
+  ctx.restore()
+}

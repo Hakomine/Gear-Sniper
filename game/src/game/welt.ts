@@ -70,7 +70,16 @@ export const DORNEN_PLATZ = MAX_WAFFEN + 2
  */
 export const KRIT_PLATZ = MAX_WAFFEN + 3
 
-export const PLATZ_ANZAHL = MAX_WAFFEN + 4
+/**
+ * Der Riss, den die Vereisung geschenkt gibt (Waffe "Frostkeil").
+ *
+ * Eigener Platz, kein geliehener - genau wie beim Geisterriss des Riss-
+ * Charakters. Waere es der Platz der treffenden Waffe, zaehlte er nicht, denn
+ * die hat ihren Riss ja schon gesetzt.
+ */
+export const FROST_PLATZ = MAX_WAFFEN + 4
+
+export const PLATZ_ANZAHL = MAX_WAFFEN + 5
 
 /**
  * Obergrenze fuer den aufgestauten Rueckstoss eines Gegners.
@@ -185,6 +194,10 @@ export function verletzeGegner(
   // Fehlschlag: Ein kritischer Treffer reisst zusaetzlich auf - unter einem
   // eigenen Platz, denn den der Waffe hat sie eben selbst belegt.
   if (krit && sp.kritRiss) rissSetzen(g, KRIT_PLATZ, sp.rissDauer)
+
+  // Frostkeil: Was gefroren ist, traegt einen Riss geschenkt - es zerspringt
+  // also mit zwei Waffen statt drei.
+  if (g.frost > 0) rissSetzen(g, FROST_PLATZ, sp.rissDauer)
 
   // Charakter "Riss": Drei Sekunden ohne Treffer, und jeder Schlag setzt
   // zusaetzlich einen Geisterriss - er zersplittert damit mit zwei Waffen

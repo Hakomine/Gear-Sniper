@@ -11,34 +11,61 @@
  * unlesbar wird.
  */
 export const FARBEN = {
-  grund: '#05060a',
-  gitter: '#0e1524',
-  gitterStark: '#16203a',
+  /*
+   * Das Spielfeld ist **heller als die Figuren darauf**.
+   *
+   * Vorher war der Grund fast schwarz und alles darauf ebenfalls dunkel - es
+   * gab keine Ebene, nur Umrisse, und im Getuemmel verschwamm alles zu einer
+   * Flaeche. Die Umkehr ist der eigentliche Griff dieser Bildsprache: Ein
+   * mittelheller Grund traegt gefuellte Koerper mit dunkler Kontur, und jede
+   * Silhouette schneidet sich von selbst frei.
+   */
+  grund: '#2a2f3e',
+  gitter: '#242938',
+  gitterStark: '#1d2130',
 
-  spieler: '#5ef2c4',
+  /**
+   * Die Kontur. Eine einzige dunkle Farbe um *alles*, was lebt.
+   *
+   * Sie ist der Grund, warum tausend Koerper im Pulk noch tausend Koerper
+   * bleiben und nicht zu einem Teppich verschmelzen.
+   */
+  kontur: '#12151e',
+  schatten: 'rgba(12, 14, 20, 0.42)',
+
+  spieler: '#fff3d6',
   spielerKern: '#ffffff',
-  geschoss: '#ffe066',
+  spielerRing: '#ffd24a',
+  geschoss: '#fff3d6',
 
   // Gegner: siehe enemies.ts - Form ist die Ansage, das hier ist nur Anstrich.
-  splitter: '#ff5c7a',
-  brocken: '#8f7bff',
-  elite: '#ff9d3d',
+  splitter: '#ff7a45',
+  brocken: '#8b6f4e',
+  elite: '#c86bff',
 
-  kristall: '#4fc3ff',
-  kristallKern: '#d6f2ff',
+  kristall: '#4fe0ff',
+  kristallKern: '#d6f6ff',
 
-  text: '#e8ecf5',
-  textSchwach: '#79839a',
-  textHervor: '#5ef2c4',
+  text: '#f2f4f9',
+  textSchwach: '#98a1b5',
+  textHervor: '#ffd24a',
 
   gefahr: '#ff4d5e',
-  heilung: '#5ef2c4',
-  krit: '#ffd23f',
-  treffer: '#ffffff',
+  heilung: '#6ee7a8',
+  krit: '#ffd24a',
+  treffer: '#fff3d6',
 
-  kartenGrund: '#0d1322',
-  kartenRand: '#243352',
-  kartenRandAktiv: '#5ef2c4',
+  /**
+   * Karten liegen **ueber** dem Feld, also sind sie heller als es.
+   *
+   * Vorher standen sie bei fast derselben Farbe wie der Grund - dadurch
+   * flimmerte das Getuemmel durch jedes Menue und nichts wirkte vorne oder
+   * hinten.
+   */
+  kartenGrund: '#394054',
+  kartenGrundTief: '#2f3546',
+  kartenRand: '#12151e',
+  kartenRandAktiv: '#ffd24a',
 } as const
 
 export type FarbName = keyof typeof FARBEN

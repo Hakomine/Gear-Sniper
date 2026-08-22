@@ -337,8 +337,30 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // Ueber die Eimer laufen, nicht ueber die feste Artenliste: Bosse bringen
   // eigene Arten mit, die dort nicht stehen - mit der alten Schleife waeren
   // sie unsichtbar gewesen.
+  /*
+   * Drei Durchgaenge je Gegnerart, und die Reihenfolge ist der ganze Stil:
+   * Schatten, dann Fuellung, dann Kontur.
+   *
+   * Der Schatten gibt jedem Koerper eine Standflaeche - ohne ihn schwebt alles
+   * auf derselben Ebene. Die Kontur schneidet ihn aus dem Grund heraus. Beides
+   * zusammen ist der Grund, warum tausend Koerper im Pulk noch tausend Koerper
+   * bleiben und nicht zu einem Teppich verschmelzen.
+   *
+   * Drei Striche je Art, nicht je Gegner: Der Pfad wird einmal fuer die ganze
+   * Art aufgebaut und dreimal benutzt.
+   */
   for (const [, liste] of gegnerEimer) {
     if (liste.length === 0) continue
+
+    ctx.save()
+    ctx.translate(0, SCHATTEN_VERSATZ)
+    ctx.beginPath()
+    for (let k = 0; k < liste.length; k++) {
+      formPfad(ctx, gegner[liste[k]], px, py, drehung)
+    }
+    ctx.fillStyle = FARBEN.schatten
+    ctx.fill()
+    ctx.restore()
 
     ctx.beginPath()
     for (let k = 0; k < liste.length; k++) {
@@ -364,7 +386,7 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   for (let k = 0; k < blitzende.length; k++) {
     formPfad(ctx, gegner[blitzende[k]], px, py, drehung)
   }
-  ctx.fillStyle = mitAlpha(FARBEN.treffer, 0.32)
+  ctx.fillStyle = mitAlpha('#ffffff', 0.45)
   ctx.fill()
 }
 
@@ -414,10 +436,17 @@ function zeichneSchildBoegen(
  * zweiter Strich darauf - ein Aufruf fuer alle Gegner einer Art.
  */
 function trennKante(ctx: CanvasRenderingContext2D): void {
-  ctx.lineWidth = 2
-  ctx.strokeStyle = FARBEN.grund
+  // Eigene Konturfarbe, nicht die Grundfarbe: Seit das Spielfeld heller ist
+  // als die Figuren, waere eine Kante in Grundfarbe unsichtbar. Sie ist jetzt
+  // dunkler als alles andere und traegt die ganze Lesbarkeit.
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 3
+  ctx.strokeStyle = FARBEN.kontur
   ctx.stroke()
 }
+
+/** Wie weit der Schlagschatten nach unten versetzt liegt. */
+const SCHATTEN_VERSATZ = 4
 
 /** Haengt die Umrissform eines Gegners an den aktuellen Pfad. */
 function formPfad(
@@ -607,6 +636,11 @@ function zeichneGeschosse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     }
     ctx.fillStyle = farbe
     ctx.fill()
+    // Auch Geschosse bekommen ihre Kontur: Auf einem hellen Feld verschwindet
+    // ein heller Punkt sonst genau dann, wenn es darauf ankommt.
+    ctx.lineWidth = 2
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.stroke()
   }
 }
 
@@ -627,6 +661,10 @@ function zeichneKristalle(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   }
   ctx.fillStyle = FARBEN.kristall
   ctx.fill()
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 2
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
 
   ctx.beginPath()
   for (let i = 0; i < liste.length; i++) {
@@ -649,7 +687,7 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // wirkt, und waehlt sie nie wieder.
   ctx.beginPath()
   ctx.arc(sp.x, sp.y, sp.magnetRadius, 0, Math.PI * 2)
-  ctx.strokeStyle = mitAlpha(FARBEN.kristall, 0.09)
+  ctx.strokeStyle = mitAlpha(FARBEN.kristall, 0.16)
   ctx.lineWidth = 1.5
   ctx.stroke()
 
@@ -666,8 +704,8 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   if (!bereit || sp.stossRest > 0) {
     ctx.beginPath()
     ctx.arc(sp.x, sp.y, sp.radius + 7, -Math.PI / 2, -Math.PI / 2 + anteil * Math.PI * 2)
-    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, 0.55)
-    ctx.lineWidth = 2.5
+    ctx.strokeStyle = FARBEN.spielerRing
+    ctx.lineWidth = 3.5
     ctx.stroke()
   } else {
     // Voll: ein geschlossener Ring, der leicht atmet - das liest sich als
@@ -675,8 +713,8 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     const puls = 0.35 + 0.2 * Math.sin(performance.now() / 320)
     ctx.beginPath()
     ctx.arc(sp.x, sp.y, sp.radius + 7, 0, Math.PI * 2)
-    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, puls)
-    ctx.lineWidth = 2
+    ctx.strokeStyle = mitAlpha(FARBEN.spielerRing, 0.35 + puls * 0.5)
+    ctx.lineWidth = 3
     ctx.stroke()
   }
 
@@ -686,8 +724,8 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.beginPath()
     ctx.moveTo(sp.x, sp.y)
     ctx.lineTo(sp.x - (sp.stossVx / laenge) * 46, sp.y - (sp.stossVy / laenge) * 46)
-    ctx.strokeStyle = mitAlpha(FARBEN.textHervor, 0.5)
-    ctx.lineWidth = 5
+    ctx.strokeStyle = mitAlpha(FARBEN.spielerRing, 0.55)
+    ctx.lineWidth = 6
     ctx.stroke()
   }
 
@@ -710,25 +748,29 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // darunter schneidet sie aus jedem Hintergrund heraus. In einem Spiel, in
   // dem man permanent ausweicht, ist die eigene Position die eine
   // Information, die niemals verloren gehen darf.
+  // Schlagschatten wie bei jedem Koerper - die Figur steht auf dem Feld,
+  // statt darueber zu schweben.
   ctx.beginPath()
-  ctx.arc(sp.x, sp.y, sp.radius * 1.75, 0, Math.PI * 2)
-  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.92)
+  ctx.arc(sp.x, sp.y + SCHATTEN_VERSATZ, sp.radius * 1.08, 0, Math.PI * 2)
+  ctx.fillStyle = FARBEN.schatten
   ctx.fill()
 
-  ctx.beginPath()
-  ctx.arc(sp.x, sp.y, sp.radius * 2.1, 0, Math.PI * 2)
-  ctx.fillStyle = mitAlpha(FARBEN.spieler, 0.16)
-  ctx.fill()
-
+  // Der Koerper: hell gefuellt, dunkel umrandet - dieselbe Regel wie bei den
+  // Gegnern, nur heller als alles andere im Bild. Er ist als Einziger cremig
+  // und rund; jede Gegnerart ist eckig und farbig. Damit ist er auch in einem
+  // Teppich aus tausend Formen die eine, die man sofort findet.
   ctx.beginPath()
   ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2)
-  ctx.fillStyle = mitAlpha(sp.blitz > 0 ? FARBEN.gefahr : FARBEN.spieler, blinkt ? 0.4 : 1)
+  ctx.fillStyle = mitAlpha(sp.blitz > 0 ? FARBEN.gefahr : FARBEN.spieler, blinkt ? 0.45 : 1)
   ctx.fill()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
 
   // Der Kern bleibt immer voll deckend - er ist der eine Punkt, an dem der
   // Spieler seine Position abliest.
   ctx.beginPath()
-  ctx.arc(sp.x, sp.y, sp.radius * 0.42, 0, Math.PI * 2)
+  ctx.arc(sp.x, sp.y, sp.radius * 0.36, 0, Math.PI * 2)
   ctx.fillStyle = FARBEN.spielerKern
   ctx.fill()
 }
@@ -845,9 +887,14 @@ function zeichneBruchlinien(ctx: CanvasRenderingContext2D, s: Spielstand): void 
   }
 
   if (!gezeichnet) return
-  ctx.lineWidth = 1.6
-  ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.8)
+  // Dunkel, nicht hell. Auf einer gefuellten Form liest sich ein weisser
+  // Strich als Glanzlicht - ein dunkler als Sprung. Vorher war der Grund
+  // schwarz und Weiss richtig; seit die Koerper gefuellt sind, ist es falsch.
+  ctx.lineCap = 'round'
+  ctx.lineWidth = 2.2
+  ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.85)
   ctx.stroke()
+  ctx.lineCap = 'butt'
 }
 
 /** Trabanten: kreisende Scherben, Position kommt aus dem Verhalten. */
