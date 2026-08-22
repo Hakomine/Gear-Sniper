@@ -155,6 +155,15 @@ Körper, den man gleich steuert, plus ein Zeichen, das die Mechanik andeutet —
 der Bogenhieb der Schleiferin, die Dornen des Kolosses, der gebrochene Strahl
 der Prismatikerin.
 
+Die Sprache geht durch bis in die letzte Ecke: Uhr, Stufe, Kills, Minikarte und
+Waffenkacheln sitzen auf denselben Platten mit Akzentbalken; Lebens- und
+Bossleiste haben Kontur, Schatten und einen hellen Kamm auf der Füllung;
+Schadenszahlen bekommen einen dunklen Umriss, damit sie sich im Getümmel nicht
+gegenseitig auslöschen; Zonen füllen dunkel statt hell, weil das Feld jetzt
+hell ist. Der Todesbildschirm besteht aus drei Platten — Punktetafel oben, was
+passiert ist links, woran sie gestorben sind rechts — und der Sprung im Glas
+läuft **hinter** ihnen durch, nicht über den Text.
+
 ## Die Minikarte
 
 Oben rechts, und sie zeigt **vier** Dinge — mehr wäre wieder Rauschen:

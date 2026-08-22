@@ -31,20 +31,23 @@ let saumSchluessel = ''
 function zeichneSaeume(ctx: CanvasRenderingContext2D, breite: number, hoehe: number): void {
   const schluessel = `${breite}x${hoehe}`
   if (saumOben === null || saumSchluessel !== schluessel) {
-    const oben = ctx.createLinearGradient(0, 0, 0, 96)
-    oben.addColorStop(0, mitAlpha(FARBEN.grund, 0.82))
-    oben.addColorStop(1, mitAlpha(FARBEN.grund, 0))
-    const unten = ctx.createLinearGradient(0, hoehe - 88, 0, hoehe)
-    unten.addColorStop(0, mitAlpha(FARBEN.grund, 0))
-    unten.addColorStop(1, mitAlpha(FARBEN.grund, 0.82))
+    // In der Konturfarbe, nicht in der Grundfarbe: Seit das Spielfeld hell
+    // ist, wuerde ein Saum in Grundfarbe die Raender *aufhellen* - und damit
+    // genau das Gegenteil dessen tun, wofuer er da ist.
+    const oben = ctx.createLinearGradient(0, 0, 0, 104)
+    oben.addColorStop(0, mitAlpha(FARBEN.kontur, 0.85))
+    oben.addColorStop(1, mitAlpha(FARBEN.kontur, 0))
+    const unten = ctx.createLinearGradient(0, hoehe - 96, 0, hoehe)
+    unten.addColorStop(0, mitAlpha(FARBEN.kontur, 0))
+    unten.addColorStop(1, mitAlpha(FARBEN.kontur, 0.85))
     saumOben = oben
     saumUnten = unten
     saumSchluessel = schluessel
   }
   ctx.fillStyle = saumOben
-  ctx.fillRect(0, 0, breite, 96)
+  ctx.fillRect(0, 0, breite, 104)
   ctx.fillStyle = saumUnten as CanvasGradient
-  ctx.fillRect(0, hoehe - 88, breite, 88)
+  ctx.fillRect(0, hoehe - 96, breite, 96)
 }
 
 export function zeichneHud(
@@ -61,40 +64,44 @@ export function zeichneHud(
   // Ganz oben, weil er der eigentliche Fortschritt ist: Der Blick muss ihn
   // streifen koennen, ohne das Getuemmel aus den Augen zu verlieren.
   const xpAnteil = Math.max(0, Math.min(1, sp.xp / sp.xpNaechste))
-  ctx.fillStyle = mitAlpha(FARBEN.kristall, 0.14)
-  ctx.fillRect(0, 0, breite, 7)
+  const xpHoehe = 10
+  ctx.fillStyle = FARBEN.kontur
+  ctx.fillRect(0, 0, breite, xpHoehe + 3)
+  ctx.fillStyle = mitAlpha(FARBEN.kristall, 0.2)
+  ctx.fillRect(0, 0, breite, xpHoehe)
   ctx.fillStyle = FARBEN.kristall
-  ctx.fillRect(0, 0, breite * xpAnteil, 7)
+  ctx.fillRect(0, 0, breite * xpAnteil, xpHoehe)
+  // Heller Kamm auf der Fuellung - dieselbe Lichtung wie an jedem Koerper.
+  ctx.fillStyle = mitAlpha('#ffffff', 0.28)
+  ctx.fillRect(0, 0, breite * xpAnteil, 3)
 
   // --- Uhr, mittig oben ----------------------------------------------------
-  ctx.font = `600 40px ${SCHRIFT.mono}`
+  const uhr = zeitText(s.zeit)
+  ctx.font = `700 40px ${SCHRIFT.mono}`
+  const uhrB = ctx.measureText(uhr).width + 44
+  hudPlatte(ctx, breite / 2 - uhrB / 2, 20, uhrB, 78, FARBEN.spielerRing)
+
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
   ctx.fillStyle = FARBEN.text
-  ctx.fillText(zeitText(s.zeit), breite / 2, 22)
+  ctx.fillText(uhr, breite / 2, 30)
+
+  // Etappe unter der Uhr: Die Uhr sagt, wie lange - die Etappe, wie weit.
+  ctx.font = `700 13px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.spielerRing
+  ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 74)
 
   // --- Stufe links, Kills rechts -------------------------------------------
-  ctx.font = `500 17px ${SCHRIFT.mono}`
-  ctx.textAlign = 'left'
-  ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(TEXTE.hudStufe, 26, 26)
-  ctx.font = `700 26px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.textHervor
-  ctx.fillText(String(sp.level), 26, 46)
-
-  ctx.font = `500 17px ${SCHRIFT.mono}`
-  ctx.textAlign = 'right'
-  ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(TEXTE.ergebnisKills.toUpperCase(), breite - 26, 26)
-  ctx.font = `700 26px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.text
-  ctx.fillText(zahlText(s.statistik.kills), breite - 26, 46)
-
-  // Etappe neben der Uhr: Die Uhr sagt, wie lange - die Etappe, wie weit.
-  ctx.textAlign = 'center'
-  ctx.font = `600 13px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 62)
+  zaehler(ctx, 22, 20, TEXTE.hudStufe, String(sp.level), FARBEN.spielerRing, false)
+  zaehler(
+    ctx,
+    breite - 22,
+    20,
+    TEXTE.ergebnisKills.toUpperCase(),
+    zahlText(s.statistik.kills),
+    FARBEN.text,
+    true,
+  )
 
   // --- Lebensbalken, unten mittig ------------------------------------------
   const bw = 360
@@ -103,30 +110,38 @@ export function zeichneHud(
   const by = hoehe - 46
   const lebenAnteil = Math.max(0, sp.hp / sp.maxHp)
 
-  const schraege = bh * 0.7
-
-  schraegBalken(ctx, bx - 2, by - 2, bw + 4, bh + 4, schraege)
-  ctx.fillStyle = mitAlpha('#000000', 0.55)
+  // Massiv wie jede Platte: harter Schatten, dunkle Kontur, und die Fuellung
+  // innen abgeschnitten. Der Balken liegt damit *auf* dem Feld statt darin.
+  const schraege = bh * 0.6
+  schraegBalken(ctx, bx, by + 5, bw, bh, schraege)
+  ctx.fillStyle = FARBEN.kontur
   ctx.fill()
+
   schraegBalken(ctx, bx, by, bw, bh, schraege)
-  ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.22)
+  ctx.fillStyle = FARBEN.kartenGrundTief
   ctx.fill()
 
-  // Die Fuellung wird am Balken *abgeschnitten* statt selbst schraeg gerechnet.
-  // Sonst muesste jede Fuellbreite ihre eigene Schraege bekommen, und bei
-  // wenig Leben liefe sie in sich zusammen.
   ctx.save()
   ctx.clip()
   // Faerbt sich mit sinkendem Leben von Mint nach Rot - man soll es sehen,
   // ohne die Zahl zu lesen.
-  ctx.fillStyle = lebenAnteil > 0.34 ? FARBEN.heilung : FARBEN.gefahr
+  const lebenFarbe = lebenAnteil > 0.34 ? FARBEN.heilung : FARBEN.gefahr
+  ctx.fillStyle = lebenFarbe
   ctx.fillRect(bx, by, bw * lebenAnteil, bh)
+  ctx.fillStyle = mitAlpha('#ffffff', 0.25)
+  ctx.fillRect(bx, by, bw * lebenAnteil, 4)
   ctx.restore()
 
-  ctx.font = `600 14px ${SCHRIFT.mono}`
+  schraegBalken(ctx, bx, by, bw, bh, schraege)
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 3
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
+
+  ctx.font = `700 14px ${SCHRIFT.mono}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillStyle = FARBEN.grund
+  ctx.fillStyle = FARBEN.kontur
   ctx.fillText(`${Math.ceil(sp.hp)} / ${Math.ceil(sp.maxHp)}`, breite / 2, by + bh / 2 + 1)
 
   zeichneMinikarte(ctx, s, breite)
@@ -163,7 +178,11 @@ function zeichneRandWarnung(
       hoehe / 2,
       Math.max(breite, hoehe) * 0.62,
     )
+    // Zur Mitte hin schon leicht sichtbar: Auf dem helleren Spielfeld geht
+    // ein reiner Randschimmer unter, und die Warnung soll man am Rand des
+    // Blickfelds mitbekommen, nicht suchen muessen.
     verlauf.addColorStop(0, 'rgba(255,77,94,0)')
+    verlauf.addColorStop(0.72, 'rgba(255,77,94,0.35)')
     verlauf.addColorStop(1, 'rgba(255,77,94,1)')
     randVerlauf = verlauf
     randVerlaufSchluessel = schluessel
@@ -186,10 +205,10 @@ function zeichneRandWarnung(
  */
 function zeichneWaffenLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, hoehe: number): void {
   const waffen = s.spieler.waffen
-  const kasten = 38
-  const luecke = 8
-  const x0 = 26
-  const y = hoehe - 62
+  const kasten = 44
+  const luecke = 9
+  const x0 = 22
+  const y = hoehe - 70
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -198,21 +217,17 @@ function zeichneWaffenLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, hoehe
     const w = waffen[i]
     const x = x0 + i * (kasten + luecke)
     const voll = istVollendet(w.def, w.stufe)
-    const rahmen = voll ? SELTENHEIT_FARBE.legendaer : w.def.farbe
+    const akzent = voll ? SELTENHEIT_FARBE.legendaer : w.def.farbe
 
-    ctx.beginPath()
-    ctx.roundRect(x, y, kasten, kasten, 8)
-    ctx.fillStyle = mitAlpha(FARBEN.grund, 0.8)
-    ctx.fill()
-    ctx.lineWidth = voll ? 2.5 : 1.5
-    ctx.strokeStyle = mitAlpha(rahmen, voll ? 1 : 0.7)
-    ctx.stroke()
+    // Kachel in derselben Sprache wie jede Platte - der Akzentbalken oben
+    // traegt die Waffenfarbe, bei Vollendung das Gold der Legendaeren.
+    hudPlatte(ctx, x, y, kasten, kasten, akzent)
 
-    // Raute in Waffenfarbe - dieselbe Farbe wie ihre Geschosse im Feld,
-    // damit man Anzeige und Wirkung zusammenbringt.
+    // Raute in Waffenfarbe, gefuellt und umrandet - dieselbe Regel wie bei
+    // allem auf dem Feld, damit Anzeige und Wirkung zusammengehoeren.
     const mx = x + kasten / 2
-    const my = y + kasten / 2 - 3
-    const r = 8
+    const my = y + kasten / 2 - 1
+    const r = 9
     ctx.beginPath()
     ctx.moveTo(mx, my - r)
     ctx.lineTo(mx + r, my)
@@ -221,10 +236,14 @@ function zeichneWaffenLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, hoehe
     ctx.closePath()
     ctx.fillStyle = w.def.farbe
     ctx.fill()
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.stroke()
 
     ctx.font = `700 10px ${SCHRIFT.mono}`
     ctx.fillStyle = voll ? SELTENHEIT_FARBE.legendaer : FARBEN.textSchwach
-    ctx.fillText(voll ? 'MAX' : `${w.stufe}`, mx, y + kasten - 8)
+    ctx.fillText(voll ? 'MAX' : `${w.stufe}`, mx, y + kasten - 7)
   }
 
   ctx.textBaseline = 'alphabetic'
@@ -248,34 +267,102 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
   const by = 78
   const anteil = Math.max(0, boss.hp / boss.maxHp)
 
-  const schraege = bh * 0.9
+  const schraege = bh * 0.8
 
-  schraegBalken(ctx, bx - 3, by - 3, bw + 6, bh + 6, schraege)
-  ctx.fillStyle = mitAlpha('#000000', 0.6)
+  schraegBalken(ctx, bx, by + 5, bw, bh, schraege)
+  ctx.fillStyle = FARBEN.kontur
   ctx.fill()
   schraegBalken(ctx, bx, by, bw, bh, schraege)
-  ctx.fillStyle = mitAlpha(z.art.farbe, 0.2)
+  ctx.fillStyle = FARBEN.kartenGrundTief
   ctx.fill()
 
   ctx.save()
   ctx.clip()
   ctx.fillStyle = z.art.farbe
   ctx.fillRect(bx, by, bw * anteil, bh)
+  ctx.fillStyle = mitAlpha('#ffffff', 0.22)
+  ctx.fillRect(bx, by, bw * anteil, 4)
   ctx.restore()
+
+  schraegBalken(ctx, bx, by, bw, bh, schraege)
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 3
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
 
   // Phasenmarke.
   const markeX = bx + bw * z.art.phaseSchwelle
   ctx.fillStyle = z.phase === 1 ? FARBEN.treffer : mitAlpha(FARBEN.treffer, 0.3)
   ctx.fillRect(markeX - 1, by - 4, 2, bh + 8)
 
+  const name = z.phase === 1 ? z.art.name : `${z.art.name} — PHASE 2`
   ctx.font = `700 15px ${SCHRIFT.mono}`
+  const nb = ctx.measureText(name).width + 32
+  hudPlatte(ctx, breite / 2 - nb / 2, by - 34, nb, 26, z.art.farbe)
   ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
+  ctx.textBaseline = 'middle'
   ctx.fillStyle = FARBEN.text
-  ctx.fillText(z.phase === 1 ? z.art.name : `${z.art.name} — PHASE 2`, breite / 2, by - 8)
+  ctx.fillText(name, breite / 2, by - 19)
   ctx.textBaseline = 'alphabetic'
 }
 
+
+/**
+ * Eine kleine HUD-Platte.
+ *
+ * Dieselbe Sprache wie die Karten in den Menues, nur kleiner: harter Schatten
+ * in der Konturfarbe, gefuellter Koerper, dunkle Kante, Akzentbalken oben.
+ * Vorher schwebte der HUD-Text frei ueber dem Getuemmel - auf einem hellen
+ * Spielfeld ist das der schnellste Weg, eine Anzeige unlesbar zu machen.
+ */
+function hudPlatte(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  b: number,
+  h: number,
+  akzent: string,
+): void {
+  ctx.fillStyle = FARBEN.kontur
+  ctx.fillRect(x, y + 4, b, h)
+  ctx.fillStyle = mitAlpha(FARBEN.kartenGrundTief, 0.94)
+  ctx.fillRect(x, y, b, h)
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.strokeRect(x + 1.25, y + 1.25, b - 2.5, h - 2.5)
+  ctx.fillStyle = akzent
+  ctx.fillRect(x, y, b, 4)
+}
+
+/**
+ * Ein Zaehler oben in der Ecke: Beschriftung klein, Wert gross.
+ *
+ * `rechts` legt fest, an welcher Kante er klebt - damit teilen sich Stufe und
+ * Kills denselben Code statt zweier fast gleicher Bloecke.
+ */
+function zaehler(
+  ctx: CanvasRenderingContext2D,
+  kante: number,
+  y: number,
+  titel: string,
+  wert: string,
+  farbe: string,
+  rechts: boolean,
+): void {
+  ctx.font = `700 26px ${SCHRIFT.mono}`
+  const breite = Math.max(96, ctx.measureText(wert).width + 34, ctx.measureText(titel).width + 26)
+  const x = rechts ? kante - breite : kante
+  hudPlatte(ctx, x, y, breite, 62, farbe)
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.font = `600 11px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.textSchwach
+  ctx.fillText(titel, x + breite / 2, y + 12)
+  ctx.font = `700 26px ${SCHRIFT.mono}`
+  ctx.fillStyle = farbe
+  ctx.fillText(wert, x + breite / 2, y + 28)
+}
 
 /** Kantenlaenge der Minikarte und wie viel Welt sie zeigt. */
 const KARTE_GROESSE = 148
@@ -306,14 +393,12 @@ function zeichneMinikarte(ctx: CanvasRenderingContext2D, s: Spielstand, breite: 
 
   ctx.save()
 
-  // Platte in derselben Sprache wie jede Karte im Spiel.
-  ctx.fillStyle = FARBEN.kontur
-  ctx.fillRect(x - 3, y - 3, KARTE_GROESSE + 6, KARTE_GROESSE + 6)
-  ctx.fillStyle = mitAlpha(FARBEN.kartenGrundTief, 0.92)
-  ctx.fillRect(x, y, KARTE_GROESSE, KARTE_GROESSE)
+  // Dieselbe Platte wie Uhr, Zaehler und Waffenkacheln.
+  hudPlatte(ctx, x, y, KARTE_GROESSE, KARTE_GROESSE, FARBEN.spielerRing)
 
   ctx.beginPath()
-  ctx.rect(x, y, KARTE_GROESSE, KARTE_GROESSE)
+  // Der Akzentbalken oben bleibt frei - die Wolke soll nicht darueber laufen.
+  ctx.rect(x + 3, y + 5, KARTE_GROESSE - 6, KARTE_GROESSE - 8)
   ctx.clip()
 
   // Wo es dicht wird. Ein grosser weicher Fleck je Gegner summiert sich von

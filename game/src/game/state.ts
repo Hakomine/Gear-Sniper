@@ -973,6 +973,7 @@ function loeseSchreinAus(s: Spielstand, sch: Schrein): void {
  * Preis waere die Pause keine Entscheidung, sondern eine Zwangsabgabe.
  */
 function oeffneAtempause(s: Spielstand): void {
+  beschrifteGuertel(s)
   s.etappeVorbei = false
   s.phase = 'atempause'
   s.zeitskala = 0
@@ -1046,6 +1047,7 @@ function naechsteKarte(s: Spielstand): void {
  * der Bestenliste herauszuhalten.
  */
 export function beendeLauf(s: Spielstand): void {
+  beschrifteGuertel(s)
   s.klaenge.melde('zerbrochen')
   s.phase = 'tot'
   s.totSeit = 0
@@ -1913,6 +1915,26 @@ function leereStatistik(): Statistik {
  * Die Scherben bekommen einen eigenen Balken in der Auswertung - man soll
  * sehen, wie viel die Kernregel tatsaechlich beitraegt, statt es zu glauben.
  */
+/**
+ * Fehlende Namen im Guertel nachtragen.
+ *
+ * Die Auswertung liest die Beschriftung eines Platzes, nicht die Waffe - eine
+ * Waffe, die eine Verschmelzung entfernt hat, soll ihren Balken behalten.
+ * Gesetzt wird sie beim Ausruesten ueber eine Karte; wer eine Waffe auf einem
+ * anderen Weg in den Guertel legt (der Charakter beim Start, ein Test, ein
+ * spaeterer Cheat), hinterliesse sonst "Platz 4" statt "Bazooka".
+ *
+ * Deshalb hier, kurz bevor die Namen gebraucht werden: einmal ueber den
+ * Guertel, was fehlt wird ergaenzt. Sechs Eintraege, zweimal je Lauf.
+ */
+function beschrifteGuertel(s: Spielstand): void {
+  for (const w of s.spieler.waffen) {
+    if (s.statistik.platzName[w.platz] !== '') continue
+    s.statistik.platzName[w.platz] = w.def.name
+    s.statistik.platzFarbe[w.platz] = w.def.farbe
+  }
+}
+
 function beschrifteSonderplaetze(st: Statistik): void {
   st.platzName[SPLITTER_PLATZ] = 'Scherben'
   st.platzFarbe[SPLITTER_PLATZ] = FARBEN.treffer

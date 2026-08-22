@@ -178,7 +178,10 @@ function zeichneSchreine(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    // Der Koerper: eine stehende Scherbe.
+    // Der Koerper: eine stehende Scherbe, mit Schatten wie alles, was auf dem
+    // Feld steht.
+    ctx.save()
+    ctx.translate(0, 5)
     ctx.beginPath()
     ctx.moveTo(sch.x, sch.y - r)
     ctx.lineTo(sch.x + r * 0.62, sch.y - r * 0.1)
@@ -186,10 +189,22 @@ function zeichneSchreine(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.lineTo(sch.x - r * 0.34, sch.y + r * 0.8)
     ctx.lineTo(sch.x - r * 0.62, sch.y - r * 0.16)
     ctx.closePath()
-    ctx.fillStyle = mitAlpha(def.farbe, 0.28 + puls * 0.16)
+    ctx.fillStyle = FARBEN.schatten
     ctx.fill()
-    ctx.strokeStyle = def.farbe
-    ctx.lineWidth = 2
+    ctx.restore()
+
+    ctx.beginPath()
+    ctx.moveTo(sch.x, sch.y - r)
+    ctx.lineTo(sch.x + r * 0.62, sch.y - r * 0.1)
+    ctx.lineTo(sch.x + r * 0.3, sch.y + r * 0.8)
+    ctx.lineTo(sch.x - r * 0.34, sch.y + r * 0.8)
+    ctx.lineTo(sch.x - r * 0.62, sch.y - r * 0.16)
+    ctx.closePath()
+    ctx.fillStyle = def.farbe
+    ctx.fill()
+    ctx.lineJoin = 'round'
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.lineWidth = 3
     ctx.stroke()
 
     if (sch.art === 'amboss' && sch.ladung > 0) {
@@ -783,9 +798,16 @@ function zeichneZahlen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   ctx.textBaseline = 'middle'
   ctx.font = `700 19px ${SCHRIFT.mono}`
 
+  // Dunkler Umriss um jede Zahl - ohne ihn verschwinden helle Ziffern auf dem
+  // helleren Feld genau dann, wenn viele davon uebereinanderliegen.
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 4
   for (let i = 0; i < liste.length; i++) {
     const z = liste[i]
-    ctx.fillStyle = mitAlpha(z.krit ? FARBEN.krit : FARBEN.text, Math.min(1, z.leben * 2.2))
+    const deckung = Math.min(1, z.leben * 2.2)
+    ctx.strokeStyle = mitAlpha(FARBEN.kontur, deckung)
+    ctx.strokeText(String(z.wert), z.x, z.y)
+    ctx.fillStyle = mitAlpha(z.krit ? FARBEN.krit : FARBEN.text, deckung)
     ctx.fillText(String(z.wert), z.x, z.y)
   }
 
@@ -812,10 +834,18 @@ function zeichneZonen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       const zucken = 1 + Math.sin(performance.now() / 90) * 0.02
       ctx.beginPath()
       ctx.arc(z.x, z.y, z.radius * zucken, 0, Math.PI * 2)
-      ctx.fillStyle = mitAlpha(z.farbe, 0.1)
+      // Auf einem hellen Grund braucht eine Zone eine *dunkle* Fuellung, sonst
+      // verschwindet sie. Vorher lag sie als heller Schleier auf schwarzem
+      // Feld - jetzt ist es umgekehrt.
+      ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.3)
       ctx.fill()
-      ctx.lineWidth = 2
-      ctx.strokeStyle = mitAlpha(z.farbe, 0.55)
+      ctx.fillStyle = mitAlpha(z.farbe, 0.16)
+      ctx.fill()
+      ctx.lineWidth = 3
+      ctx.strokeStyle = FARBEN.kontur
+      ctx.stroke()
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = z.farbe
       ctx.stroke()
 
       // Drei einlaufende Ringe zeigen die Richtung des Sogs.
@@ -831,17 +861,19 @@ function zeichneZonen(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       // Schwarzer Kern.
       ctx.beginPath()
       ctx.arc(z.x, z.y, z.radius * 0.16, 0, Math.PI * 2)
-      ctx.fillStyle = mitAlpha(FARBEN.grund, 0.95)
+      ctx.fillStyle = FARBEN.kontur
       ctx.fill()
       continue
     }
 
     ctx.beginPath()
     ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2)
-    ctx.fillStyle = mitAlpha(z.farbe, 0.12 * rest)
+    ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.24 * rest)
     ctx.fill()
-    ctx.lineWidth = 1.5
-    ctx.strokeStyle = mitAlpha(z.farbe, 0.4 * rest)
+    ctx.fillStyle = mitAlpha(z.farbe, 0.18 * rest)
+    ctx.fill()
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = mitAlpha(z.farbe, 0.75 * rest)
     ctx.stroke()
   }
 }
@@ -1070,7 +1102,10 @@ function zeichneFeindSchuesse(ctx: CanvasRenderingContext2D, s: Spielstand): voi
   }
   ctx.fillStyle = FARBEN.gefahr
   ctx.fill()
-  ctx.lineWidth = 2
-  ctx.strokeStyle = FARBEN.treffer
+  // Dunkle Kontur wie bei allem anderen. Ein weisser Rand liess die Geschosse
+  // vorher auf schwarzem Grund leuchten; auf hellem Feld trennt Dunkel besser.
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = FARBEN.kontur
   ctx.stroke()
 }

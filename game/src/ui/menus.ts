@@ -41,7 +41,7 @@ export function zeichneTitel(
 
   const gewaehlt = CHARAKTERE[s.charakterWahl] ?? CHARAKTERE[0]
   const offen = s.offen.includes(gewaehlt.id)
-  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 232)
+  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 218)
   zeichnePunkte(ctx, s, breite / 2, hoehe - 132)
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
@@ -100,7 +100,7 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
 
 /** Groesse der Charakterplatte auf dem Titelbild. */
 const PLATTE_B = 560
-const PLATTE_H = 224
+const PLATTE_H = 258
 
 function zeichneCharakterPlatte(
   ctx: CanvasRenderingContext2D,
@@ -151,10 +151,10 @@ function zeichneCharakterPlatte(
   const lx = x + 172
   ctx.font = `700 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.heilung
-  ctx.fillText(TEXTE.vorteil.toUpperCase(), lx, y + 138)
+  ctx.fillText(TEXTE.vorteil.toUpperCase(), lx, y + 132)
   ctx.font = `400 15px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.text
-  umbrochenerLinks(ctx, c.vorteil, lx, y + 160, PLATTE_B - 214, 20)
+  umbrochenerLinks(ctx, c.vorteil, lx, y + 154, PLATTE_B - 214, 20)
 
   ctx.font = `700 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.gefahr
@@ -320,21 +320,39 @@ function zeichnePunkte(
   mx: number,
   y: number,
 ): void {
-  ctx.textAlign = 'center'
-  ctx.font = `400 14px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.textSchwach
+  /*
+   * Die Charakterreihe als Kacheln statt als Zeichenkette.
+   *
+   * Vorher standen dort Rauten aus der Schriftart - je nach System sahen sie
+   * verschieden aus, und ein gesperrter Charakter war ein Punkt, den man kaum
+   * sah. Gezeichnete Kacheln tragen ihre Farbe und zeigen auf einen Blick, wie
+   * viele es ueberhaupt gibt.
+   */
+  const kachel = 22
+  const luecke = 10
+  const gesamt = CHARAKTERE.length * kachel + (CHARAKTERE.length - 1) * luecke
+  let kx = mx - gesamt / 2
 
-  const punkte: string[] = []
   for (let i = 0; i < CHARAKTERE.length; i++) {
-    punkte.push(s.offen.includes(CHARAKTERE[i].id) ? (i === s.charakterWahl ? '◆' : '◇') : '·')
+    const c = CHARAKTERE[i]
+    const offen = s.offen.includes(c.id)
+    const hier = i === s.charakterWahl
+
+    ctx.fillStyle = FARBEN.kontur
+    ctx.fillRect(kx, y - kachel / 2 + 3, kachel, kachel)
+    ctx.fillStyle = offen ? c.farbe : FARBEN.kartenGrundTief
+    ctx.fillRect(kx, y - kachel / 2, kachel, kachel)
+    ctx.lineWidth = hier ? 3 : 2
+    ctx.strokeStyle = hier ? FARBEN.spieler : FARBEN.kontur
+    ctx.strokeRect(kx + 1, y - kachel / 2 + 1, kachel - 2, kachel - 2)
+    kx += kachel + luecke
   }
-  ctx.font = `400 20px ${SCHRIFT.mono}`
-  ctx.fillText(punkte.join(' '), mx, y)
 
   if (s.bestwert <= 0) return
-  ctx.font = `400 15px ${SCHRIFT.mono}`
+  ctx.textAlign = 'center'
+  ctx.font = `600 15px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(`${TEXTE.bestwert}: ${zahlText(s.bestwert)}`, mx, y + 28)
+  ctx.fillText(`${TEXTE.bestwert}: ${zahlText(s.bestwert)}`, mx, y + 34)
 }
 
 // ---------------------------------------------------------------------------
@@ -356,9 +374,19 @@ export function zeichneLevelup(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  ctx.font = `700 38px ${SCHRIFT.mono}`
-  ctx.fillStyle = s.bossKarte ? SELTENHEIT_FARBE.legendaer : FARBEN.spieler
-  ctx.fillText(s.bossKarte ? 'BOSSBEUTE' : TEXTE.levelup, breite / 2, hoehe / 2 - 178)
+  const kopf = s.bossKarte ? 'BOSSBEUTE' : TEXTE.levelup
+  const kopfFarbe = s.bossKarte ? SELTENHEIT_FARBE.legendaer : FARBEN.spielerRing
+  ctx.font = `700 34px ${SCHRIFT.mono}`
+  const kopfB = ctx.measureText(kopf).width + 76
+  massivePlatte(ctx, breite / 2 - kopfB / 2, hoehe / 2 - 206, kopfB, 58, {
+    grund: FARBEN.kartenGrund,
+    kontur: FARBEN.kontur,
+    akzent: kopfFarbe,
+    aktiv: true,
+    ecke: 16,
+  })
+  ctx.fillStyle = kopfFarbe
+  ctx.fillText(kopf, breite / 2, hoehe / 2 - 174)
 
   const anzahl = s.angebote.length
   const gesamt = anzahl * KARTE_B + (anzahl - 1) * KARTE_LUECKE
@@ -493,8 +521,10 @@ export function zeichneTod(
   // stand. Waechst über gut eine Sekunde heran, damit man das Zerbrechen
   // sieht statt es vorzufinden.
   const seitTod = Math.min(1, s.totSeit / 1.1)
-  ctx.strokeStyle = mitAlpha(FARBEN.treffer, 0.22)
-  ctx.lineWidth = 1.4
+  // Vor den Platten gezeichnet, also *hinter* ihnen: Der Sprung bleibt das
+  // Motiv des Bildschirms, laeuft aber durch keinen Text mehr.
+  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, 0.3)
+  ctx.lineWidth = 2
   ctx.beginPath()
   sprungOverlay(ctx, breite, hoehe, seitTod, s.saat, breite / 2, hoehe / 2)
   ctx.stroke()
@@ -502,29 +532,68 @@ export function zeichneTod(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  ctx.font = `700 54px ${SCHRIFT.mono}`
+  /*
+   * Die Punktetafel: eine massive Platte, kein frei schwebender Text.
+   *
+   * Sie traegt das Wichtigste des ganzen Bildschirms - die Zahl, um die es
+   * bei einer Bestenliste geht - und muss deshalb auch die staerkste Form
+   * haben. Der Sprung im Glas laeuft dahinter durch, nicht darueber.
+   */
+  const tafelB = 520
+  const tafelX = breite / 2 - tafelB / 2
+  massivePlatte(ctx, tafelX, 44, tafelB, 176, {
+    grund: FARBEN.kartenGrund,
+    kontur: FARBEN.kontur,
+    akzent: FARBEN.gefahr,
+    aktiv: true,
+    ecke: 26,
+  })
+  randSpruenge(ctx, tafelX, 44, tafelB, 26, s.saat, mitAlpha(FARBEN.gefahr, 0.5))
+
+  ctx.font = `700 40px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.gefahr
-  ctx.fillText(TEXTE.tot, breite / 2, 86)
+  ctx.fillText(TEXTE.tot, breite / 2, 84)
 
-  // Punkte gross: Das ist die Zahl, um die es bei einer Bestenliste geht.
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `600 12px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(TEXTE.punkte, breite / 2, 132)
-  ctx.font = `700 58px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.textHervor
-  ctx.fillText(zahlText(s.punkte), breite / 2, 172)
+  ctx.fillText(TEXTE.punkte, breite / 2, 118)
+  ctx.font = `700 56px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.spielerRing
+  ctx.fillText(zahlText(s.punkte), breite / 2, 156)
 
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `400 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(
     `${s.charakter.name} ×${s.charakter.punkteFaktor.toFixed(2)}  ·  ${TEXTE.bestwert} ${zahlText(s.bestwert)}`,
     breite / 2,
-    206,
+    196,
   )
 
-  zeichneErgebnisZeilen(ctx, s, breite / 2 - 250, 250)
-  zeichneSchadensBalken(ctx, s, breite / 2 + 30, 250)
-  zeichneFreischaltung(ctx, s, breite / 2, hoehe - 96)
+  // Zwei Platten nebeneinander: links was passiert ist, rechts woran sie
+  // gestorben sind.
+  const spalteB = 300
+  const spalteH = 250
+  const luecke = 28
+  const linksX = breite / 2 - spalteB - luecke / 2
+  const rechtsX = breite / 2 + luecke / 2
+  const spalteY = 252
+
+  massivePlatte(ctx, linksX, spalteY, spalteB, spalteH, {
+    grund: FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: FARBEN.textSchwach,
+    ecke: 20,
+  })
+  massivePlatte(ctx, rechtsX, spalteY, spalteB + 130, spalteH, {
+    grund: FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: FARBEN.treffer,
+    ecke: 20,
+  })
+
+  zeichneErgebnisZeilen(ctx, s, linksX + 34, spalteY + 52)
+  zeichneSchadensBalken(ctx, s, rechtsX + 30, spalteY + 56)
+  zeichneFreischaltung(ctx, s, breite / 2, hoehe - 104)
 
   const puls = 0.55 + 0.45 * Math.sin(performance.now() / 380)
   ctx.textAlign = 'center'
@@ -609,13 +678,20 @@ function zeichneSchadensBalken(
 
     const bx = x + namensBreite
     schraegBalken(ctx, bx, by - 9, bw, 18, 9)
-    ctx.fillStyle = mitAlpha(e.farbe, 0.16)
+    ctx.fillStyle = FARBEN.kontur
     ctx.fill()
     ctx.save()
     ctx.clip()
     ctx.fillStyle = e.farbe
     ctx.fillRect(bx, by - 9, bw * anteil, 18)
+    ctx.fillStyle = mitAlpha('#ffffff', 0.22)
+    ctx.fillRect(bx, by - 9, bw * anteil, 4)
     ctx.restore()
+    schraegBalken(ctx, bx, by - 9, bw, 18, 9)
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = FARBEN.kontur
+    ctx.stroke()
 
     ctx.textAlign = 'left'
     ctx.font = `700 14px ${SCHRIFT.mono}`
