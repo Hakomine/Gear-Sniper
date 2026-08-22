@@ -134,7 +134,7 @@ export class Zeichner {
     // Im Tod kein HUD: Uhr, Lebensbalken und Waffenleiste stehen sonst quer
     // durch die Auswertung, und der Lauf ist ohnehin vorbei.
     if (s.phase !== 'titel' && s.phase !== 'tot' && s.phase !== 'atempause') {
-      zeichneSchreinZeiger(ctx, s, VIRT_B, VIRT_H)
+      if (!s.blind) zeichneSchreinZeiger(ctx, s, VIRT_B, VIRT_H)
       zeichneHud(ctx, s, VIRT_B, VIRT_H)
     }
     if (s.phase === 'titel') zeichneTitel(ctx, s, VIRT_B, VIRT_H)

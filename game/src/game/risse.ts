@@ -20,6 +20,9 @@ import type { Gegner } from './state'
 /** Wie lange ein Riss offen bleibt, wenn nichts nachkommt. */
 export const RISS_FENSTER = 1.6
 
+/** Kuerzestes Rissfenster, das es geben darf - siehe `rissSetzen`. */
+export const RISS_MINDEST = 0.45
+
 /** Ab so vielen verschiedenen Waffen zersplittert der Gegner. */
 export const RISS_SCHWELLE = 3
 
@@ -82,10 +85,20 @@ export function rissSetzen(g: Gegner, platz: number, zusatz = 0): boolean {
   // Plaetze passen in fuenf Bits, und Pruefen wie Setzen sind je eine
   // Operation.
   const bit = 1 << platz
-  // `zusatz` kommt vom Gegenstand "Nachhall". Er steht als Parameter da und
-  // nicht als Blick in den Spielstand, damit diese Datei rein bleibt: Sie
-  // rechnet Risse, sie kennt keinen Spieler.
-  g.risseZeit = RISS_FENSTER + zusatz
+  /*
+   * `zusatz` kommt vom Spieler und kann in beide Richtungen gehen.
+   *
+   * Er steht als Parameter da und nicht als Blick in den Spielstand, damit
+   * diese Datei rein bleibt: Sie rechnet Risse, sie kennt keinen Spieler.
+   * Positiv ist er beim Gegenstand "Nachhall", negativ bei der Verhexung
+   * "Enge" - dieselbe Zeile, beide Richtungen, keine zweite Stelle zum
+   * Vergessen.
+   *
+   * Die Untergrenze ist kein Zierrat: Ein Fenster von null Sekunden hiesse,
+   * dass die Kernregel gar nicht mehr ausloest, und ein Lauf ohne
+   * Zersplitterung ist kein schwerer Lauf, sondern ein kaputter.
+   */
+  g.risseZeit = Math.max(RISS_MINDEST, RISS_FENSTER + zusatz)
 
   if ((g.risseMaske & bit) !== 0) return false
   g.risseMaske |= bit

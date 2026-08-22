@@ -28,7 +28,10 @@ export const TEXTE = {
   schadensAnteil: 'Woran sie gestorben sind',
   freigeschaltet: 'FREIGESCHALTET',
 
-  charakterHinweis: 'A / D wählt · LEERTASTE startet',
+  charakterHinweis: 'A / D wählt · W / S wechselt die Reihe · LEERTASTE startet',
+  verhexungen: 'VERHEXUNGEN',
+  verhexungHinweis: 'Freiwillig schwerer — für mehr Punkte',
+  verhexungKeine: 'Keine gewählt · Punkte ×1,00',
   vorteil: 'Dafür',
   nachteil: 'Dagegen',
   gesperrt: 'GESPERRT',

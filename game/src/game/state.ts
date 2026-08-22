@@ -37,6 +37,8 @@ import { risseAblaufen, rissSetzen, zersplitterBereit } from './risse'
 import type { Bewegung } from './gegnerVerhalten'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
+import type { VerhexungId } from './verhexungen'
+import { VERHEXUNGEN, verhexungsFaktor, wendeVerhexungenAn } from './verhexungen'
 import { loeseZeichen, ZEICHEN } from './zeichen'
 import type { Aufwertung } from './upgrades'
 import { zieheAngebote } from './upgrades'
@@ -557,6 +559,23 @@ export type Spielstand = {
    * an genau einer Stelle.
    */
   gewonnen: boolean
+
+  // --- Verhexungen: was der Spieler sich vor dem Start selbst auflegt -------
+  // Sie greifen ueber Felder, nicht ueber Sonderfaelle in der heissen
+  // Schleife - dasselbe Muster wie Charaktere und Regel-Gegenstaende.
+
+  /** Welche Verhexungen fuer diesen Lauf gewaehlt sind. */
+  verhexungen: VerhexungId[]
+  /** Welche auf dem Titelbild gerade angewaehlt ist. */
+  verhexungWahl: number
+  /** 0 = Charakterreihe, 1 = Verhexungsreihe. Nur auf dem Titelbild. */
+  titelZeile: number
+  /** Faktor auf das Tempo aller Gegner. Verhexung "Hast". */
+  tempoFeind: number
+  /** Verhexung "Blindheit": keine Minikarte, keine Schreinzeiger. */
+  blind: boolean
+  /** Verhexung "Zoll": so viele maximale Leben kostet jede Etappe. */
+  zoll: number
   /**
    * Wie viele Kartenbildschirme noch offen sind.
    *
@@ -668,6 +687,12 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     gezeichnet: 0,
     zeichenMult: 1,
     gewonnen: false,
+    verhexungen: [],
+    verhexungWahl: 0,
+    titelZeile: 0,
+    tempoFeind: 1,
+    blind: false,
+    zoll: 0,
     bossNummer: 0,
     bossKarte: false,
     charakter: charakterMit('splitter'),
@@ -731,6 +756,9 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.gezeichnet = 0
   s.zeichenMult = 1
   s.gewonnen = false
+  s.tempoFeind = 1
+  s.blind = false
+  s.zoll = 0
   s.bossNummer = 0
   s.bossKarte = false
   s.angebote = []
@@ -746,6 +774,17 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
     s.statistik.platzName[w.platz] = w.def.name
     s.statistik.platzFarbe[w.platz] = w.def.farbe
   }
+  /*
+   * Die Verhexungen ganz zuletzt.
+   *
+   * Sie muessen *nach* dem Charakter greifen - "Kargheit" nimmt einen Platz
+   * von dem weg, was der Charakter gesetzt hat, nicht vom Grundwert - und
+   * *nach* dem Zuruecksetzen der Spielstandfelder, sonst schriebe die naechste
+   * Zeile ihre Wirkung sofort wieder weg. Genau dieser Fehler hat schon einmal
+   * die Beschriftung der Guertelplaetze gekostet.
+   */
+  wendeVerhexungenAn(s)
+
   s.naechsteId = 1
   startWelle(s)
   // Auch die erste Etappe bekommt ihre Schreine - sonst steht das Feld genau
@@ -775,16 +814,9 @@ export function tick(s: Spielstand, b: Befehle, dt: number): void {
   if (b.stumm) s.tonAus = !s.tonAus
 
   switch (s.phase) {
-    case 'titel': {
-      if (b.links) s.charakterWahl = (s.charakterWahl + CHARAKTERE.length - 1) % CHARAKTERE.length
-      if (b.rechts) s.charakterWahl = (s.charakterWahl + 1) % CHARAKTERE.length
-      if (!b.bestaetigen) return
-      const gewaehlt = CHARAKTERE[s.charakterWahl]
-      // Gesperrte lassen sich anschauen, aber nicht starten - die Bedingung
-      // steht auf der Karte, damit man ein Ziel hat statt einer Sperre.
-      if (s.offen.includes(gewaehlt.id)) starteLauf(s, s.saat, gewaehlt)
+    case 'titel':
+      titelTick(s, b)
       return
-    }
 
     case 'tot':
       s.totSeit += dt
@@ -1121,6 +1153,12 @@ function atempauseTick(s: Spielstand, b: Befehle, dt: number): void {
   if (tuer.id === 'tiefer') s.zerruettung++
 
   s.etappe++
+  // Verhexung "Zoll": Jede Etappe kostet maximale Leben. Nie unter 20 - unter
+  // einem Treffer zu sterben ist keine Schwierigkeit, sondern ein Abbruch.
+  if (s.zoll > 0) {
+    s.spieler.maxHp = Math.max(20, s.spieler.maxHp - s.zoll)
+    s.spieler.hp = Math.min(s.spieler.hp, s.spieler.maxHp)
+  }
   verteileSchreine(s, s.rng)
   s.tuerAngebot = []
   s.bossKarte = tuer.gute
@@ -1178,7 +1216,7 @@ export function beendeLauf(s: Spielstand): void {
     punkteFuer(s.statistik, s.charakter.punkteFaktor) +
     (s.etappe - 1) * ETAPPEN_PUNKTE +
     (s.gewonnen ? KERN_PUNKTE : 0)
-  s.punkte = Math.round(roh * (1 + s.zerruettung * 0.5))
+  s.punkte = Math.round(roh * (1 + s.zerruettung * 0.5) * verhexungsFaktor(s.verhexungen))
   s.neuFreigeschaltet = freigeschaltetDurch(s.statistik, s.spieler).filter(
     (id) => !s.offen.includes(id),
   )
@@ -1532,6 +1570,41 @@ function platzeSingularitaet(s: Spielstand, z: Zone): void {
   t.platz = z.platz
   t.farbe = z.farbe
   t.truemmer = false
+}
+
+/**
+ * Das Titelbild: Charakter oben, Verhexungen darunter.
+ *
+ * Zwei Zeilen und keine neue Taste. W/S wechselt die Zeile, A/D bewegt sich
+ * darin, Leertaste schaltet um beziehungsweise startet. Alles, was dafuer
+ * gebraucht wird, steht schon in `Befehle` - eine eigene Taste fuer ein Menue,
+ * das man einmal pro Lauf sieht, waere eine Taste zu viel.
+ */
+function titelTick(s: Spielstand, b: Befehle): void {
+  if (b.hoch) s.titelZeile = 0
+  if (b.runter) s.titelZeile = 1
+
+  if (s.titelZeile === 1) {
+    const n = VERHEXUNGEN.length
+    if (b.links) s.verhexungWahl = (s.verhexungWahl + n - 1) % n
+    if (b.rechts) s.verhexungWahl = (s.verhexungWahl + 1) % n
+    if (!b.bestaetigen) return
+
+    const id = VERHEXUNGEN[s.verhexungWahl].id
+    const i = s.verhexungen.indexOf(id)
+    if (i >= 0) s.verhexungen.splice(i, 1)
+    else s.verhexungen.push(id)
+    s.klaenge.melde('riss')
+    return
+  }
+
+  if (b.links) s.charakterWahl = (s.charakterWahl + CHARAKTERE.length - 1) % CHARAKTERE.length
+  if (b.rechts) s.charakterWahl = (s.charakterWahl + 1) % CHARAKTERE.length
+  if (!b.bestaetigen) return
+  const gewaehlt = CHARAKTERE[s.charakterWahl]
+  // Gesperrte lassen sich anschauen, aber nicht starten - die Bedingung
+  // steht auf der Karte, damit man ein Ziel hat statt einer Sperre.
+  if (s.offen.includes(gewaehlt.id)) starteLauf(s, s.saat, gewaehlt)
 }
 
 function raeumeTote(s: Spielstand): void {

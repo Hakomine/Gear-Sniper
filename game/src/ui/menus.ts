@@ -4,6 +4,7 @@ import type { PauseEintrag, Spielstand } from '../game/state'
 import { PAUSE_EINTRAEGE } from '../game/state'
 import { tuerMit } from '../game/etappen'
 import type { Aufwertung } from '../game/upgrades'
+import { VERHEXUNGEN, verhexungsFaktor } from '../game/verhexungen'
 import { SELTENHEIT_NAME } from '../game/weapons'
 import { DORNEN_PLATZ, GEIST_PLATZ, SPLITTER_PLATZ } from '../game/welt'
 import { massivePlatte, randSpruenge, schraegBalken, sprungOverlay } from '../render/glas'
@@ -41,7 +42,8 @@ export function zeichneTitel(
 
   const gewaehlt = CHARAKTERE[s.charakterWahl] ?? CHARAKTERE[0]
   const offen = s.offen.includes(gewaehlt.id)
-  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 218)
+  zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 200)
+  zeichneVerhexungen(ctx, s, breite / 2, 480)
   zeichnePunkte(ctx, s, breite / 2, hoehe - 132)
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
@@ -96,6 +98,75 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
   ctx.font = `400 19px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.untertitel, mx, my + 58)
+}
+
+/** Kachelmasse der Verhexungsreihe. */
+const HEX_B = 150
+const HEX_H = 52
+const HEX_LUECKE = 8
+
+/**
+ * Die Verhexungsreihe unter der Charakterwahl.
+ *
+ * Sie steht bewusst auf dem Titelbild und nicht in einem eigenen Menue: Wer
+ * sie nicht sieht, benutzt sie nie, und dann ist der Regler umsonst gebaut.
+ * Aus, ist sie eine graue Leiste, die niemanden stoert; an, faerbt sie sich
+ * und der Punktefaktor darunter steigt sichtbar mit.
+ *
+ * Der Faktor steht in derselben Zeile wie die Wirkung der gerade angewaehlten:
+ * Man liest den Preis und den Lohn nebeneinander, genau wie auf den Tueren.
+ */
+function zeichneVerhexungen(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  mx: number,
+  y: number,
+): void {
+  const n = VERHEXUNGEN.length
+  const gesamt = n * HEX_B + (n - 1) * HEX_LUECKE
+  const aktiveReihe = s.titelZeile === 1
+  let x = mx - gesamt / 2
+
+  ctx.textAlign = 'center'
+  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = aktiveReihe ? FARBEN.spielerRing : FARBEN.textSchwach
+  ctx.fillText(TEXTE.verhexungen, mx, y - 16)
+
+  for (let i = 0; i < n; i++) {
+    const v = VERHEXUNGEN[i]
+    const an = s.verhexungen.includes(v.id)
+    const hier = aktiveReihe && i === s.verhexungWahl
+
+    massivePlatte(ctx, x, y, HEX_B, HEX_H, {
+      grund: an ? FARBEN.kartenGrund : FARBEN.kartenGrundTief,
+      kontur: FARBEN.kontur,
+      akzent: an ? v.farbe : FARBEN.kartenRand,
+      aktiv: hier,
+      ecke: 12,
+    })
+
+    ctx.font = `700 15px ${SCHRIFT.mono}`
+    ctx.fillStyle = an ? v.farbe : FARBEN.textSchwach
+    ctx.fillText(v.name, x + HEX_B / 2, y + 24)
+    ctx.font = `600 12px ${SCHRIFT.mono}`
+    ctx.fillStyle = an ? FARBEN.text : FARBEN.textSchwach
+    ctx.fillText(`+${Math.round(v.bonus * 100)} %`, x + HEX_B / 2, y + 42)
+
+    x += HEX_B + HEX_LUECKE
+  }
+
+  // Die Wirkung der gerade angewaehlten - und was der ganze Stapel bringt.
+  const faktor = verhexungsFaktor(s.verhexungen)
+  const fokus = VERHEXUNGEN[s.verhexungWahl]
+  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.fillStyle = aktiveReihe ? FARBEN.text : FARBEN.textSchwach
+  const zeile =
+    aktiveReihe && fokus !== undefined
+      ? `${fokus.wirkung}  ·  Punkte ×${faktor.toFixed(2)}`
+      : s.verhexungen.length === 0
+        ? TEXTE.verhexungKeine
+        : `${s.verhexungen.length} gewählt  ·  Punkte ×${faktor.toFixed(2)}`
+  ctx.fillText(zeile, mx, y + HEX_H + 18)
 }
 
 /** Groesse der Charakterplatte auf dem Titelbild. */

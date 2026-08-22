@@ -149,7 +149,10 @@ export function zeichneHud(
   ctx.fillStyle = FARBEN.kontur
   ctx.fillText(`${Math.ceil(sp.hp)} / ${Math.ceil(sp.maxHp)}`, breite / 2, by + bh / 2 + 1)
 
-  zeichneMinikarte(ctx, s, breite)
+  // Verhexung "Blindheit": Die Karte bleibt weg. Sie ist das einzige, was
+  // eine Verhexung an der Oberflaeche aendert - und ausgerechnet die Anzeige
+  // wegzunehmen, die vier Runden lang gefehlt hat, ist ein spuerbarer Preis.
+  if (!s.blind) zeichneMinikarte(ctx, s, breite)
   zeichneWaffenLeiste(ctx, s, hoehe)
   zeichneBossLeiste(ctx, s, breite)
 

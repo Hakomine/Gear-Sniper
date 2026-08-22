@@ -63,7 +63,7 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.maxHp = art.hp * hpFaktor(s.zeit) * s.etappenWerte.zaehigkeit * zerruettungsFaktor(s.zerruettung)
   g.hp = g.maxHp
   g.radius = art.radius
-  g.tempo = art.tempo * tempoFaktor(s.zeit)
+  g.tempo = art.tempo * tempoFaktor(s.zeit) * s.tempoFeind
   g.schaden = art.schaden * schadenFaktor(s.zeit)
   g.xp = art.xp
   g.masse = art.masse
