@@ -1,0 +1,7 @@
+node_modules/
+dist/
+
+# Screenshots und Berichte aus dem Playwright-Lauf - jederzeit neu erzeugbar.
+screenshots/
+test-results/
+playwright-report/
