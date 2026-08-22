@@ -2,6 +2,10 @@ import { Ton } from './audio/ton'
 import { Eingabe } from './core/input'
 import { Schleife } from './core/loop'
 import { CHARAKTERE } from './game/charaktere'
+import type { Eintrag } from './game/chronik'
+import { leseChronik } from './game/chronik'
+import { VERHEXUNGEN } from './game/verhexungen'
+import type { VerhexungId } from './game/verhexungen'
 import type { Befehle } from './game/state'
 import { erzeugeSpielstand, leereBefehle, tick } from './game/state'
 import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
@@ -41,18 +45,37 @@ spiel.sichtRadius = SICHT_RADIUS
  * kennt keinen Browser, und genau das macht die Messungen und Tests ohne
  * Fenster ueberhaupt erst moeglich.
  */
-const SPEICHER = 'scherbenfeld.fortschritt.v1'
+const SPEICHER = 'scherbenfeld.fortschritt.v2'
+/** Der Vorgaenger. Wird einmal gelesen, nie wieder geschrieben. */
+const SPEICHER_ALT = 'scherbenfeld.fortschritt.v1'
 
-type Fortschritt = { offen: string[]; bestwert: number; tonAus?: boolean }
+type Fortschritt = {
+  offen: string[]
+  bestwert: number
+  tonAus: boolean
+  /** Die besten zehn Laeufe - reine Aufzeichnung, siehe `game/chronik.ts`. */
+  chronik: Eintrag[]
+  /** Zuletzt gewaehlte Verhexungen, damit man sie nicht jedes Mal neu setzt. */
+  verhexungen: VerhexungId[]
+  /** Saatwert des Tages, an dem zuletzt die Tagesscherbe gespielt wurde. */
+  tagStand: number
+}
+
+function leererFortschritt(): Fortschritt {
+  return { offen: [], bestwert: 0, tonAus: false, chronik: [], verhexungen: [], tagStand: 0 }
+}
 
 function ladeFortschritt(): Fortschritt {
   // Ein kaputter, fremder oder gesperrter Eintrag darf das Spiel nicht am
   // Starten hindern - im privaten Fenster wirft schon der Zugriff selbst.
   try {
-    const roh = localStorage.getItem(SPEICHER)
-    if (roh === null) return { offen: [], bestwert: 0 }
+    // Erst der neue Stand, dann der alte: Wer schon gespielt hat, verliert
+    // seine offenen Charaktere nicht, nur weil das Format gewachsen ist.
+    const roh = localStorage.getItem(SPEICHER) ?? localStorage.getItem(SPEICHER_ALT)
+    if (roh === null) return leererFortschritt()
     const daten = JSON.parse(roh) as Partial<Fortschritt>
     const bekannt = new Set<string>(CHARAKTERE.map((c) => c.id))
+    const hexen = new Set<string>(VERHEXUNGEN.map((v) => v.id))
     return {
       offen: Array.isArray(daten.offen) ? daten.offen.filter((id) => bekannt.has(id)) : [],
       bestwert:
@@ -60,9 +83,17 @@ function ladeFortschritt(): Fortschritt {
           ? Math.max(0, Math.floor(daten.bestwert))
           : 0,
       tonAus: daten.tonAus === true,
+      chronik: leseChronik(daten.chronik),
+      verhexungen: Array.isArray(daten.verhexungen)
+        ? (daten.verhexungen.filter((v) => typeof v === 'string' && hexen.has(v)) as VerhexungId[])
+        : [],
+      tagStand:
+        typeof daten.tagStand === 'number' && Number.isFinite(daten.tagStand)
+          ? Math.max(0, Math.floor(daten.tagStand))
+          : 0,
     }
   } catch {
-    return { offen: [], bestwert: 0 }
+    return leererFortschritt()
   }
 }
 
@@ -70,7 +101,14 @@ function sichereFortschritt(): void {
   try {
     localStorage.setItem(
       SPEICHER,
-      JSON.stringify({ offen: spiel.offen, bestwert: spiel.bestwert, tonAus: spiel.tonAus }),
+      JSON.stringify({
+        offen: spiel.offen,
+        bestwert: spiel.bestwert,
+        tonAus: spiel.tonAus,
+        chronik: spiel.chronik,
+        verhexungen: spiel.verhexungen,
+        tagStand: spiel.tagStand,
+      }),
     )
   } catch {
     // Volle Quote oder gesperrter Speicher: Der Lauf laeuft trotzdem weiter.
@@ -80,7 +118,10 @@ function sichereFortschritt(): void {
 const gespeichert = ladeFortschritt()
 for (const id of gespeichert.offen) if (!spiel.offen.includes(id)) spiel.offen.push(id)
 spiel.bestwert = Math.max(spiel.bestwert, gespeichert.bestwert)
-spiel.tonAus = gespeichert.tonAus === true
+spiel.tonAus = gespeichert.tonAus
+spiel.chronik = gespeichert.chronik
+spiel.verhexungen = [...gespeichert.verhexungen]
+spiel.tagStand = gespeichert.tagStand
 ton.stumm = spiel.tonAus
 
 // Geschrieben wird nur, wenn sich wirklich etwas geaendert hat. Beides aendert
@@ -90,6 +131,11 @@ ton.stumm = spiel.tonAus
 let offenStand = spiel.offen.length
 let bestStand = spiel.bestwert
 let tonStand = spiel.tonAus
+// Nicht die Laenge der Chronik pruefen: Sie ist bei zehn gedeckelt und aendert
+// sich danach nie wieder. Der Zaehler laeuft weiter.
+let chronikStand = spiel.chronikZaehler
+let hexStand = spiel.verhexungen.join(',')
+let tagStand = spiel.tagStand
 
 // Einmal angelegt und pro Tick ueberschrieben - kein Muell in der Schleife.
 const befehle: Befehle = leereBefehle()
@@ -112,6 +158,7 @@ const schleife = new Schleife({
     // Escape und Start fuehren beide ins Pausenmenue - und wieder heraus.
     befehle.pause = eingabe.getippt('zurueck') || eingabe.getippt('pause')
     befehle.stumm = eingabe.getippt('stumm')
+    befehle.tag = eingabe.getippt('tag')
     befehle.wahl = eingabe.getippt('wahl1')
       ? 0
       : eingabe.getippt('wahl2')
@@ -130,14 +177,21 @@ const schleife = new Schleife({
     ton.spiele(spiel.klaenge)
     spiel.klaenge.leeren()
 
+    const hexJetzt = spiel.verhexungen.join(',')
     if (
       spiel.offen.length !== offenStand ||
       spiel.bestwert !== bestStand ||
-      spiel.tonAus !== tonStand
+      spiel.tonAus !== tonStand ||
+      spiel.chronikZaehler !== chronikStand ||
+      spiel.tagStand !== tagStand ||
+      hexJetzt !== hexStand
     ) {
       offenStand = spiel.offen.length
       bestStand = spiel.bestwert
       tonStand = spiel.tonAus
+      chronikStand = spiel.chronikZaehler
+      tagStand = spiel.tagStand
+      hexStand = hexJetzt
       sichereFortschritt()
     }
   },

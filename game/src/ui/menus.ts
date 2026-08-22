@@ -1,7 +1,9 @@
+import { tagesSaat } from '../core/rng'
 import type { Charakter } from '../game/charaktere'
 import { CHARAKTERE } from '../game/charaktere'
 import type { PauseEintrag, Spielstand } from '../game/state'
 import { PAUSE_EINTRAEGE } from '../game/state'
+import { charakterAnzeige, CHRONIK_SICHTBAR } from '../game/chronik'
 import { tuerMit } from '../game/etappen'
 import type { Aufwertung } from '../game/upgrades'
 import { VERHEXUNGEN, verhexungsFaktor } from '../game/verhexungen'
@@ -44,6 +46,10 @@ export function zeichneTitel(
   const offen = s.offen.includes(gewaehlt.id)
   zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 200)
   zeichneVerhexungen(ctx, s, breite / 2, 480)
+  // Links die Tagesscherbe, rechts die Chronik - beide in den Raum neben der
+  // Charakterplatte, der sonst leer stand.
+  zeichneTagesscherbe(ctx, s, 26, 214)
+  zeichneChronik(ctx, s, breite - 26 - SEITE_B, 214)
   zeichnePunkte(ctx, s, breite / 2, hoehe - 132)
 
   ctx.font = `400 16px ${SCHRIFT.mono}`
@@ -98,6 +104,113 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
   ctx.font = `400 19px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.untertitel, mx, my + 58)
+}
+
+/** Breite der beiden Seitenplatten auf dem Titelbild. */
+const SEITE_B = 300
+
+/**
+ * Die Chronik: die besten fuenf Laeufe mit ihrer Geschichte.
+ *
+ * Ein Bestwert allein sagt, wie hoch jemand gekommen ist, nicht *wie*. Erst
+ * mit Charakter, Etappe, Zerruettung und der Zahl der Verhexungen daneben
+ * wird aus einer Zahl ein Vergleich - und genau das ist der Punkt einer
+ * Bestenliste.
+ */
+function zeichneChronik(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  x: number,
+  y: number,
+): void {
+  const h = 244
+  massivePlatte(ctx, x, y, SEITE_B, h, {
+    grund: FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: FARBEN.spielerRing,
+    ecke: 16,
+  })
+
+  ctx.textAlign = 'left'
+  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = FARBEN.spielerRing
+  ctx.fillText(TEXTE.chronik, x + 18, y + 26)
+
+  if (s.chronik.length === 0) {
+    ctx.font = `400 14px ${SCHRIFT.mono}`
+    ctx.fillStyle = FARBEN.textSchwach
+    ctx.fillText(TEXTE.chronikLeer, x + 18, y + 58)
+    return
+  }
+
+  let zy = y + 58
+  for (let i = 0; i < Math.min(CHRONIK_SICHTBAR, s.chronik.length); i++) {
+    const e = s.chronik[i]
+    const c = charakterAnzeige(e.charakter)
+
+    // Der Kranz vor dem Namen markiert einen Sieg ueber den Kern - das
+    // Einzige, was ein Lauf erreichen kann und nicht nur ansammelt.
+    ctx.font = `700 16px ${SCHRIFT.mono}`
+    ctx.fillStyle = FARBEN.text
+    ctx.fillText(zahlText(e.punkte), x + 18, zy)
+
+    ctx.textAlign = 'right'
+    ctx.font = `600 12px ${SCHRIFT.mono}`
+    ctx.fillStyle = c.farbe
+    ctx.fillText(`${e.gewonnen ? '◈ ' : ''}${c.name}`, x + SEITE_B - 18, zy - 2)
+
+    ctx.font = `400 11px ${SCHRIFT.mono}`
+    ctx.fillStyle = FARBEN.textSchwach
+    const teile = [`E${e.etappe}`]
+    if (e.zerruettung > 0) teile.push(`Z${e.zerruettung}`)
+    if (e.verhexungen.length > 0) teile.push(`${e.verhexungen.length}×V`)
+    if (e.tag) teile.push('Tag')
+    ctx.fillText(teile.join(' · '), x + SEITE_B - 18, zy + 13)
+
+    ctx.textAlign = 'left'
+    zy += 38
+  }
+}
+
+/**
+ * Die Tagesscherbe.
+ *
+ * Ein Saatwert aus dem Datum, ein Versuch, fuer alle derselbe. Das Spiel
+ * benutzt nirgends `Math.random()`, deshalb ergibt derselbe Wert wirklich
+ * dieselben Gegner, Tueren und Schreine - das ist die naechste Verwandte
+ * einer Online-Bestenliste, die ohne Server moeglich ist.
+ */
+function zeichneTagesscherbe(
+  ctx: CanvasRenderingContext2D,
+  s: Spielstand,
+  x: number,
+  y: number,
+): void {
+  const h = 116
+  const offen = s.tagStand !== tagesSaat()
+  massivePlatte(ctx, x, y, SEITE_B, h, {
+    grund: offen ? FARBEN.kartenGrund : FARBEN.kartenGrundTief,
+    kontur: FARBEN.kontur,
+    akzent: offen ? FARBEN.kristall : FARBEN.textSchwach,
+    aktiv: offen,
+    ecke: 16,
+  })
+
+  ctx.textAlign = 'left'
+  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.fillStyle = offen ? FARBEN.kristall : FARBEN.textSchwach
+  ctx.fillText(TEXTE.tagesscherbe, x + 18, y + 26)
+
+  ctx.font = `400 13px ${SCHRIFT.mono}`
+  ctx.fillStyle = offen ? FARBEN.text : FARBEN.textSchwach
+  umbrochenerLinks(
+    ctx,
+    offen ? TEXTE.tagesscherbeFrei : TEXTE.tagesscherbeWeg,
+    x + 18,
+    y + 56,
+    SEITE_B - 36,
+    18,
+  )
 }
 
 /** Kachelmasse der Verhexungsreihe. */

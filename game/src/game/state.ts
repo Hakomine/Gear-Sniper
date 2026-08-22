@@ -1,5 +1,5 @@
 import { Pool } from '../core/pool'
-import { Rng } from '../core/rng'
+import { Rng, tagesSaat } from '../core/rng'
 import { RaumGitter } from '../core/spatialHash'
 import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import { xpFuerLevel } from './damage'
@@ -37,6 +37,8 @@ import { risseAblaufen, rissSetzen, zersplitterBereit } from './risse'
 import type { Bewegung } from './gegnerVerhalten'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
+import type { Eintrag } from './chronik'
+import { eintragAus, trageEin } from './chronik'
 import type { VerhexungId } from './verhexungen'
 import { VERHEXUNGEN, verhexungsFaktor, wendeVerhexungenAn } from './verhexungen'
 import { loeseZeichen, ZEICHEN } from './zeichen'
@@ -92,6 +94,7 @@ export function leereBefehle(): Befehle {
     runter: false,
     pause: false,
     stumm: false,
+    tag: false,
     wahl: -1,
   }
 }
@@ -469,6 +472,8 @@ export type Befehle = {
   pause: boolean
   /** M - schaltet den Ton stumm, in jeder Phase. */
   stumm: boolean
+  /** T - startet auf dem Titelbild die Tagesscherbe. */
+  tag: boolean
   /** Direktwahl per Zifferntaste, sonst -1. */
   wahl: number
 }
@@ -576,6 +581,36 @@ export type Spielstand = {
   blind: boolean
   /** Verhexung "Zoll": so viele maximale Leben kostet jede Etappe. */
   zoll: number
+
+  // --- Chronik und Tagesscherbe --------------------------------------------
+
+  /**
+   * Die besten zehn Laeufe - reine Aufzeichnung, kein Wert.
+   *
+   * Kommt von aussen herein und geht nach aussen zurueck: `main.ts` legt sie
+   * in den `localStorage`, diese Datei haengt nur Eintraege an. Damit bleibt
+   * `src/game/` browserfrei wie der Rest.
+   */
+  chronik: Eintrag[]
+  /**
+   * Zaehlt jeden Eintrag mit - der Anlass zum Speichern.
+   *
+   * Nicht `chronik.length` pruefen: Die Liste ist bei zehn gedeckelt und
+   * aendert danach ihre Laenge nie wieder. Ein elfter Lauf waere still nicht
+   * gespeichert worden.
+   */
+  chronikZaehler: number
+  /** Laeuft gerade die Tagesscherbe? */
+  tagesLauf: boolean
+  /**
+   * Der Saatwert des Tages, an dem zuletzt die Tagesscherbe gespielt wurde.
+   *
+   * Ein Versuch pro Tag - das ist der ganze Reiz: Alle bekommen dieselben
+   * Gegner, dieselben Tueren, dieselben Schreine, und niemand kann es
+   * dreissigmal probieren. Wird beim *Start* gesetzt, nicht am Ende: Sonst
+   * waere Aufgeben ein Freiversuch.
+   */
+  tagStand: number
   /**
    * Wie viele Kartenbildschirme noch offen sind.
    *
@@ -693,6 +728,10 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     tempoFeind: 1,
     blind: false,
     zoll: 0,
+    chronik: [],
+    chronikZaehler: 0,
+    tagesLauf: false,
+    tagStand: 0,
     bossNummer: 0,
     bossKarte: false,
     charakter: charakterMit('splitter'),
@@ -759,6 +798,9 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.tempoFeind = 1
   s.blind = false
   s.zoll = 0
+  // Ein gewoehnlicher Start ist nie die Tagesscherbe - die geht ueber
+  // `starteTageslauf`, das diese Flagge danach setzt.
+  s.tagesLauf = false
   s.bossNummer = 0
   s.bossKarte = false
   s.angebote = []
@@ -1222,6 +1264,10 @@ export function beendeLauf(s: Spielstand): void {
   )
   for (const id of s.neuFreigeschaltet) s.offen.push(id)
   s.bestwert = Math.max(s.bestwert, s.punkte)
+  // Der Eintrag entsteht *nach* den Punkten und den Freischaltungen: Er soll
+  // den Lauf so festhalten, wie er gewertet wurde.
+  s.chronik = trageEin(s.chronik, eintragAus(s))
+  s.chronikZaehler++
 }
 
 /**
@@ -1573,6 +1619,28 @@ function platzeSingularitaet(s: Spielstand, z: Zone): void {
 }
 
 /**
+ * Die Tagesscherbe: ein Versuch pro Tag, fuer alle derselbe.
+ *
+ * Der Saatwert kommt aus dem Datum, und weil im ganzen Spiel kein einziges
+ * `Math.random()` steht, ergibt derselbe Wert dieselben Gegner, dieselben
+ * Tueren und dieselben Schreine - genau dafuer sind die beiden getrennten
+ * Zufallsstroeme gebaut. Das ist die naechste Verwandte einer
+ * Online-Bestenliste, die ohne Server moeglich ist; der Schritt ins Netz
+ * bleibt danach ein Datenfeld.
+ *
+ * `tagStand` wird beim *Start* gesetzt, nicht am Ende. Sonst waere Aufgeben
+ * ein Freiversuch, und aus dem einen Versuch wuerden beliebig viele.
+ */
+export function starteTageslauf(s: Spielstand): void {
+  const saat = tagesSaat()
+  const c = CHARAKTERE[s.charakterWahl] ?? CHARAKTERE[0]
+  if (!s.offen.includes(c.id)) return
+  starteLauf(s, saat, c)
+  s.tagesLauf = true
+  s.tagStand = saat
+}
+
+/**
  * Das Titelbild: Charakter oben, Verhexungen darunter.
  *
  * Zwei Zeilen und keine neue Taste. W/S wechselt die Zeile, A/D bewegt sich
@@ -1583,6 +1651,10 @@ function platzeSingularitaet(s: Spielstand, z: Zone): void {
 function titelTick(s: Spielstand, b: Befehle): void {
   if (b.hoch) s.titelZeile = 0
   if (b.runter) s.titelZeile = 1
+  if (b.tag && s.tagStand !== tagesSaat()) {
+    starteTageslauf(s)
+    return
+  }
 
   if (s.titelZeile === 1) {
     const n = VERHEXUNGEN.length
