@@ -399,6 +399,7 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   }
 
   zeichneZeichenRinge(ctx, s, drehung)
+  zeichneSchalen(ctx, s, drehung)
 
   // Der Trefferblitz *ueberlagert* die Farbe, er ersetzt sie nicht.
   //
@@ -417,6 +418,64 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   }
   ctx.fillStyle = mitAlpha('#ffffff', 0.45)
   ctx.fill()
+}
+
+/**
+ * Die Schalen des Kerns.
+ *
+ * Drei Ringe um den Koerper, einer je verbliebener Schale, und einer davon
+ * bricht mit jedem Viertel. Damit sagt der Gegner selbst, wie weit der Kampf
+ * ist - man muss nicht auf die Leiste schauen, um zu sehen, dass gerade etwas
+ * passiert ist.
+ *
+ * Waehrend des Gnadenfensters blinkt er hell: Es ist der einzige Moment im
+ * Spiel, in dem Schaden gar nichts bewirkt, und das muss sichtbar sein - sonst
+ * sieht es aus, als seien die eigenen Waffen kaputt.
+ */
+function zeichneSchalen(ctx: CanvasRenderingContext2D, s: Spielstand, drehung: number): void {
+  const gegner = s.gegner.aktiv
+  for (let i = 0; i < gegner.length; i++) {
+    const g = gegner[i]
+    const z = g.bossZustand
+    if (z === null || (z.art.schalen ?? 0) === 0) continue
+
+    for (let k = 0; k < z.schale; k++) {
+      const r = g.radius * (1.25 + k * 0.22)
+      ctx.beginPath()
+      // Leicht gegenlaeufig gedreht, damit die Schalen als getrennte Koerper
+      // lesbar bleiben statt als ein dicker Rand.
+      const versatz = drehung * (k % 2 === 0 ? 0.5 : -0.5)
+      for (let e = 0; e <= 6; e++) {
+        const w = versatz + (e / 6) * Math.PI * 2
+        const px2 = g.x + Math.cos(w) * r
+        const py2 = g.y + Math.sin(w) * r
+        if (e === 0) ctx.moveTo(px2, py2)
+        else ctx.lineTo(px2, py2)
+      }
+      ctx.lineWidth = 7
+      ctx.strokeStyle = FARBEN.kontur
+      ctx.stroke()
+      ctx.lineWidth = 3.5
+      ctx.strokeStyle = z.art.farbe
+      ctx.stroke()
+    }
+
+    if (z.unverwundbar > 0) {
+      ctx.beginPath()
+      ctx.arc(g.x, g.y, g.radius * 1.1, 0, Math.PI * 2)
+      ctx.fillStyle = mitAlpha('#ffffff', 0.35 + Math.sin(drehung * 12) * 0.2)
+      ctx.fill()
+    }
+
+    // Der Kittring: Solange er offen steht, sammelt der Kern seine Risse ein.
+    if (z.kittGemeldet) {
+      ctx.beginPath()
+      ctx.arc(g.x, g.y, g.radius * (1.1 + z.kittRest), 0, Math.PI * 2)
+      ctx.lineWidth = 4
+      ctx.strokeStyle = mitAlpha('#63d4ff', 0.85)
+      ctx.stroke()
+    }
+  }
 }
 
 /**

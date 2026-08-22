@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TICK_DT } from '../src/core/loop'
 import { bossWelle, findeBoss, naechsteBossZeit } from '../src/game/bosse'
-import { leereEtappenWerte, TUEREN, tuerMit } from '../src/game/etappen'
+import { KERN_TUEREN, leereEtappenWerte, TUEREN, tuerMit } from '../src/game/etappen'
 import { erzeugeSpieler } from '../src/game/player'
 import type { Spielstand } from '../src/game/state'
 import { erzeugeSpielstand, gitterAufbauen, leereBefehle, starteLauf, tick } from '../src/game/state'
@@ -43,6 +43,18 @@ describe('Türen sind Handel, kein Geschenk', () => {
   it('gibt jeder Tür außer der sicheren einen echten Preis', () => {
     for (const t of TUEREN) {
       if (t.id === 'ruhe') continue
+      /*
+       * Die beiden Kern-Tueren sind keine Etappentueren.
+       *
+       * Sie drehen an keiner Stellschraube der naechsten Etappe, sondern
+       * entscheiden, ob es ueberhaupt eine naechste gibt. Ihr Preis steht
+       * deshalb nicht in `anwenden`, sondern in `state.ts` - und wird weiter
+       * unten eigens geprueft.
+       */
+      if (KERN_TUEREN.includes(t.id)) {
+        expect(t.preis.length, t.id).toBeGreaterThan(0)
+        continue
+      }
       expect(t.preis.length, t.id).toBeGreaterThan(0)
 
       // Und der Preis steht nicht nur im Text: Er veraendert messbar etwas.

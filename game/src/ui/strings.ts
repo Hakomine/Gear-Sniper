@@ -20,6 +20,8 @@ export const TEXTE = {
   kartenStufe: 'Stufe',
 
   tot: 'ZERBROCHEN',
+  gewonnen: 'VOLLENDET',
+  gewonnenUnter: 'Der Kern ist gebrochen',
   totHinweis: 'LEERTASTE zurück zur Auswahl',
   punkte: 'PUNKTE',
   bestwert: 'Bester Lauf',

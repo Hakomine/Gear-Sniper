@@ -169,6 +169,10 @@ export function verletzeGegner(
   stossY: number,
 ): void {
   if (g.tot) return
+  // Waehrend eine Schale des Kerns bricht, geht gar nichts durch - kein
+  // Schaden und kein Riss. Das Fenster ist der Moment, in dem der Ring aus
+  // Gegnern ankommt; wer ihn durchhalten muss, soll ihn nicht wegschiessen.
+  if (g.bossZustand !== null && g.bossZustand.unverwundbar > 0) return
 
   // Erst reissen, dann rechnen: Der Treffer, der den dritten Riss setzt, soll
   // den Bonus schon mitnehmen. Das macht den Moment spuerbar, in dem ein Bau
@@ -220,7 +224,20 @@ export function verletzeGegner(
   const abwehr = GEGNER_VERHALTEN[g.art.verhalten].schadensFaktor
   const richtung = abwehr === undefined ? 1 : abwehr(g, sp.x, sp.y)
 
-  const schaden = Math.max(1, Math.floor(basisSchaden * rissBonus(g) * schliff * richtung))
+  /*
+   * Der Kern nimmt nur ein Zehntel - er faellt allein an der Kernregel.
+   *
+   * Die Daempfung wirkt *nach* dem Rissbonus, nicht davor. Damit bleibt der
+   * Bonus vollstaendig erhalten: Wer ihn aufreisst, trifft auch mit
+   * gewoehnlichem Schaden dreimal so hart wie ohne. Andersherum waere die
+   * Kernregel am Endgegner ausgerechnet dort entwertet, wo sie am meisten
+   * zaehlen soll.
+   */
+  const daempfung = g.bossZustand?.art.daempfung ?? 1
+  const schaden = Math.max(
+    1,
+    Math.floor(basisSchaden * rissBonus(g) * schliff * richtung * daempfung),
+  )
 
   g.hp -= schaden
   g.blitz = 0.09
@@ -311,8 +328,12 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
     const weite = ZERSPLITTER_RADIUS * s.etappenWerte.splitterWeite * sp.zwillingsbruch
     // Zwillingsbruch: doppelt so weit, dafuer halb so hart. Ein reiner Tausch -
     // er belohnt einen Flaechenbau und bestraft einen auf Einzelziele.
-    const wucht =
-      (g.maxHp * (istBoss ? BOSS_ZERSPLITTER_ANTEIL : ZERSPLITTER_ANTEIL)) / sp.zwillingsbruch
+    // Der Kern bringt seinen eigenen Anteil mit: Zwoelf Prozent, dafuer ist es
+    // der einzige Weg, ihn ueberhaupt zu legen.
+    const splitterAnteil = istBoss
+      ? (g.bossZustand?.art.splitterAnteil ?? BOSS_ZERSPLITTER_ANTEIL)
+      : ZERSPLITTER_ANTEIL
+    const wucht = (g.maxHp * splitterAnteil) / sp.zwillingsbruch
     g.hp -= wucht
     s.statistik.schaden += wucht
     // Auf das Scherbenkonto, nicht auf das der ausloesenden Waffe: Die
@@ -440,6 +461,8 @@ export function legeZone(
   z.truemmer = false
   z.feindlich = false
   z.wachsend = false
+  z.luecke = 0
+  z.lueckeBreite = 0
   z.gewitter = false
   return z
 }

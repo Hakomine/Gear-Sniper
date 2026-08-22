@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TICK_DT } from '../src/core/loop'
 import {
+  BOSSE,
   bossFuer,
   bossHpFaktor,
   bossTick,
@@ -345,9 +346,19 @@ describe('Determinismus mit Bossen', () => {
     expect(eins.boss.y).toBe(zwei.boss.y)
   })
 
-  it('schickt die Bosse in fester Reihenfolge', () => {
+  it('schickt die Bosse reihum statt am Ende immer denselben', () => {
     expect(bossFuer(0).id).not.toBe(bossFuer(1).id)
-    // Nach dem letzten wiederholt sich der schwerste, statt undefined zu sein.
-    expect(bossFuer(99).id).toBe(bossFuer(2).id)
+    // Nie undefined, egal wie hoch die Nummer laeuft.
+    expect(bossFuer(99)).toBeDefined()
+    /*
+     * Reihum, nicht "der schwerste fuer immer".
+     *
+     * Vorher blieb es ab der vierten Welle beim Zerbrecher - und damit bestand
+     * die zweite Haelfte jedes Laufs aus demselben Kampf. Seit ein Lauf sechs
+     * Etappen bis zum Kern hat, saehe man vier davon denselben Gegner.
+     */
+    const sechs = new Set([0, 1, 2, 3, 4, 5].map((n) => bossFuer(n).id))
+    expect(sechs.size).toBeGreaterThanOrEqual(4)
+    expect(bossFuer(BOSSE.length).id).toBe(bossFuer(0).id)
   })
 })

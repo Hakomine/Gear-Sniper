@@ -87,9 +87,14 @@ export function zeichneHud(
   ctx.fillText(uhr, breite / 2, 30)
 
   // Etappe unter der Uhr: Die Uhr sagt, wie lange - die Etappe, wie weit.
+  // Die Zerruettung haengt hinten dran statt eine eigene Platte zu bekommen:
+  // Sie beantwortet dieselbe Frage - wie weit ist dieser Lauf - nur eine
+  // Ebene hoeher.
   ctx.font = `700 13px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.spielerRing
-  ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 74)
+  ctx.fillStyle = s.zerruettung > 0 ? '#c86bff' : FARBEN.spielerRing
+  const fortschritt =
+    s.zerruettung > 0 ? `${TEXTE.etappe} ${s.etappe} · Z${s.zerruettung}` : `${TEXTE.etappe} ${s.etappe}`
+  ctx.fillText(fortschritt, breite / 2, 74)
 
   // --- Stufe links, Kills rechts -------------------------------------------
   zaehler(ctx, 22, 20, TEXTE.hudStufe, String(sp.level), FARBEN.spielerRing, false)
@@ -290,12 +295,47 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
   ctx.strokeStyle = FARBEN.kontur
   ctx.stroke()
 
-  // Phasenmarke.
-  const markeX = bx + bw * z.art.phaseSchwelle
-  ctx.fillStyle = z.phase === 1 ? FARBEN.treffer : mitAlpha(FARBEN.treffer, 0.3)
-  ctx.fillRect(markeX - 1, by - 4, 2, bh + 8)
+  /*
+   * Schalen statt Phasenmarke - beim Kern.
+   *
+   * Drei Striche statt einem, und die schon gebrochenen sind blass. Damit sagt
+   * die Leiste dasselbe wie beim gewoehnlichen Boss ("gleich aendert sich
+   * etwas"), nur dreimal - und man sieht auf einen Blick, wie weit der
+   * Endkampf ist, ohne den Balken lesen zu muessen.
+   */
+  const schalen = z.art.schalen ?? 0
+  if (schalen > 0) {
+    for (let i = 1; i <= schalen; i++) {
+      const anteilMarke = i / (schalen + 1)
+      const mx = bx + bw * anteilMarke
+      const offen = z.schale >= i
+      ctx.fillStyle = offen ? FARBEN.treffer : mitAlpha(FARBEN.treffer, 0.25)
+      ctx.fillRect(mx - 1.5, by - 5, 3, bh + 10)
+    }
+  } else {
+    // Phasenmarke.
+    const markeX = bx + bw * z.art.phaseSchwelle
+    ctx.fillStyle = z.phase === 1 ? FARBEN.treffer : mitAlpha(FARBEN.treffer, 0.3)
+    ctx.fillRect(markeX - 1, by - 4, 2, bh + 8)
+  }
 
-  const name = z.phase === 1 ? z.art.name : `${z.art.name} — PHASE 2`
+  // Die Kittuhr: ein schmaler Streifen unter der Leiste, der leerlaeuft. Ohne
+  // ihn ist die Selbstkittung eine Ueberraschung statt einer Ansage - und
+  // genau die Regel gilt fuer jeden Bossangriff im Spiel.
+  if (z.art.kittTakt !== undefined && z.art.kittTakt > 0) {
+    const rest = Math.max(0, z.kittRest) / z.art.kittTakt
+    ctx.fillStyle = FARBEN.kontur
+    ctx.fillRect(bx, by + bh + 6, bw, 5)
+    ctx.fillStyle = z.kittGemeldet ? FARBEN.gefahr : '#63d4ff'
+    ctx.fillRect(bx, by + bh + 6, bw * rest, 5)
+  }
+
+  const name =
+    schalen > 0
+      ? `${z.art.name} — ${z.schale} SCHALEN`
+      : z.phase === 1
+        ? z.art.name
+        : `${z.art.name} — PHASE 2`
   ctx.font = `700 15px ${SCHRIFT.mono}`
   const nb = ctx.measureText(name).width + 32
   hudPlatte(ctx, breite / 2 - nb / 2, by - 34, nb, 26, z.art.farbe)

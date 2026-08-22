@@ -5,7 +5,8 @@ import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import { xpFuerLevel } from './damage'
 import { zerspringen } from './effects'
 import type { EtappenWerte, TuerId } from './etappen'
-import { ETAPPEN_PUNKTE, leereEtappenWerte, TUEREN, tuerMit } from './etappen'
+import { ETAPPEN_PUNKTE, KERN_TUEREN, leereEtappenWerte, TUEREN, tuerMit } from './etappen'
+import { KERN_ETAPPE, KERN_PUNKTE } from './kern'
 import type { Schrein } from './schreine'
 import {
   AMBOSS_DAUER,
@@ -20,7 +21,7 @@ import { Klangpuffer } from './klaenge'
 import { aktualisiereKristalle, legeKristall } from './pickups'
 import { bewegeSpieler, erzeugeSpieler, stosse, stossTick, verletzeSpieler } from './player'
 import type { BossZustand } from './bosse'
-import { bossTick, bossWelle, findeBoss, naechsteBossZeit } from './bosse'
+import { bossTick, bossWelle, findeBoss, naechsteBossZeit, rufeKern } from './bosse'
 import type { Charakter } from './charaktere'
 import type { CharakterId } from './charaktere'
 import {
@@ -357,6 +358,17 @@ export type Zone = {
    * unentrinnbar.
    */
   wachsend: boolean
+  /**
+   * Mitte der Luecke im wachsenden Ring, im Bogenmass. `lueckeBreite` 0 heisst:
+   * geschlossen.
+   *
+   * Die Bruchwelle des Kerns ist der einzige Angriff im Spiel, dem man nicht
+   * ausweicht, sondern durch den man *hindurch* muss. Ein Ring ohne Luecke
+   * waere nur eine Zeitschaltuhr auf Schaden - mit Luecke ist er eine Frage:
+   * Wo stehe ich, wenn er kommt?
+   */
+  luecke: number
+  lueckeBreite: number
 }
 
 /** Rein optisch: Blitzbahn, Hiebbogen, Druckring. */
@@ -941,6 +953,12 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
     beendeLauf(s)
     return
   }
+  // Der Sieg zuerst: Faellt der Kern, ist die Etappe zwar auch vorbei, aber
+  // es gibt keine naechste mehr.
+  if (s.gewonnen) {
+    beendeLauf(s)
+    return
+  }
   if (s.etappeVorbei) oeffneAtempause(s)
 }
 
@@ -1034,7 +1052,21 @@ function oeffneAtempause(s: Spielstand): void {
   s.zeitskala = 0
   s.tuerWahl = 0
 
-  const uebrige = TUEREN.filter((t) => t.id !== 'ruhe').map((t) => t.id)
+  /*
+   * Nach der sechsten Etappe steht das Kern-Tor - und nur das.
+   *
+   * Kein drittes Angebot daneben: Die Frage soll genau zwei Antworten haben,
+   * aufhoeren oder weiter. Eine dritte Tuer waere eine Ausrede, sich nicht zu
+   * entscheiden, und die Entscheidung ist der ganze Griff.
+   */
+  if (s.etappe % KERN_ETAPPE === 0) {
+    s.tuerAngebot = [...KERN_TUEREN]
+    return
+  }
+
+  const uebrige = TUEREN.filter((t) => t.id !== 'ruhe' && !KERN_TUEREN.includes(t.id)).map(
+    (t) => t.id,
+  )
   // Fisher-Yates auf einer Kopie, damit dieselbe Tuer nicht zweimal steht.
   for (let i = uebrige.length - 1; i > 0; i--) {
     const j = Math.floor(s.rng.next() * (i + 1))
@@ -1064,6 +1096,29 @@ function atempauseTick(s: Spielstand, b: Befehle, dt: number): void {
   // Erst zuruecksetzen, dann anwenden: Eine Tuer wirkt genau eine Etappe.
   s.etappenWerte = leereEtappenWerte()
   tuer.anwenden(s.etappenWerte, s.spieler)
+
+  /*
+   * Zum Kern: keine Karte, keine Schreine, keine neue Etappe.
+   *
+   * Er kommt sofort und allein. Wer hier noch drei Aufwertungen bekaeme,
+   * ginge mit einem anderen Bau in den Kampf als dem, mit dem er sich
+   * entschieden hat - und die Entscheidung waere entwertet.
+   */
+  if (tuer.id === 'kern') {
+    s.tuerAngebot = []
+    s.kartenSchuld = 0
+    s.bossKarte = false
+    s.zeitskala = 1
+    s.phase = 'laufend'
+    s.spieler.unverwundbar = Math.max(s.spieler.unverwundbar, 1.2)
+    rufeKern(s)
+    return
+  }
+
+  // Tiefer ins Feld: Die Zerruettung gilt fuer den ganzen Rest des Laufs und
+  // steht deshalb nicht in den Etappenwerten, die jede Etappe zurueckgesetzt
+  // werden.
+  if (tuer.id === 'tiefer') s.zerruettung++
 
   s.etappe++
   verteileSchreine(s, s.rng)
@@ -1103,12 +1158,27 @@ function naechsteKarte(s: Spielstand): void {
  */
 export function beendeLauf(s: Spielstand): void {
   beschrifteGuertel(s)
-  s.klaenge.melde('zerbrochen')
+  // Ein Sieg klingt nicht wie ein Tod. Derselbe Weg, anderer Ton - der
+  // Abschlussbildschirm verzweigt an genau dieser einen Flagge.
+  s.klaenge.melde(s.gewonnen ? 'stufe' : 'zerbrochen', s.gewonnen ? 1.6 : 1)
   s.phase = 'tot'
   s.totSeit = 0
   s.trauma = 1
   s.blitz = 0.9
-  s.punkte = punkteFuer(s.statistik, s.charakter.punkteFaktor) + (s.etappe - 1) * ETAPPEN_PUNKTE
+  /*
+   * Punkte: Grundwert, Etappen, der Kern - und darauf die Zerruettung.
+   *
+   * Der Zerruettungsfaktor greift ganz zuletzt und auf *alles*. Das ist der
+   * Grund, warum eine Schleife sich lohnt: Wer zweimal am Kern vorbeigeht und
+   * dann faellt, kann mehr stehen haben als jemand, der beim ersten Mal
+   * gewinnt. Ohne diesen Faktor waere "zum Kern" immer die richtige Wahl und
+   * das Tor keine Entscheidung.
+   */
+  const roh =
+    punkteFuer(s.statistik, s.charakter.punkteFaktor) +
+    (s.etappe - 1) * ETAPPEN_PUNKTE +
+    (s.gewonnen ? KERN_PUNKTE : 0)
+  s.punkte = Math.round(roh * (1 + s.zerruettung * 0.5))
   s.neuFreigeschaltet = freigeschaltetDurch(s.statistik, s.spieler).filter(
     (id) => !s.offen.includes(id),
   )
@@ -1503,6 +1573,7 @@ function raeumeTote(s: Spielstand): void {
     s.trauma = Math.min(1, s.trauma + 0.012)
 
     if (g.bossZustand !== null) {
+      const istKern = g.bossZustand.art.istKern === true
       s.klaenge.melde('boss')
       s.statistik.bosse++
       s.trauma = 1
@@ -1515,6 +1586,8 @@ function raeumeTote(s: Spielstand): void {
       // Die Etappe endet, wenn ihr letzter Boss liegt. Bei "Zwillinge" stehen
       // zwei auf dem Feld - dann zaehlt der zweite.
       if (findeBoss(s) === null) s.etappeVorbei = true
+      // Der Kern ist der letzte Gegner des Laufs. `laufendTick` schliesst ab.
+      if (istKern) s.gewonnen = true
     }
 
     loeseZeichen(s, g)
@@ -1827,6 +1900,8 @@ function leereZone(): Zone {
     feindlich: false,
     wachsend: false,
     gewitter: false,
+    luecke: 0,
+    lueckeBreite: 0,
   }
 }
 
@@ -1894,6 +1969,13 @@ function feindZone(s: Spielstand, z: Zone, dt: number): void {
     // hindurchrutscht, und schmal genug, dass Ausweichen zaehlt.
     const band = 26
     if (Math.abs(abstand - z.radius) > band + sp.radius) return
+    if (z.lueckeBreite > 0) {
+      // Steht der Spieler in der Luecke, laeuft die Welle an ihm vorbei.
+      let diff = Math.atan2(sp.y - z.y, sp.x - z.x) - z.luecke
+      while (diff > Math.PI) diff -= Math.PI * 2
+      while (diff < -Math.PI) diff += Math.PI * 2
+      if (Math.abs(diff) < z.lueckeBreite) return
+    }
     trefferAmSpieler(s, z.schaden)
     return
   }

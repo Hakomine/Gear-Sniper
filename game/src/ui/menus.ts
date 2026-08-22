@@ -521,13 +521,24 @@ export function zeichneTod(
   // stand. Waechst über gut eine Sekunde heran, damit man das Zerbrechen
   // sieht statt es vorzufinden.
   const seitTod = Math.min(1, s.totSeit / 1.1)
-  // Vor den Platten gezeichnet, also *hinter* ihnen: Der Sprung bleibt das
-  // Motiv des Bildschirms, laeuft aber durch keinen Text mehr.
-  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, 0.3)
-  ctx.lineWidth = 2
+  /*
+   * Ein Sieg sieht nicht aus wie ein Tod.
+   *
+   * Derselbe Bildschirm, ein anderes Motiv: Der Sprung im Glas laeuft
+   * *einwaerts* auf die Mitte zu statt von ihr weg, in Gold statt in Rot. Es
+   * ist die einzige Verzweigung, die der ganze Sieg braucht - eine zweite
+   * Bildschirmroutine waere derselbe Code mit anderen Farben, und die faellt
+   * beim naechsten Umbau auseinander.
+   */
+  const gewonnen = s.gewonnen
+  const akzent = gewonnen ? FARBEN.spielerRing : FARBEN.gefahr
+  ctx.strokeStyle = mitAlpha(akzent, gewonnen ? 0.45 : 0.3)
+  ctx.lineWidth = gewonnen ? 3 : 2
   ctx.beginPath()
-  sprungOverlay(ctx, breite, hoehe, seitTod, s.saat, breite / 2, hoehe / 2)
+  sprungOverlay(ctx, breite, hoehe, gewonnen ? 1 - seitTod * 0.75 : seitTod, s.saat, breite / 2, hoehe / 2)
   ctx.stroke()
+
+  if (gewonnen) zeichneKranz(ctx, breite / 2, hoehe / 2, seitTod)
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -544,15 +555,15 @@ export function zeichneTod(
   massivePlatte(ctx, tafelX, 44, tafelB, 176, {
     grund: FARBEN.kartenGrund,
     kontur: FARBEN.kontur,
-    akzent: FARBEN.gefahr,
+    akzent: akzent,
     aktiv: true,
     ecke: 26,
   })
-  randSpruenge(ctx, tafelX, 44, tafelB, 26, s.saat, mitAlpha(FARBEN.gefahr, 0.5))
+  randSpruenge(ctx, tafelX, 44, tafelB, 26, s.saat, mitAlpha(akzent, 0.5))
 
   ctx.font = `700 40px ${SCHRIFT.mono}`
-  ctx.fillStyle = FARBEN.gefahr
-  ctx.fillText(TEXTE.tot, breite / 2, 84)
+  ctx.fillStyle = akzent
+  ctx.fillText(gewonnen ? TEXTE.gewonnen : TEXTE.tot, breite / 2, 84)
 
   ctx.font = `600 12px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
@@ -563,8 +574,12 @@ export function zeichneTod(
 
   ctx.font = `400 13px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
+  // Die Zerruettung steht in derselben Zeile wie der Charakterfaktor: Beides
+  // sind Multiplikatoren auf dieselbe Zahl darueber, und wer wissen will,
+  // *warum* sie so hoch ist, soll es dort finden.
+  const zerr = s.zerruettung > 0 ? `  ·  Z${s.zerruettung} ×${(1 + s.zerruettung * 0.5).toFixed(1)}` : ''
   ctx.fillText(
-    `${s.charakter.name} ×${s.charakter.punkteFaktor.toFixed(2)}  ·  ${TEXTE.bestwert} ${zahlText(s.bestwert)}`,
+    `${s.charakter.name} ×${s.charakter.punkteFaktor.toFixed(2)}${zerr}  ·  ${TEXTE.bestwert} ${zahlText(s.bestwert)}`,
     breite / 2,
     196,
   )
@@ -602,6 +617,31 @@ export function zeichneTod(
   ctx.fillText(TEXTE.totHinweis, breite / 2, hoehe - 40)
 
   ctx.textBaseline = 'alphabetic'
+}
+
+/**
+ * Der Kranz um die Bildmitte - nur beim Sieg.
+ *
+ * Zwoelf Scherben, die nach aussen zeigen: dieselbe Formsprache wie der
+ * Sprung im Glas, nur andersherum gelesen. Ein Sieg im Scherbenfeld ist kein
+ * heiler Bildschirm, sondern ein Bruch, den man selbst gesetzt hat.
+ */
+function zeichneKranz(ctx: CanvasRenderingContext2D, mx: number, my: number, t: number): void {
+  const zacken = 12
+  const innen = 150 + t * 40
+  const aussen = innen + 46
+  ctx.beginPath()
+  for (let i = 0; i < zacken; i++) {
+    const w = (i / zacken) * Math.PI * 2 - Math.PI / 2
+    ctx.moveTo(mx + Math.cos(w) * innen, my + Math.sin(w) * innen)
+    ctx.lineTo(mx + Math.cos(w) * aussen, my + Math.sin(w) * aussen)
+  }
+  ctx.lineWidth = 6
+  ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.75 * t)
+  ctx.stroke()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = mitAlpha(FARBEN.spielerRing, 0.85 * t)
+  ctx.stroke()
 }
 
 function zeichneErgebnisZeilen(

@@ -26,6 +26,8 @@ export type TuerId =
   | 'zwillinge'
   | 'duennhaeutig'
   | 'sproedigkeit'
+  | 'kern'
+  | 'tiefer'
 
 /**
  * Die Stellschrauben einer Etappe.
@@ -149,7 +151,48 @@ export const TUEREN: readonly Tuer[] = [
       w.splitterWeite = 2
     },
   },
+  {
+    id: 'kern',
+    name: 'Zum Kern',
+    preis: 'Hier endet der Lauf — so oder so',
+    lohn: 'Der letzte Gegner. Sieg zählt 4000 Punkte',
+    farbe: '#ffd24a',
+    karten: 0,
+    gute: false,
+    anwenden: () => {
+      // Der Kern selbst wird in `state.ts` gerufen. Hier steht nichts, weil an
+      // der Etappe nichts mehr zu drehen ist - sie ist die letzte.
+    },
+  },
+  {
+    id: 'tiefer',
+    name: 'Tiefer ins Feld',
+    preis: 'Eine Stufe Zerrüttung: zäher, mehr Zeichen, mehr Bosse',
+    lohn: 'Zwei bessere Karten und die Hälfte mehr auf alle Punkte',
+    farbe: '#c86bff',
+    karten: 2,
+    gute: true,
+    anwenden: () => {
+      // Die Zerruettung selbst zaehlt `state.ts` hoch: Sie gilt fuer den
+      // ganzen Rest des Laufs, nicht fuer eine Etappe, und gehoert damit nicht
+      // in die Etappenwerte.
+    },
+  },
 ]
+
+/**
+ * Das Kern-Tor - es ersetzt nach der sechsten Etappe die drei gewoehnlichen.
+ *
+ * Zwei Seiten, kein Zwang: Wer aufhoeren will, geht zum Kern und beendet den
+ * Lauf so oder so. Wer weiter will, nimmt eine Stufe Zerruettung und laeuft
+ * dieselben sechs Etappen noch einmal, nur haerter.
+ *
+ * Der Unterschied zu einem festen Zeitlimit ist der ganze Punkt: Ein Lauf,
+ * der nach dreissig Minuten von selbst endet, nimmt dem Spieler die
+ * Entscheidung ab. Hier ist der Ausstieg die Entscheidung - und weil beide
+ * Seiten Punkte bringen, ist keine davon die feige.
+ */
+export const KERN_TUEREN: readonly TuerId[] = ['kern', 'tiefer']
 
 export function tuerMit(id: TuerId): Tuer {
   return TUEREN.find((t) => t.id === id) ?? TUEREN[0]
@@ -163,3 +206,18 @@ export function tuerMit(id: TuerId): Tuer {
  * sichtbaren Anfang und Ende.
  */
 export const ETAPPEN_PUNKTE = 300
+
+/**
+ * Was eine Stufe Zerruettung an den Trefferpunkten aendert.
+ *
+ * Multiplikativ und kumulativ: Die zweite Runde ist eineinhalbmal so zaeh wie
+ * die erste, die dritte gut doppelt so zaeh. Steil genug, dass eine Schleife
+ * kein Leerlauf wird, flach genug, dass die vierte Runde nicht in derselben
+ * Sekunde endet, in der sie anfaengt.
+ *
+ * Bewusst *nur* die Zaehigkeit und nicht die Menge: Die Menge steht ohnehin am
+ * Deckel, mehr davon gaebe es gar nicht.
+ */
+export function zerruettungsFaktor(stufe: number): number {
+  return Math.pow(1.45, stufe)
+}

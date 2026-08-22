@@ -7,6 +7,7 @@ import {
   tempoFaktor,
   verfuegbareArten,
 } from './enemies'
+import { zerruettungsFaktor } from './etappen'
 import type { Gegner, Spielstand } from './state'
 import { loeseZeichen, OHNE_ZEICHEN, setzeLeger, setzeZeichen, waehleZeichen } from './zeichen'
 
@@ -59,7 +60,7 @@ export function legeGegner(s: Spielstand, art: GegnerArt, x: number, y: number):
   g.art = art
   // Skalierung einmal beim Spawn festschreiben statt jeden Tick neu zu
   // rechnen - und ein Gegner behaelt damit die Werte, mit denen er kam.
-  g.maxHp = art.hp * hpFaktor(s.zeit) * s.etappenWerte.zaehigkeit
+  g.maxHp = art.hp * hpFaktor(s.zeit) * s.etappenWerte.zaehigkeit * zerruettungsFaktor(s.zerruettung)
   g.hp = g.maxHp
   g.radius = art.radius
   g.tempo = art.tempo * tempoFaktor(s.zeit)
