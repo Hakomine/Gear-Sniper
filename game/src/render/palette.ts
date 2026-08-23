@@ -12,60 +12,90 @@
  */
 export const FARBEN = {
   /*
-   * Das Spielfeld ist **heller als die Figuren darauf**.
+   * Nachtfeld: Der Grund traegt nichts, das Licht darauf traegt alles.
    *
-   * Vorher war der Grund fast schwarz und alles darauf ebenfalls dunkel - es
-   * gab keine Ebene, nur Umrisse, und im Getuemmel verschwamm alles zu einer
-   * Flaeche. Die Umkehr ist der eigentliche Griff dieser Bildsprache: Ein
-   * mittelheller Grund traegt gefuellte Koerper mit dunkler Kontur, und jede
-   * Silhouette schneidet sich von selbst frei.
+   * Die Bildsprache hat zweimal die Richtung gewechselt, und beide Male aus
+   * einem gemessenen Grund. Zuerst war der Grund fast schwarz und alles
+   * darauf ebenfalls dunkel - es gab keine Ebene, nur Umrisse, und im
+   * Getuemmel verschwamm alles zu einer Flaeche. Dann wurde der Grund
+   * mittelhell, damit gefuellte Koerper mit dunkler Kontur sich von selbst
+   * freischneiden. Das hat funktioniert, sah aber weiterhin nach Aufklebern
+   * auf Millimeterpapier aus - weil nichts *emittierte*.
+   *
+   * Jetzt ist der Grund wieder Nacht, aber diesmal mit der Glut-Schicht
+   * darueber (`render/glut.ts`): Koerper bleiben dunkel und konturiert, ihr
+   * *Zustand* leuchtet. Damit gilt endlich die Regel, die hier seit der
+   * ersten Runde steht: Die Form sagt, was es ist, die Farbe sagt, wie es
+   * ihm geht.
    */
-  grund: '#2a2f3e',
-  gitter: '#242938',
-  gitterStark: '#1d2130',
+  grund: '#070912',
+  grundTief: '#04050b',
+  gitter: '#1b2740',
+  gitterStark: '#2b4570',
 
   /**
    * Die Kontur. Eine einzige dunkle Farbe um *alles*, was lebt.
    *
    * Sie ist der Grund, warum tausend Koerper im Pulk noch tausend Koerper
-   * bleiben und nicht zu einem Teppich verschmelzen.
+   * bleiben und nicht zu einem Teppich verschmelzen - und auf dem Nachtfeld
+   * trennt sie jetzt Leuchtendes voneinander statt Flaechen.
    */
-  kontur: '#12151e',
-  schatten: 'rgba(12, 14, 20, 0.42)',
+  kontur: '#03040a',
+  schatten: 'rgba(2, 3, 8, 0.55)',
 
-  spieler: '#fff3d6',
+  spieler: '#fff6e2',
   spielerKern: '#ffffff',
-  spielerRing: '#ffd24a',
-  geschoss: '#fff3d6',
+  spielerRing: '#ffcb3d',
+  geschoss: '#cfe9ff',
 
-  // Gegner: siehe enemies.ts - Form ist die Ansage, das hier ist nur Anstrich.
-  splitter: '#ff7a45',
-  brocken: '#8b6f4e',
-  elite: '#c86bff',
+  /*
+   * Gegnerkoerper: eine kuehle Familie aus drei Helligkeiten, kein Farbton.
+   *
+   * Vorher trug jede Art ihren eigenen gesaettigten Ton - dreizehn davon auf
+   * aehnlicher Helligkeit, und im Screenshot sah das Feld aus wie ein
+   * Farbwaehler. Nichts trat zurueck, also trat auch nichts hervor.
+   *
+   * Jetzt sagt die *Form*, um welche Art es sich handelt (dafuer gibt es neun
+   * verschiedene), und der Farbton ist ausschliesslich Zustand. Die drei
+   * Stufen sagen nur, wie schwer der Brocken ist.
+   */
+  koerperLeicht: '#4c5d7e',
+  koerperMittel: '#374663',
+  koerperSchwer: '#28324c',
 
   kristall: '#4fe0ff',
-  kristallKern: '#d6f6ff',
+  kristallKern: '#e8fbff',
 
-  text: '#f2f4f9',
-  textSchwach: '#98a1b5',
-  textHervor: '#ffd24a',
+  text: '#eef2fb',
+  textSchwach: '#8291ad',
+  textHervor: '#ffcb3d',
 
-  gefahr: '#ff4d5e',
-  heilung: '#6ee7a8',
-  krit: '#ffd24a',
-  treffer: '#fff3d6',
+  /*
+   * Zustandsfarben - die einzigen gesaettigten Toene im ganzen Spiel.
+   *
+   * Sie sind knapp gehalten, weil jede weitere die vorhandenen entwertet: Wenn
+   * alles leuchtet, sagt Leuchten nichts mehr. Ein Test haelt fest, dass keine
+   * zwei zu nah beieinander liegen.
+   */
+  gefahr: '#ff3a52',
+  heilung: '#4fe6a0',
+  krit: '#ffcb3d',
+  treffer: '#fff6e2',
+  /** Ein offener Riss - die Kernregel, und deshalb die auffaelligste Farbe. */
+  riss: '#7fd4ff',
 
   /**
-   * Karten liegen **ueber** dem Feld, also sind sie heller als es.
+   * Karten liegen **ueber** dem Feld: dunkles Glas, das eine Kante faengt.
    *
-   * Vorher standen sie bei fast derselben Farbe wie der Grund - dadurch
-   * flimmerte das Getuemmel durch jedes Menue und nichts wirkte vorne oder
-   * hinten.
+   * Auf dem Nachtfeld waeren helle Platten Scheinwerfer und wuerden das
+   * Getuemmel dahinter erschlagen. Stattdessen sind sie nur wenig heller als
+   * der Grund und tragen ihr Gewicht ueber eine leuchtende Oberkante - so
+   * bleibt der Lauf sichtbar und die Karte trotzdem vorne.
    */
-  kartenGrund: '#394054',
-  kartenGrundTief: '#2f3546',
-  kartenRand: '#12151e',
-  kartenRandAktiv: '#ffd24a',
+  kartenGrund: '#131a2c',
+  kartenGrundTief: '#0d1322',
+  kartenRand: '#03040a',
+  kartenRandAktiv: '#ffcb3d',
 } as const
 
 export type FarbName = keyof typeof FARBEN

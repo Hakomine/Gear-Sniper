@@ -1,4 +1,3 @@
-import { FARBEN } from '../render/palette'
 import type { WaffenDef } from './weapons'
 
 /**
@@ -151,7 +150,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Reißt erst alles zusammen, dann detoniert es',
       seltenheit: 'fusion',
       verhalten: 'kollaps',
-      farbe: FARBEN.elite,
+      farbe: '#b46bff',
       maxStufe: 4,
       extraName: 'Sogweite',
       basis: {

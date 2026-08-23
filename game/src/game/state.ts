@@ -19,6 +19,7 @@ import {
 import type { GegnerArt } from './enemies'
 import { artIndex, QUELLE_UMWELT } from './enemies'
 import { Klangpuffer } from './klaenge'
+import { Wellenpuffer } from './wellen'
 import { aktualisiereKristalle, legeKristall } from './pickups'
 import { bewegeSpieler, erzeugeSpieler, stosse, stossTick, verletzeSpieler } from './player'
 import type { BossZustand } from './bosse'
@@ -695,6 +696,13 @@ export type Spielstand = {
    */
   totSeit: number
   /**
+   * Wo das Feld gestossen wurde - siehe `wellen.ts`.
+   *
+   * Dieselbe Trennung wie beim Ton: Die Simulation meldet nur, `render/gitter.ts`
+   * macht daraus eine Welle im Boden. Damit bleibt `src/game/` browserfrei.
+   */
+  wellen: Wellenpuffer
+  /**
    * Was in diesem Tick zu hoeren sein soll.
    *
    * Nur Meldungen - die Simulation spielt nichts ab und kennt keinen Browser.
@@ -788,6 +796,7 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     neuFreigeschaltet: [],
     totSeit: 0,
     klaenge: new Klangpuffer(),
+    wellen: new Wellenpuffer(),
     pauseWahl: 0,
     tonAus: false,
     angebote: [],
@@ -814,6 +823,7 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   charakter.anwenden(s.spieler, s.rng)
 
   s.klaenge.leeren()
+  s.wellen.leeren()
   s.gegner.alleFreigeben()
   s.geschosse.alleFreigeben()
   s.zonen.alleFreigeben()
@@ -1019,7 +1029,10 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
     sp.blickX = b.x
     sp.blickY = b.y
   }
-  if (b.bestaetigen && stosse(sp, b.x, b.y, sp.blickX, sp.blickY)) s.klaenge.melde('stoss')
+  if (b.bestaetigen && stosse(sp, b.x, b.y, sp.blickX, sp.blickY)) {
+    s.klaenge.melde('stoss')
+    s.wellen.melde(sp.x, sp.y, 220, 190)
+  }
   stossTick(sp, sdt)
 
   bewegeSpieler(sp, b.x, b.y, sdt)
@@ -1822,6 +1835,7 @@ function trefferAmSpieler(s: Spielstand, schaden: number, quelle = QUELLE_UMWELT
 
   verletzeSpieler(sp, schaden * sp.schadenNimmt)
   s.klaenge.melde('einschlag')
+  s.wellen.melde(sp.x, sp.y, 300, 230)
   sp.unverwundbar = UNVERWUNDBAR
   sp.blitz = 1
   s.trauma = Math.min(1, s.trauma + 0.45)
@@ -1869,6 +1883,7 @@ function spielerZersplittert(s: Spielstand): void {
   s.blitz = Math.max(s.blitz, 0.8)
   zerspringen(s, sp.x, sp.y, sp.radius * 3, s.charakter.farbe)
   legeEffekt(s, 'ring', sp.x, sp.y, GLAS_RADIUS, 0.5, s.charakter.farbe, 5)
+  s.wellen.melde(sp.x, sp.y, 1400, GLAS_RADIUS * 2.2)
 
   // Erst danach: Der Umkreis soll den Schlag *beantworten*, nicht ihn
   // ausloesen - `reisseUmkreisAuf` kann eine Kaskade starten, und die haette

@@ -370,9 +370,16 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
       )
     }
 
-    zerspringen(s, g.x, g.y, g.radius * 1.6, FARBEN.treffer)
+    // In der Rissfarbe, nicht in Creme: Auf dem Nachtfeld sahen cremefarbene
+    // Scherben aus wie Papierschnipsel. Eisblau liest sich als Glas - und es
+    // ist dieselbe Farbe, in der die Risse davor geleuchtet haben.
+    zerspringen(s, g.x, g.y, g.radius * 1.6, FARBEN.riss)
     legeEffekt(s, 'ring', g.x, g.y, weite, 0.3, FARBEN.treffer, 3)
     s.trauma = Math.min(1, s.trauma + 0.06)
+    // Und der Boden wellt. Das ist der haeufigste Stoss im ganzen Spiel und
+    // damit der, an dem das Federnetz haengt: Wer eine Kette ausloest, sieht
+    // sie durch den Grund laufen.
+    s.wellen.melde(g.x, g.y, istBoss ? 900 : 260, weite * 1.9)
 
     // Tiefer als erlaubt darf die Welle keine neuen Zersplitterungen mehr
     // ausloesen - Schaden macht sie trotzdem.

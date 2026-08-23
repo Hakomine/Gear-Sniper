@@ -296,7 +296,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Träge Granate mit großem Flächenknall',
     seltenheit: 'episch',
     verhalten: 'sprengsatz',
-    farbe: FARBEN.elite,
+    farbe: '#b46bff',
     maxStufe: 5,
     extraName: 'Knallradius',
     basis: {
@@ -350,7 +350,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Sofort-Laser quer durch das Bild',
     seltenheit: 'legendaer',
     verhalten: 'strahl',
-    farbe: FARBEN.splitter,
+    farbe: '#ff7a45',
     maxStufe: 5,
     extraName: 'Strahlbreite',
     basis: {

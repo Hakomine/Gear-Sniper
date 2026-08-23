@@ -468,7 +468,7 @@ function zeichneMinikarte(ctx: CanvasRenderingContext2D, s: Spielstand, breite: 
     ctx.moveTo(px + 7, py)
     ctx.arc(px, py, 7, 0, Math.PI * 2)
   }
-  ctx.fillStyle = mitAlpha(FARBEN.splitter, 0.14)
+  ctx.fillStyle = mitAlpha(FARBEN.koerperLeicht, 0.3)
   ctx.fill()
 
   // Offene Schreine als Bernsteinraute - der einzige Grund, irgendwohin zu

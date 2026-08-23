@@ -110,7 +110,11 @@ function bossArtAlsGegner(b: BossArt): GegnerArt {
     // sie vorher zu `bossTick` ab. Der Eintrag steht nur da, damit der Typ
     // vollstaendig ist.
     verhalten: 'jaeger',
+    // Der Boss ist die eine Ausnahme von der Farbdisziplin: Er *darf* seinen
+    // eigenen Ton tragen, denn es gibt immer nur einen, und genau ihn soll man
+    // im Getuemmel sofort finden. Koerper und Kern teilen ihn sich.
     farbe: b.farbe,
+    kern: b.farbe,
     radius: b.radius,
     hp: b.hp,
     tempo: b.tempo,
@@ -595,6 +599,7 @@ function sturmangriff(s: Spielstand, g: Gegner, z: BossZustand): void {
   z.sturmVy = (dy / laenge) * tempo
   z.sturmRest = 0.5
   s.trauma = Math.min(1, s.trauma + 0.18)
+  s.wellen.melde(g.x, g.y, 700, 300)
 }
 
 function schockringe(s: Spielstand, g: Gegner, z: BossZustand): void {
@@ -615,6 +620,7 @@ function schockringe(s: Spielstand, g: Gegner, z: BossZustand): void {
     ring.feindlich = true
     ring.wachsend = true
   }
+  s.wellen.melde(g.x, g.y, 1100, 420)
 }
 
 function bruchruf(s: Spielstand, g: Gegner): void {

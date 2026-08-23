@@ -149,6 +149,8 @@ export function schalenBruch(s: Spielstand, g: Gegner, z: BossZustand): void {
   s.trauma = 1
   s.klaenge.melde('boss', 1.3)
   legeEffekt(s, 'ring', g.x, g.y, g.radius * 6, 0.9, KERN.farbe, 6)
+  // Der groesste Stoss im Spiel: Beim Schalenbruch soll der halbe Boden wellen.
+  s.wellen.melde(g.x, g.y, 2600, 620)
 
   const arten = verfuegbareArten(s.zeit)
   const art = arten[arten.length - 1]
@@ -180,6 +182,7 @@ export function bruchwelle(s: Spielstand, g: Gegner, z: BossZustand): void {
   welle.luecke = s.rng.next() * Math.PI * 2
   welle.lueckeBreite = WELLE_LUECKE
   s.trauma = Math.min(1, s.trauma + 0.25)
+  s.wellen.melde(g.x, g.y, 1600, WELLE_RADIUS)
 }
 
 /** Die Luecke ankuendigen, bevor die Welle laeuft. */

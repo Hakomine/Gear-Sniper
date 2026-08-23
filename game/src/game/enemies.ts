@@ -40,7 +40,27 @@ export type GegnerArt = {
    * sich der Lauf nach zehn Minuten anfuehlte wie nach einer.
    */
   readonly verhalten: GegnerVerhaltenId
+  /**
+   * Der Koerper - eine von drei Helligkeiten aus der kuehlen Familie.
+   *
+   * Bewusst **kein Farbton**. Vorher trug jede Art ihren eigenen gesaettigten
+   * Ton; dreizehn davon auf aehnlicher Helligkeit ergaben ein Feld, das aussah
+   * wie ein Farbwaehler. Nichts trat zurueck, also trat auch nichts hervor.
+   * Die Helligkeit sagt jetzt nur noch, wie schwer der Brocken ist.
+   */
   readonly farbe: string
+  /**
+   * Der leuchtende Kern - hier wohnt der Farbton, und nur hier.
+   *
+   * Er ist knapp bemessen: Nur Arten, die eine *Entscheidung* verlangen,
+   * bekommen einen auffaelligen. Der Kitt loescht Risse, also muss man ihn
+   * zuerst wegmachen; der Speier trifft aus der Ferne, also muss man zu ihm
+   * hin; der Stuermer kuendigt eine Bahn an. Alle anderen tragen ein
+   * neutrales Stahlblau, das nur sagt "lebt".
+   *
+   * Wenn alles leuchtet, sagt Leuchten nichts mehr.
+   */
+  readonly kern: string
   readonly radius: number
   readonly hp: number
   readonly tempo: number
@@ -69,7 +89,8 @@ export const GEGNER_ARTEN = [
     name: 'Splitter',
     form: 'dreieck',
     verhalten: 'jaeger',
-    farbe: FARBEN.splitter,
+    farbe: FARBEN.koerperLeicht,
+    kern: '#a6c0e8',
     radius: 9,
     hp: 10,
     tempo: 78,
@@ -85,7 +106,8 @@ export const GEGNER_ARTEN = [
     name: 'Brocken',
     form: 'quadrat',
     verhalten: 'jaeger',
-    farbe: FARBEN.brocken,
+    farbe: FARBEN.koerperSchwer,
+    kern: '#8ea8d0',
     radius: 15,
     hp: 58,
     tempo: 42,
@@ -101,7 +123,8 @@ export const GEGNER_ARTEN = [
     name: 'Kantiger',
     form: 'sechseck',
     verhalten: 'jaeger',
-    farbe: FARBEN.elite,
+    farbe: FARBEN.koerperMittel,
+    kern: '#b8cdf0',
     radius: 20,
     hp: 165,
     tempo: 58,
@@ -117,7 +140,8 @@ export const GEGNER_ARTEN = [
     name: 'Schwärmer',
     form: 'raute',
     verhalten: 'schwaermer',
-    farbe: '#52c4b0',
+    farbe: FARBEN.koerperLeicht,
+    kern: '#a6c0e8',
     radius: 10,
     hp: 22,
     tempo: 104,
@@ -133,7 +157,8 @@ export const GEGNER_ARTEN = [
     name: 'Stürmer',
     form: 'pfeil',
     verhalten: 'stuermer',
-    farbe: '#ff4d5e',
+    farbe: FARBEN.koerperMittel,
+    kern: FARBEN.gefahr,
     radius: 13,
     hp: 46,
     tempo: 62,
@@ -149,7 +174,8 @@ export const GEGNER_ARTEN = [
     name: 'Speier',
     form: 'stern',
     verhalten: 'speier',
-    farbe: '#ffd24a',
+    farbe: FARBEN.koerperMittel,
+    kern: '#ff8a3d',
     radius: 12,
     hp: 40,
     tempo: 54,
@@ -165,7 +191,8 @@ export const GEGNER_ARTEN = [
     name: 'Teiler',
     form: 'doppelquadrat',
     verhalten: 'teiler',
-    farbe: '#7de08a',
+    farbe: FARBEN.koerperLeicht,
+    kern: '#b07fe8',
     radius: 16,
     hp: 70,
     tempo: 50,
@@ -187,7 +214,8 @@ export const GEGNER_ARTEN = [
     name: 'Bruchstück',
     form: 'quadrat',
     verhalten: 'jaeger',
-    farbe: '#a8ecb2',
+    farbe: FARBEN.koerperLeicht,
+    kern: '#b07fe8',
     radius: 9,
     hp: 18,
     tempo: 96,
@@ -203,7 +231,8 @@ export const GEGNER_ARTEN = [
     name: 'Kitt',
     form: 'kreuz',
     verhalten: 'kitt',
-    farbe: '#ff3fa4',
+    farbe: FARBEN.koerperMittel,
+    kern: '#ff3fa4',
     radius: 14,
     hp: 62,
     tempo: 64,
@@ -219,7 +248,8 @@ export const GEGNER_ARTEN = [
     name: 'Schildträger',
     form: 'halbmond',
     verhalten: 'schild',
-    farbe: '#a8c4e8',
+    farbe: FARBEN.koerperSchwer,
+    kern: '#7b95bd',
     radius: 18,
     hp: 130,
     tempo: 46,

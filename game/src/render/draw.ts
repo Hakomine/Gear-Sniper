@@ -7,6 +7,8 @@ import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
 import { ZEICHEN } from '../game/zeichen'
 import { zeichneAtempause, zeichneLevelup, zeichnePause, zeichneTitel, zeichneTod } from '../ui/menus'
 import { zeichneHud } from './hud'
+import { gitterBild } from './gitter'
+import { glut } from './glut'
 import { erschuetterung } from './juice'
 import { FARBEN, mitAlpha, SCHRIFT } from './palette'
 import { zeichnePartikel } from './particles'
@@ -40,8 +42,6 @@ export const WELT_ZOOM = 1.35
 /** Halbe Diagonale des sichtbaren Weltausschnitts - vom Spieler bis in die Ecke. */
 export const SICHT_RADIUS = Math.hypot(VIRT_B, VIRT_H) / 2 / WELT_ZOOM
 
-const GITTER_SCHRITT = 80
-
 // Drehung der Dreiecksflanken um 140 Grad - einmal ausgerechnet.
 const FLANKE_COS = Math.cos((140 * Math.PI) / 180)
 const FLANKE_SIN = Math.sin((140 * Math.PI) / 180)
@@ -53,6 +53,16 @@ const blitzende: number[] = []
 export class Zeichner {
   /** Faktor von virtuellen Punkten auf echte Bildpunkte. */
   private pixelSkala = 1
+
+  /**
+   * Wann das letzte Bild gezeichnet wurde.
+   *
+   * Das Federnetz laeuft in *echter* Zeit, nicht in Spielzeit - genau wie die
+   * Partikel in `aktualisiereOptik`. Sonst stuende der Boden waehrend eines
+   * Hitstops still, und ausgerechnet die Welle, die der Schlag ausgeloest hat,
+   * bliebe eingefroren.
+   */
+  private letzteZeit = performance.now()
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -79,6 +89,7 @@ export class Zeichner {
     this.canvas.width = Math.floor(cssB * dpr)
     this.canvas.height = Math.floor(cssH * dpr)
     this.pixelSkala = this.canvas.width / VIRT_B
+    glut.passeAn(VIRT_B, VIRT_H)
   }
 
   /**
@@ -94,8 +105,11 @@ export class Zeichner {
     const ctx = this.ctx
     ctx.setTransform(this.pixelSkala, 0, 0, this.pixelSkala, 0, 0)
 
-    ctx.fillStyle = FARBEN.grund
-    ctx.fillRect(0, 0, VIRT_B, VIRT_H)
+    const jetzt = performance.now()
+    const echtDt = Math.min(0.05, (jetzt - this.letzteZeit) / 1000)
+    this.letzteZeit = jetzt
+
+    zeichneNachtgrund(ctx)
 
     // --- Welt ------------------------------------------------------------
     ctx.save()
@@ -108,7 +122,8 @@ export class Zeichner {
     // Reihenfolge ist Lesbarkeit: Zonen liegen als Untergrund unter allem,
     // Bruchlinien direkt auf den Gegnern, Effekte ueber dem Getuemmel, der
     // Spieler zuletzt - er darf nie verdeckt sein.
-    zeichneGitter(ctx, s)
+    gitterBild(ctx, s, echtDt)
+    zeichneStaub(ctx, s)
     // Schreine liegen wie Zonen im Untergrund: Sie sind Gelaende, kein Gegner.
     zeichneSchreine(ctx, s)
     zeichneZonen(ctx, s)
@@ -124,9 +139,16 @@ export class Zeichner {
     zeichneSpieler(ctx, s)
     zeichneZahlen(ctx, s)
 
+    // Die Matrix festhalten, *bevor* sie zurueckgesetzt wird: Die Glut hat
+    // ihre Punkte in Weltkoordinaten gesammelt und braucht dieselbe Sicht.
+    const weltMatrix = ctx.getTransform()
     ctx.restore()
 
+    glut.aufloesen(ctx, VIRT_B, VIRT_H, weltMatrix, this.pixelSkala)
+
     // --- Bildschirm -------------------------------------------------------
+    zeichneVignette(ctx, s)
+
     if (s.blitz > 0) {
       ctx.fillStyle = mitAlpha('#ffffff', s.blitz * 0.28)
       ctx.fillRect(0, 0, VIRT_B, VIRT_H)
@@ -264,58 +286,132 @@ function zeichneSchreinZeiger(
   }
 }
 
+
 /**
- * Jede Etappe faerbt das Gitter anders.
+ * Der Nachtgrund: kein flaches Rechteck, sondern ein Verlauf mit Mitte.
  *
- * Der billigste Weg, Fortschritt sichtbar zu machen: Ohne ihn sieht Minute
- * neun genauso aus wie Minute eins, und die Etappen bleiben eine Zahl im
- * Menue statt einer Erfahrung. Der Farbton dreht sich in festen Schritten
- * durch den Kreis, die Helligkeit bleibt - lesbar muss es ja bleiben.
+ * Eine einfarbige Flaeche ueber 1280 x 720 Punkte liest sich als Papier. Ein
+ * sehr flacher Radialverlauf gibt dem Bild eine Mitte, ohne dass jemand ihn
+ * bewusst wahrnimmt - und genau darum geht es: Man soll nicht den Verlauf
+ * sehen, sondern aufhoeren, das Papier zu sehen.
+ *
+ * Der Verlauf wird einmal gebaut und behalten. Ihn je Bild neu anzulegen waere
+ * dieselbe Sorte Muell, die die Pools an anderer Stelle vermeiden.
  */
-function etappenFarbe(etappe: number, stark: boolean): string {
-  const ton = (200 + (etappe - 1) * 47) % 360
-  return `hsla(${ton}, 40%, ${stark ? 34 : 26}%, ${stark ? 0.5 : 0.32})`
+let grundVerlauf: CanvasGradient | null = null
+
+function zeichneNachtgrund(ctx: CanvasRenderingContext2D): void {
+  if (grundVerlauf === null) {
+    const v = ctx.createRadialGradient(
+      VIRT_B / 2,
+      VIRT_H / 2,
+      0,
+      VIRT_B / 2,
+      VIRT_H / 2,
+      Math.hypot(VIRT_B, VIRT_H) / 2,
+    )
+    v.addColorStop(0, FARBEN.grund)
+    v.addColorStop(1, FARBEN.grundTief)
+    grundVerlauf = v
+  }
+  ctx.fillStyle = grundVerlauf
+  ctx.fillRect(0, 0, VIRT_B, VIRT_H)
 }
 
 /**
- * Der Hintergrund.
+ * Zwei Ebenen Staub.
  *
- * Ohne ihn steht der Spieler auf einer schwarzen Flaeche und man sieht die
- * eigene Bewegung nicht - das Spiel fuehlt sich an, als klebe man fest. Das
- * Gitter kostet ein paar Striche und macht aus Stillstand Fahrt.
+ * Sie tun nichts, und das ist ihr Zweck: Wenn der Spieler steht, steht sonst
+ * das ganze Bild. Ein paar Koerner, die in zwei verschiedenen Tempi durch das
+ * Feld treiben, geben dem Nichts eine Tiefe - und sie sind an Weltkoordinaten
+ * gebunden, laufen also beim Bewegen mit unterschiedlicher Geschwindigkeit
+ * vorbei. Das ist Parallaxe fuer den Preis einer Modulo-Rechnung.
  */
-function zeichneGitter(ctx: CanvasRenderingContext2D, s: Spielstand): void {
-  // Durch den Zoom geteilt: Der sichtbare Weltausschnitt ist kleiner als das
-  // Spielfeld in virtuellen Punkten. Ohne die Teilung zeichnete das Gitter
-  // weit ueber den Bildrand hinaus - reine Rechenzeit fuer nichts.
-  const halbB = VIRT_B / 2 / WELT_ZOOM + GITTER_SCHRITT
-  const halbH = VIRT_H / 2 / WELT_ZOOM + GITTER_SCHRITT
-  const linksX = s.kamera.x - halbB
-  const rechtsX = s.kamera.x + halbB
-  const obenY = s.kamera.y - halbH
-  const untenY = s.kamera.y + halbH
+const STAUB_FELD = 620
+const STAUB_JE_EBENE = 26
 
-  const startX = Math.floor(linksX / GITTER_SCHRITT) * GITTER_SCHRITT
-  const startY = Math.floor(obenY / GITTER_SCHRITT) * GITTER_SCHRITT
+function zeichneStaub(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const zeit = performance.now() / 1000
 
-  // Zwei Durchgaenge, damit `strokeStyle` nur zweimal wechselt statt bei
-  // jedem fuenften Strich.
-  for (const stark of [false, true]) {
+  for (let ebene = 0; ebene < 2; ebene++) {
+    // Die hintere Ebene bewegt sich langsamer und ist blasser - das ist die
+    // ganze Parallaxe.
+    const tiefe = ebene === 0 ? 0.45 : 0.8
+    const mx = s.kamera.x * tiefe
+    const my = s.kamera.y * tiefe
+    const groesse = ebene === 0 ? 1.4 : 2.2
+
     ctx.beginPath()
-    for (let x = startX; x <= rechtsX; x += GITTER_SCHRITT) {
-      if ((Math.round(x / GITTER_SCHRITT) % 5 === 0) !== stark) continue
-      ctx.moveTo(x, obenY)
-      ctx.lineTo(x, untenY)
+    for (let i = 0; i < STAUB_JE_EBENE; i++) {
+      // Feste Streuung aus dem Index statt gespeicherter Positionen: Zwei
+      // Sinuskurven mit unrunden Faktoren ergeben eine Verteilung, die nicht
+      // nach Raster aussieht, und kosten keinen Speicher.
+      const rohX = (Math.sin(i * 12.9898 + ebene * 7.1) * 43758.5453) % 1
+      const rohY = (Math.sin(i * 78.233 + ebene * 3.7) * 43758.5453) % 1
+      const drift = zeit * (ebene === 0 ? 5 : 11)
+
+      // In den sichtbaren Bereich falten - der Staub wiederholt sich, aber bei
+      // dieser Groesse sieht das niemand.
+      const x = s.kamera.x + (((rohX * STAUB_FELD + drift - mx) % STAUB_FELD) + STAUB_FELD) % STAUB_FELD - STAUB_FELD / 2
+      const y = s.kamera.y + (((rohY * STAUB_FELD - my) % STAUB_FELD) + STAUB_FELD) % STAUB_FELD - STAUB_FELD / 2
+      ctx.moveTo(x + groesse, y)
+      ctx.arc(x, y, groesse, 0, Math.PI * 2)
     }
-    for (let y = startY; y <= untenY; y += GITTER_SCHRITT) {
-      if ((Math.round(y / GITTER_SCHRITT) % 5 === 0) !== stark) continue
-      ctx.moveTo(linksX, y)
-      ctx.lineTo(rechtsX, y)
-    }
-    ctx.strokeStyle = etappenFarbe(s.etappe, stark)
-    ctx.lineWidth = 1
-    ctx.stroke()
+    ctx.fillStyle = mitAlpha(FARBEN.riss, ebene === 0 ? 0.07 : 0.12)
+    ctx.fill()
   }
+}
+
+/**
+ * Vignette und Etappenstich.
+ *
+ * Beides in einem Durchgang: Die Raender laufen ins Schwarze, und darueber
+ * liegt ein sehr blasser Farbstich, der mit der Etappe wandert. Vorher lag
+ * diese Aufgabe beim Gitter - jede Etappe hatte eine eigene Rasterfarbe -, und
+ * dort war sie falsch aufgehoben: Ein Raster in wechselnder Farbe sieht nach
+ * Konfiguration aus, ein Licht in wechselnder Farbe nach Ort.
+ */
+let vignette: CanvasGradient | null = null
+
+function zeichneVignette(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  if (vignette === null) {
+    const v = ctx.createRadialGradient(
+      VIRT_B / 2,
+      VIRT_H / 2,
+      Math.min(VIRT_B, VIRT_H) * 0.34,
+      VIRT_B / 2,
+      VIRT_H / 2,
+      Math.hypot(VIRT_B, VIRT_H) / 2,
+    )
+    v.addColorStop(0, 'rgba(0,0,0,0)')
+    v.addColorStop(1, 'rgba(0,0,0,0.62)')
+    vignette = v
+  }
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, 0, VIRT_B, VIRT_H)
+
+  const stich = etappenStich(s.etappe, s.zerruettung)
+  if (stich === null) return
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  ctx.fillStyle = stich
+  ctx.fillRect(0, 0, VIRT_B, VIRT_H)
+  ctx.restore()
+}
+
+/**
+ * Ein sehr blasser Farbstich je Etappe.
+ *
+ * Er ist bewusst kaum wahrnehmbar - man soll nicht denken "jetzt ist es
+ * gruen", sondern nur merken, dass sich etwas veraendert hat, wenn eine neue
+ * Etappe anfaengt. Unter Zerruettung wird er kraeftiger: Die Schleife soll
+ * sich anders anfuehlen, nicht nur anders rechnen.
+ */
+const STICHE = ['rgba(60,120,255,', 'rgba(255,120,60,', 'rgba(140,60,255,', 'rgba(60,255,180,']
+
+function etappenStich(etappe: number, zerruettung: number): string | null {
+  const staerke = 0.012 + Math.min(0.03, zerruettung * 0.012)
+  return STICHE[(etappe - 1) % STICHE.length] + staerke.toFixed(3) + ')'
 }
 
 /**
@@ -397,6 +493,25 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.fillStyle = gegner[liste[0]].art.farbe
     ctx.fill()
     trennKante(ctx)
+
+    /*
+     * Vierter Durchgang: der Kern.
+     *
+     * Ein Koerper aus einer Fuellung und einer Kontur ist ein Aufkleber - er
+     * hat keine Innenseite. Ein kleinerer, hellerer Kern in derselben Form
+     * gibt ihm eine, und weil er artweise gebuendelt laeuft wie die drei
+     * davor, kostet er einen Farbwechsel und einen Pfad fuer das ganze Feld.
+     *
+     * Hier - und nur hier - lebt der Farbton: Der Kitt ist rosa, weil man ihn
+     * zuerst wegmachen muss, der Speier orange, weil man zu ihm hin muss. Der
+     * Rest traegt Stahlblau, das nur sagt "lebt".
+     */
+    ctx.beginPath()
+    for (let k = 0; k < liste.length; k++) {
+      kernPfad(ctx, gegner[liste[k]], px, py, drehung)
+    }
+    ctx.fillStyle = gegner[liste[0]].art.kern
+    ctx.fill()
   }
 
   zeichneZeichenRinge(ctx, s, drehung)
@@ -459,6 +574,13 @@ function zeichneSchalen(ctx: CanvasRenderingContext2D, s: Spielstand, drehung: n
       ctx.lineWidth = 3.5
       ctx.strokeStyle = z.art.farbe
       ctx.stroke()
+
+      // Jede stehende Schale gibt Licht ab. Wer sie bricht, sieht den Kern
+      // dunkler werden - der Kampffortschritt steht damit am Gegner selbst.
+      for (let e = 0; e < 8; e++) {
+        const w = (e / 8) * Math.PI * 2
+        glut.melde(g.x + Math.cos(w) * r, g.y + Math.sin(w) * r, 26, z.art.farbe, 0.4)
+      }
     }
 
     if (z.unverwundbar > 0) {
@@ -521,6 +643,14 @@ function zeichneZeichenRinge(
     ctx.lineWidth = 2.5
     ctx.strokeStyle = ZEICHEN[z].farbe
     ctx.stroke()
+
+    // Gezeichnete sind das, was man zuerst wegmacht - sie duerfen als Einzige
+    // unter den Gegnern leuchten. Der Deckel von siebzig haelt das bezahlbar.
+    for (let k = 0; k < liste.length; k++) {
+      const g = gegner[liste[k]]
+      if (g === undefined) continue
+      glut.melde(g.x, g.y, g.radius * 1.5, ZEICHEN[z].farbe, 0.45)
+    }
   }
 }
 
@@ -581,6 +711,48 @@ function trennKante(ctx: CanvasRenderingContext2D): void {
 
 /** Wie weit der Schlagschatten nach unten versetzt liegt. */
 const SCHATTEN_VERSATZ = 4
+
+/**
+ * Wie `formPfad`, nur kleiner - der leuchtende Innenkoerper.
+ *
+ * Bewusst dieselbe Form statt eines Kreises: Ein runder Kern in einem
+ * Sechseck saehe aus wie ein aufgemaltes Auge. Dieselbe Silhouette in klein
+ * liest sich als *dasselbe Ding*, nur von innen beleuchtet - und damit bleibt
+ * die Formensprache, die neun Arten unterscheidbar macht, auch im Kern
+ * erhalten.
+ */
+const KERN_ANTEIL = 0.52
+
+function kernPfad(
+  ctx: CanvasRenderingContext2D,
+  g: { x: number; y: number; radius: number; blick?: number; art: { form: string } },
+  px: number,
+  py: number,
+  drehung: number,
+): void {
+  // Ohne neues Feld am Gegner: Der Pfad wird mit einem kleineren Radius
+  // gebaut, indem das Objekt kurz umhuellt wird. Ein flacher Aufsatz auf
+  // einem gepoolten Objekt kostet nichts - er verlaesst diese Zeile nie.
+  huelle.x = g.x
+  // Ein Stueck nach oben versetzt: Damit sitzt der helle Teil oben und die
+  // dunkle Fuellung schaut unten hervor. Das ist Beleuchtung von oben fuer den
+  // Preis einer Zahl - und es gibt jedem Koerper eine Ober- und eine
+  // Unterseite, statt ihn als flachen Aufkleber stehen zu lassen.
+  huelle.y = g.y - g.radius * 0.14
+  huelle.radius = g.radius * KERN_ANTEIL
+  huelle.blick = g.blick
+  huelle.art = g.art
+  formPfad(ctx, huelle, px, py, drehung)
+}
+
+/** Wiederverwendete Huelle - kein Muell je Gegner und Bild. */
+const huelle: { x: number; y: number; radius: number; blick?: number; art: { form: string } } = {
+  x: 0,
+  y: 0,
+  radius: 0,
+  blick: 0,
+  art: { form: 'quadrat' },
+}
 
 /** Haengt die Umrissform eines Gegners an den aktuellen Pfad. */
 function formPfad(
@@ -751,16 +923,19 @@ function zeichneGeschosse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   for (const [farbe, eimer] of geschossEimer) {
     if (eimer.length === 0) continue
 
-    // Zwei Durchgaenge ergeben ein Leuchten, ohne `shadowBlur` zu benutzen -
-    // der ist bei dieser Menge um ein Vielfaches teurer als ein zweiter Pfad.
-    ctx.beginPath()
+    /*
+     * Der Hof kommt jetzt aus der Glut-Schicht, nicht mehr aus einem zweiten,
+     * groesseren Kreis in halber Deckkraft.
+     *
+     * Das war ein Leuchten, das keines war: eine flache Scheibe mit hartem
+     * Rand. Echtes Bloom faellt nach aussen weich ab und laeuft ueber
+     * benachbarte Geschosse zusammen - genau das, was ein Schuss macht, der
+     * wirklich strahlt.
+     */
     for (let k = 0; k < eimer.length; k++) {
       const p = liste[eimer[k]]
-      ctx.moveTo(p.x + p.radius * 2.6, p.y)
-      ctx.arc(p.x, p.y, p.radius * 2.6, 0, Math.PI * 2)
+      glut.melde(p.x, p.y, p.radius * 1.5, farbe, 0.7)
     }
-    ctx.fillStyle = mitAlpha(farbe, 0.18)
-    ctx.fill()
 
     ctx.beginPath()
     for (let k = 0; k < eimer.length; k++) {
@@ -787,6 +962,9 @@ function zeichneKristalle(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     const k = liste[i]
     // Groesse zeigt den Wert: Ein Elite-Kristall soll aus der Ferne locken.
     const r = 4 + Math.min(6, k.wert)
+    // Kristalle sind der Grund, sich zu bewegen - sie muessen von weitem
+    // locken. Auf dem Nachtfeld tut das nicht ihre Farbe, sondern ihr Schein.
+    glut.melde(k.x, k.y, r * 0.7, FARBEN.kristall, 0.3)
     ctx.moveTo(k.x, k.y - r)
     ctx.lineTo(k.x + r, k.y)
     ctx.lineTo(k.x, k.y + r)
@@ -907,6 +1085,17 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   ctx.arc(sp.x, sp.y, sp.radius * 0.36, 0, Math.PI * 2)
   ctx.fillStyle = FARBEN.spielerKern
   ctx.fill()
+
+  /*
+   * Die eigene Figur ist die hellste Lichtquelle im Bild - und muss es sein.
+   *
+   * In einem Spiel, das nur aus Ausweichen besteht, ist die eigene Position
+   * die eine Information, die niemals verlorengehen darf. Auf dem Nachtfeld
+   * traegt das nicht mehr die Farbe, sondern der Schein: Selbst unter tausend
+   * Koerpern bleibt der hellste Fleck der eigene.
+   */
+  glut.melde(sp.x, sp.y, sp.radius * 1.5, FARBEN.spieler, blinkt ? 0.5 : 1)
+  if (sp.stossRest > 0) glut.melde(sp.x, sp.y, sp.radius * 3, FARBEN.spielerRing, 0.8)
 
   if (sp.istGlas) zeichneEigeneRisse(ctx, s)
 }
@@ -1093,14 +1282,33 @@ function zeichneBruchlinien(ctx: CanvasRenderingContext2D, s: Spielstand): void 
   }
 
   if (!gezeichnet) return
-  // Dunkel, nicht hell. Auf einer gefuellten Form liest sich ein weisser
-  // Strich als Glanzlicht - ein dunkler als Sprung. Vorher war der Grund
-  // schwarz und Weiss richtig; seit die Koerper gefuellt sind, ist es falsch.
+
+  /*
+   * Zwei Striche auf demselben Pfad: erst dunkel und breit, dann hell und
+   * schmal darauf.
+   *
+   * Ein Riss ist die Kernregel dieses Spiels und soll das Auffaelligste am
+   * Gegner sein. Als reiner dunkler Strich auf einem dunklen Koerper war er
+   * das Gegenteil - man sah ihn erst, wenn man danach suchte. Der helle Kern
+   * in der Mitte macht daraus Glas, das von innen bricht: dieselbe Lesart wie
+   * bei einem echten Sprung, wo die Bruchflaeche das Licht faengt.
+   */
   ctx.lineCap = 'round'
-  ctx.lineWidth = 2.2
-  ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.85)
+  ctx.lineWidth = 3.4
+  ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.9)
+  ctx.stroke()
+  ctx.lineWidth = 1.5
+  ctx.strokeStyle = mitAlpha(FARBEN.riss, 0.95)
   ctx.stroke()
   ctx.lineCap = 'butt'
+
+  // Und jeder gerissene Gegner glimmt. Bei drei Rissen zerspringt er - das
+  // Glimmen ist die Vorwarnung, die es bisher nur als Strichzeichnung gab.
+  for (let i = 0; i < liste.length; i++) {
+    const g = liste[i]
+    if (g.risse <= 0) continue
+    glut.melde(g.x, g.y, g.radius * (0.9 + g.risse * 0.22), FARBEN.riss, 0.16 * g.risse)
+  }
 }
 
 /** Trabanten: kreisende Scherben, Position kommt aus dem Verhalten. */
@@ -1138,6 +1346,45 @@ function zeichneTrabanten(ctx: CanvasRenderingContext2D, s: Spielstand): void {
 }
 
 /** Blitzbahnen, Hiebboegen und Druckringe. */
+/**
+ * Einen Effekt in die Glut geben - Striche entlang ihrer Laenge, Ringe entlang
+ * ihres Umfangs.
+ *
+ * Die Zahl der Punkte haengt an der Groesse und ist gedeckelt: Ein Ring von
+ * 600 Punkten Radius braucht mehr Stuetzstellen als einer von 40, aber keiner
+ * braucht dreissig.
+ */
+function glutEntlang(e: Effekt, rest: number): void {
+  const staerke = 0.5 * rest
+  if (staerke < 0.05) return
+
+  if (e.art === 'strich') {
+    const laenge = Math.hypot(e.x2 - e.x, e.y2 - e.y)
+    const stuecke = Math.max(1, Math.min(14, Math.round(laenge / 60)))
+    for (let k = 0; k <= stuecke; k++) {
+      const t = k / stuecke
+      glut.melde(
+        e.x + (e.x2 - e.x) * t,
+        e.y + (e.y2 - e.y) * t,
+        Math.max(3, e.breite * 2),
+        e.farbe,
+        staerke,
+      )
+    }
+    return
+  }
+
+  const bogen = e.art === 'bogen'
+  const von = bogen ? e.winkel - e.spanne : 0
+  const bis = bogen ? e.winkel + e.spanne : Math.PI * 2
+  const r = e.art === 'ring' ? e.radius * rest : e.radius
+  const stuecke = Math.max(4, Math.min(18, Math.round((r * (bis - von)) / 55)))
+  for (let k = 0; k <= stuecke; k++) {
+    const w = von + ((bis - von) * k) / stuecke
+    glut.melde(e.x + Math.cos(w) * r, e.y + Math.sin(w) * r, Math.max(4, e.breite * 2.4), e.farbe, staerke)
+  }
+}
+
 function zeichneEffekte(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   const liste = s.effekte.aktiv
   if (liste.length === 0) return
@@ -1150,6 +1397,14 @@ function zeichneEffekte(ctx: CanvasRenderingContext2D, s: Spielstand): void {
       zeichneWarnung(ctx, e, rest)
       continue
     }
+
+    /*
+     * Effekte sind das Licht des Spiels: ein Bogenhieb, ein Kettenblitz, der
+     * Ring einer Zersplitterung. Sie melden sich an mehreren Punkten an ihrer
+     * Laenge an - ein einzelner Leuchtpunkt in der Mitte eines
+     * bildschirmbreiten Strahls saehe aus wie eine Lampe daneben.
+     */
+    glutEntlang(e, rest)
 
     if (e.art === 'strich') {
       // Zweimal gezeichnet: breit und blass als Schein, schmal und weiss als
@@ -1268,14 +1523,12 @@ function zeichneFeindSchuesse(ctx: CanvasRenderingContext2D, s: Spielstand): voi
   const liste = s.feindSchuesse.aktiv
   if (liste.length === 0) return
 
-  ctx.beginPath()
+  // Feindgeschosse muessen von eigenen unterscheidbar bleiben: Sie sind die
+  // einzigen roten Punkte im Bild, und Rot ist im ganzen Spiel fuer Gefahr
+  // reserviert. Der Schein macht sie im Getuemmel auffindbar.
   for (let i = 0; i < liste.length; i++) {
-    const p = liste[i]
-    ctx.moveTo(p.x + p.radius * 2.2, p.y)
-    ctx.arc(p.x, p.y, p.radius * 2.2, 0, Math.PI * 2)
+    glut.melde(liste[i].x, liste[i].y, liste[i].radius * 1.6, FARBEN.gefahr, 0.8)
   }
-  ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.22)
-  ctx.fill()
 
   ctx.beginPath()
   for (let i = 0; i < liste.length; i++) {
