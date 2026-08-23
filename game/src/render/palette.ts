@@ -120,14 +120,32 @@ export const SELTENHEIT_FARBE = {
 
 
 /**
- * Schrift.
+ * Schrift - drei Rollen, nicht eine.
  *
- * Bewusst nur Systemschriften: Eine Webschrift muesste nachgeladen werden,
- * waere im spaeter verpackten Spiel eine Datei mehr und ist beim ersten Bild
- * noch nicht da. Monospace passt ausserdem zur geometrischen Bildsprache und
- * laesst Zahlen nicht springen, wenn sie hochzaehlen.
+ * Vorher stand hier genau ein Eintrag, und Titel, Fließtext und Zahlen teilten
+ * ihn sich: eine Monospace fuer alles. Das ist der zuverlaessigste Hinweis
+ * darauf, dass eine Oberflaeche von jemandem gebaut wurde, der Code schreibt -
+ * Monospace im Fließtext kommt in keinem Spiel vor, das jemand verkauft.
+ *
+ * Die Anzeigeschrift wird **mitgeliefert** (`public/schrift/`, SIL Open Font
+ * License, Lizenztext daneben). Das bricht mit "keine Asset-Dateien", und das
+ * ist die Sache wert: 22 kB liegen lokal im Projekt, werden nicht nachgeladen
+ * und funktionieren im spaeteren Steam-Paket genauso wie im Browser. Der erste
+ * Bildaufbau wartet in `main.ts` auf `document.fonts.ready`, sonst blitzt ein
+ * Bild in der Ersatzschrift auf.
+ *
+ * **Zahlen bleiben Monospace.** Uhr, Punkte und Trefferzahlen zaehlen hoch,
+ * und in einer Proportionalschrift springt dabei die ganze Zeile - das ist
+ * genau der Grund, aus dem es Tabellenziffern gibt.
  */
+const GROTESK = '"Space Grotesk", "Segoe UI", system-ui, sans-serif'
+
 export const SCHRIFT = {
+  /** Ueberschriften, Titel, Namen - alles, was groß steht. */
+  anzeige: GROTESK,
+  /** Fließtext auf Karten und Platten. */
+  text: GROTESK,
+  /** Nur Zahlen. */
   mono: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
 } as const
 

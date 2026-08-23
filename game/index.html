@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <title>Scherbenfeld</title>
     <style>
+      /*
+       * Die eine mitgelieferte Schrift.
+       *
+       * Sie liegt lokal unter `public/schrift/` (SIL Open Font License, der
+       * Lizenztext steht daneben) und wird *nicht* nachgeladen: kein externer
+       * Abruf, kein Netz noetig, und im spaeteren Steam-Paket aendert sich
+       * nichts. 22 kB fuer eine Oberflaeche, die nicht mehr nach Terminal
+       * aussieht.
+       *
+       * `font-display: block` statt `swap`: Ein sichtbarer Wechsel von der
+       * Ersatzschrift zur richtigen mitten im Titelbild waere genau der
+       * Eindruck von "billig gemacht", den diese Runde loswerden soll. Das
+       * Spiel wartet in `main.ts` ohnehin auf `document.fonts.ready`, bevor es
+       * das erste Bild zeichnet.
+       */
+      @font-face {
+        font-family: 'Space Grotesk';
+        src: url('/schrift/space-grotesk.woff2') format('woff2');
+        font-weight: 400 700;
+        font-style: normal;
+        font-display: block;
+      }
+
       /* Das Spiel zeichnet alles selbst. CSS hat genau eine Aufgabe:
          die Leinwand mittig und randlos auf schwarzem Grund halten. */
       html,
@@ -12,7 +35,7 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #05060a;
+        background: #04050b;
         overflow: hidden;
       }
       body {

@@ -11,7 +11,7 @@ import { SELTENHEIT_NAME } from '../game/weapons'
 import { DORNEN_PLATZ, GEIST_PLATZ, SPLITTER_PLATZ } from '../game/welt'
 import { massivePlatte, randSpruenge, schraegBalken, sprungOverlay } from '../render/glas'
 import { FARBEN, mitAlpha, SCHRIFT, SELTENHEIT_FARBE } from '../render/palette'
-import { TEXTE, zahlText, zeitText } from './strings'
+import { kommaText, TEXTE, zahlText, zeitText } from './strings'
 
 /**
  * Titel-, Levelup- und Todesbildschirm.
@@ -56,7 +56,7 @@ export function zeichneTitel(
   // und `textAlign` ist Zustand am Kontext - ohne diese Zeile stand die
   // Hinweiszeile darunter nach rechts verschoben.
   ctx.textAlign = 'center'
-  ctx.font = `400 16px ${SCHRIFT.mono}`
+  ctx.font = `400 16px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.charakterHinweis, breite / 2, hoehe - 42)
 
@@ -85,7 +85,7 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
    * bleibt ganz und bekommt trotzdem Gewicht.
    */
   const text = TEXTE.titel
-  ctx.font = `700 78px ${SCHRIFT.mono}`
+  ctx.font = `700 78px ${SCHRIFT.anzeige}`
   ctx.textAlign = 'center'
 
   ctx.fillStyle = FARBEN.kontur
@@ -105,7 +105,7 @@ function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number
   ctx.lineWidth = 3
   ctx.stroke()
 
-  ctx.font = `400 19px ${SCHRIFT.mono}`
+  ctx.font = `400 19px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.untertitel, mx, my + 58)
 }
@@ -136,12 +136,12 @@ function zeichneChronik(
   })
 
   ctx.textAlign = 'left'
-  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.font = `700 12px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.spielerRing
   ctx.fillText(TEXTE.chronik, x + 18, y + 26)
 
   if (s.chronik.length === 0) {
-    ctx.font = `400 14px ${SCHRIFT.mono}`
+    ctx.font = `400 14px ${SCHRIFT.text}`
     ctx.fillStyle = FARBEN.textSchwach
     ctx.fillText(TEXTE.chronikLeer, x + 18, y + 58)
     return
@@ -159,9 +159,25 @@ function zeichneChronik(
     ctx.fillText(zahlText(e.punkte), x + 18, zy)
 
     ctx.textAlign = 'right'
-    ctx.font = `600 12px ${SCHRIFT.mono}`
+    ctx.font = `600 12px ${SCHRIFT.text}`
     ctx.fillStyle = c.farbe
-    ctx.fillText(`${e.gewonnen ? '◈ ' : ''}${c.name}`, x + SEITE_B - 18, zy - 2)
+    ctx.fillText(c.name, x + SEITE_B - 18, zy - 2)
+
+    // Die Marke fuer einen Sieg wird gezeichnet, nicht getippt: Ein Zeichen wie
+    // "◈" liegt ausserhalb des mitgelieferten Schriftschnitts und faellt damit
+    // auf irgendeine Systemschrift zurueck - genau die Unschaerfe, die diese
+    // Runde loswerden soll. Eine Raute aus vier Linien sieht ueberall gleich aus.
+    if (e.gewonnen) {
+      const mx = x + SEITE_B - 26 - ctx.measureText(c.name).width
+      ctx.beginPath()
+      ctx.moveTo(mx, zy - 8)
+      ctx.lineTo(mx + 5, zy - 3)
+      ctx.lineTo(mx, zy + 2)
+      ctx.lineTo(mx - 5, zy - 3)
+      ctx.closePath()
+      ctx.fillStyle = FARBEN.spielerRing
+      ctx.fill()
+    }
 
     ctx.font = `400 11px ${SCHRIFT.mono}`
     ctx.fillStyle = FARBEN.textSchwach
@@ -207,11 +223,11 @@ function zeichneTagesscherbe(
   })
 
   ctx.textAlign = 'left'
-  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.font = `700 12px ${SCHRIFT.text}`
   ctx.fillStyle = offen ? FARBEN.kristall : FARBEN.textSchwach
   ctx.fillText(TEXTE.tagesscherbe, x + 18, y + 26)
 
-  ctx.font = `400 13px ${SCHRIFT.mono}`
+  ctx.font = `400 13px ${SCHRIFT.text}`
   ctx.fillStyle = offen ? FARBEN.text : FARBEN.textSchwach
   umbrochenerLinks(
     ctx,
@@ -251,7 +267,7 @@ function zeichneVerhexungen(
   let x = mx - gesamt / 2
 
   ctx.textAlign = 'center'
-  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.font = `700 12px ${SCHRIFT.text}`
   ctx.fillStyle = aktiveReihe ? FARBEN.spielerRing : FARBEN.textSchwach
   ctx.fillText(TEXTE.verhexungen, mx, y - 16)
 
@@ -268,7 +284,7 @@ function zeichneVerhexungen(
       ecke: 12,
     })
 
-    ctx.font = `700 15px ${SCHRIFT.mono}`
+    ctx.font = `700 15px ${SCHRIFT.text}`
     ctx.fillStyle = an ? v.farbe : FARBEN.textSchwach
     ctx.fillText(v.name, x + HEX_B / 2, y + 24)
     ctx.font = `600 12px ${SCHRIFT.mono}`
@@ -281,14 +297,14 @@ function zeichneVerhexungen(
   // Die Wirkung der gerade angewaehlten - und was der ganze Stapel bringt.
   const faktor = verhexungsFaktor(s.verhexungen)
   const fokus = VERHEXUNGEN[s.verhexungWahl]
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `400 14px ${SCHRIFT.text}`
   ctx.fillStyle = aktiveReihe ? FARBEN.text : FARBEN.textSchwach
   const zeile =
     aktiveReihe && fokus !== undefined
-      ? `${fokus.wirkung}  ·  Punkte ×${faktor.toFixed(2)}`
+      ? `${fokus.wirkung}  ·  Punkte ×${kommaText(faktor, 2)}`
       : s.verhexungen.length === 0
         ? TEXTE.verhexungKeine
-        : `${s.verhexungen.length} gewählt  ·  Punkte ×${faktor.toFixed(2)}`
+        : `${s.verhexungen.length} gewählt  ·  Punkte ×${kommaText(faktor, 2)}`
   ctx.fillText(zeile, mx, y + HEX_H + 18)
 }
 
@@ -322,46 +338,46 @@ function zeichneCharakterPlatte(
   zeichneWappen(ctx, c, offen, x + 82, y + PLATTE_H / 2 + 6)
 
   ctx.textAlign = 'center'
-  ctx.font = `700 34px ${SCHRIFT.mono}`
+  ctx.font = `700 34px ${SCHRIFT.anzeige}`
   ctx.fillStyle = offen ? c.farbe : FARBEN.textSchwach
   ctx.fillText(c.name, mx + 46, y + 52)
 
   if (!offen && c.bedingung !== null) {
-    ctx.font = `700 13px ${SCHRIFT.mono}`
+    ctx.font = `700 13px ${SCHRIFT.text}`
     ctx.fillStyle = FARBEN.gefahr
     ctx.fillText(TEXTE.gesperrt, mx + 46, y + 92)
-    ctx.font = `400 17px ${SCHRIFT.mono}`
+    ctx.font = `400 17px ${SCHRIFT.text}`
     ctx.fillStyle = FARBEN.textSchwach
     umbrochenerText(ctx, c.bedingung.text, mx + 46, y + 130, PLATTE_B - 200, 24)
     ctx.restore()
     return
   }
 
-  ctx.font = `400 16px ${SCHRIFT.mono}`
+  ctx.font = `400 16px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   umbrochenerText(ctx, c.beschreibung, mx + 46, y + 84, PLATTE_B - 210, 22)
 
   ctx.textAlign = 'left'
   const lx = x + 172
-  ctx.font = `700 13px ${SCHRIFT.mono}`
+  ctx.font = `700 13px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.heilung
   ctx.fillText(TEXTE.vorteil.toUpperCase(), lx, y + 132)
-  ctx.font = `400 15px ${SCHRIFT.mono}`
+  ctx.font = `400 15px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.text
   umbrochenerLinks(ctx, c.vorteil, lx, y + 154, PLATTE_B - 214, 20)
 
-  ctx.font = `700 13px ${SCHRIFT.mono}`
+  ctx.font = `700 13px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.gefahr
   ctx.fillText(TEXTE.nachteil.toUpperCase(), lx, y + 196)
-  ctx.font = `400 15px ${SCHRIFT.mono}`
+  ctx.font = `400 15px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.text
   umbrochenerLinks(ctx, c.nachteil, lx, y + 218, PLATTE_B - 214, 20)
 
   ctx.textAlign = 'right'
   ctx.font = `600 14px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textHervor
-  ctx.fillText(`×${c.punkteFaktor.toFixed(2)}`, x + PLATTE_B - 42, y + 52)
-  ctx.font = `400 11px ${SCHRIFT.mono}`
+  ctx.fillText(`×${kommaText(c.punkteFaktor, 2)}`, x + PLATTE_B - 42, y + 52)
+  ctx.font = `400 11px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.punkteFaktor, x + PLATTE_B - 42, y + 68)
 
@@ -589,7 +605,7 @@ export function zeichneLevelup(
 
   const kopf = s.bossKarte ? 'BOSSBEUTE' : TEXTE.levelup
   const kopfFarbe = s.bossKarte ? SELTENHEIT_FARBE.legendaer : FARBEN.spielerRing
-  ctx.font = `700 34px ${SCHRIFT.mono}`
+  ctx.font = `700 34px ${SCHRIFT.anzeige}`
   const kopfB = ctx.measureText(kopf).width + 76
   massivePlatte(ctx, breite / 2 - kopfB / 2, hoehe / 2 - 206, kopfB, 58, {
     grund: FARBEN.kartenGrund,
@@ -610,7 +626,7 @@ export function zeichneLevelup(
     zeichneKarte(ctx, s.angebote[i], startX + i * (KARTE_B + KARTE_LUECKE), y, i, i === s.auswahl)
   }
 
-  ctx.font = `400 16px ${SCHRIFT.mono}`
+  ctx.font = `400 16px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.levelupHinweis, breite / 2, hoehe / 2 + 166)
 
@@ -660,15 +676,15 @@ function zeichneKarte(
   ctx.fillText(String(index + 1), x + 20, oben + 30)
 
   ctx.textAlign = 'center'
-  ctx.font = `700 12px ${SCHRIFT.mono}`
+  ctx.font = `700 12px ${SCHRIFT.text}`
   ctx.fillStyle = rand
   ctx.fillText(kopfZeile(a), mx, oben + 30)
 
-  ctx.font = `700 25px ${SCHRIFT.mono}`
+  ctx.font = `700 25px ${SCHRIFT.anzeige}`
   ctx.fillStyle = a.art === 'passiv' ? FARBEN.text : a.farbe
   ctx.fillText(a.name, mx, oben + 72)
 
-  ctx.font = `400 16px ${SCHRIFT.mono}`
+  ctx.font = `400 16px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   umbrochenerText(ctx, a.beschreibung, mx, oben + 114, KARTE_B - 46, 22)
 
@@ -789,25 +805,25 @@ export function zeichneTod(
   })
   randSpruenge(ctx, tafelX, 44, tafelB, 26, s.saat, mitAlpha(akzent, 0.5))
 
-  ctx.font = `700 40px ${SCHRIFT.mono}`
+  ctx.font = `700 40px ${SCHRIFT.anzeige}`
   ctx.fillStyle = akzent
   ctx.fillText(gewonnen ? TEXTE.gewonnen : TEXTE.tot, breite / 2, 84)
 
-  ctx.font = `600 12px ${SCHRIFT.mono}`
+  ctx.font = `600 12px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.punkte, breite / 2, 118)
   ctx.font = `700 56px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.spielerRing
   ctx.fillText(zahlText(s.punkte), breite / 2, 156)
 
-  ctx.font = `400 13px ${SCHRIFT.mono}`
+  ctx.font = `400 13px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   // Die Zerruettung steht in derselben Zeile wie der Charakterfaktor: Beides
   // sind Multiplikatoren auf dieselbe Zahl darueber, und wer wissen will,
   // *warum* sie so hoch ist, soll es dort finden.
-  const zerr = s.zerruettung > 0 ? `  ·  Z${s.zerruettung} ×${(1 + s.zerruettung * 0.5).toFixed(1)}` : ''
+  const zerr = s.zerruettung > 0 ? `  ·  Z${s.zerruettung} ×${kommaText(1 + s.zerruettung * 0.5, 1)}` : ''
   ctx.fillText(
-    `${s.charakter.name} ×${s.charakter.punkteFaktor.toFixed(2)}${zerr}  ·  ${TEXTE.bestwert} ${zahlText(s.bestwert)}`,
+    `${s.charakter.name} ×${kommaText(s.charakter.punkteFaktor, 2)}${zerr}  ·  ${TEXTE.bestwert} ${zahlText(s.bestwert)}`,
     breite / 2,
     196,
   )
@@ -840,7 +856,7 @@ export function zeichneTod(
 
   const puls = 0.55 + 0.45 * Math.sin(performance.now() / 380)
   ctx.textAlign = 'center'
-  ctx.font = `600 19px ${SCHRIFT.mono}`
+  ctx.font = `600 19px ${SCHRIFT.text}`
   ctx.fillStyle = mitAlpha(FARBEN.text, puls)
   ctx.fillText(TEXTE.totHinweis, breite / 2, hoehe - 40)
 
@@ -888,7 +904,7 @@ function zeichneErgebnisZeilen(
 
   for (let i = 0; i < zeilen.length; i++) {
     const zy = y + i * 34
-    ctx.font = `400 17px ${SCHRIFT.mono}`
+    ctx.font = `400 17px ${SCHRIFT.text}`
     ctx.textAlign = 'left'
     ctx.fillStyle = FARBEN.textSchwach
     ctx.fillText(zeilen[i][0], x, zy)
@@ -923,7 +939,7 @@ function zeichneSchadensBalken(
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `400 14px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.schadensAnteil, x, y - 24)
 
@@ -939,7 +955,7 @@ function zeichneSchadensBalken(
     const by = y + i * 30
     const anteil = e.wert / groesster
 
-    ctx.font = `600 14px ${SCHRIFT.mono}`
+    ctx.font = `600 14px ${SCHRIFT.text}`
     ctx.textAlign = 'right'
     ctx.fillStyle = FARBEN.text
     ctx.fillText(e.name, x + namensBreite - 12, by)
@@ -1007,10 +1023,10 @@ function zeichneFreischaltung(
 
   const puls = 0.6 + 0.4 * Math.sin(performance.now() / 200)
   ctx.textAlign = 'center'
-  ctx.font = `700 15px ${SCHRIFT.mono}`
+  ctx.font = `700 15px ${SCHRIFT.text}`
   ctx.fillStyle = mitAlpha(SELTENHEIT_FARBE.legendaer, puls)
   ctx.fillText(TEXTE.freigeschaltet, mx, y)
-  ctx.font = `700 22px ${SCHRIFT.mono}`
+  ctx.font = `700 22px ${SCHRIFT.anzeige}`
   ctx.fillStyle = SELTENHEIT_FARBE.legendaer
   ctx.fillText(namen, mx, y + 26)
 }
@@ -1041,7 +1057,7 @@ export function zeichneAtempause(
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(`${TEXTE.etappe} ${s.etappe}`, breite / 2, 62)
 
-  ctx.font = `700 40px ${SCHRIFT.mono}`
+  ctx.font = `700 40px ${SCHRIFT.anzeige}`
   ctx.fillStyle = FARBEN.textHervor
   ctx.fillText(TEXTE.atempauseTitel, breite / 2, 100)
 
@@ -1060,7 +1076,7 @@ export function zeichneAtempause(
   }
 
   ctx.textAlign = 'center'
-  ctx.font = `600 15px ${SCHRIFT.mono}`
+  ctx.font = `600 15px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.atempauseHinweis, breite / 2, hoehe - 52)
   ctx.textBaseline = 'alphabetic'
@@ -1100,22 +1116,22 @@ function zeichneTuer(
   ctx.fillText(String(i + 1), 18, 26)
 
   ctx.textAlign = 'center'
-  ctx.font = `700 23px ${SCHRIFT.mono}`
+  ctx.font = `700 23px ${SCHRIFT.anzeige}`
   ctx.fillStyle = tuer.farbe
   ctx.fillText(tuer.name, b / 2, 44)
 
   ctx.textAlign = 'left'
-  ctx.font = `600 12px ${SCHRIFT.mono}`
+  ctx.font = `600 12px ${SCHRIFT.text}`
   ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.9)
   ctx.fillText(TEXTE.tuerPreis.toUpperCase(), 22, 84)
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `400 14px ${SCHRIFT.text}`
   ctx.fillStyle = tuer.preis === '' ? FARBEN.textSchwach : FARBEN.text
   umbrochenerLinks(ctx, tuer.preis === '' ? TEXTE.tuerOhnePreis : tuer.preis, 22, 104, b - 44, 18)
 
-  ctx.font = `600 12px ${SCHRIFT.mono}`
+  ctx.font = `600 12px ${SCHRIFT.text}`
   ctx.fillStyle = mitAlpha(FARBEN.heilung, 0.9)
   ctx.fillText(TEXTE.tuerLohn.toUpperCase(), 22, 148)
-  ctx.font = `400 14px ${SCHRIFT.mono}`
+  ctx.font = `400 14px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.text
   umbrochenerLinks(ctx, tuer.lohn, 22, 168, b - 44, 18)
 
@@ -1159,7 +1175,7 @@ export function zeichnePause(
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = `700 26px ${SCHRIFT.mono}`
+  ctx.font = `700 26px ${SCHRIFT.anzeige}`
   ctx.fillStyle = FARBEN.textHervor
   ctx.fillText(TEXTE.pauseTitel, b / 2, 46)
 
@@ -1176,18 +1192,18 @@ export function zeichnePause(
       ctx.fillRect(28, zy - 17, 4, 34)
     }
 
-    ctx.font = `${gewaehlt ? 700 : 400} 18px ${SCHRIFT.mono}`
+    ctx.font = `${gewaehlt ? 700 : 400} 18px ${SCHRIFT.text}`
     ctx.fillStyle = gewaehlt ? FARBEN.textHervor : FARBEN.textSchwach
     ctx.fillText(eintragText(PAUSE_EINTRAEGE[i], s), b / 2, zy)
   }
 
   // Der Hinweis steht dauerhaft da, nicht nur wenn "Aufgeben" gewaehlt ist:
   // Man soll es lesen, bevor man dort landet, nicht danach.
-  ctx.font = `400 12px ${SCHRIFT.mono}`
+  ctx.font = `400 12px ${SCHRIFT.text}`
   ctx.fillStyle = mitAlpha(FARBEN.gefahr, 0.8)
   ctx.fillText(TEXTE.pauseWarnung, b / 2, h - 52)
 
-  ctx.font = `400 13px ${SCHRIFT.mono}`
+  ctx.font = `400 13px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.pauseHinweis, b / 2, h - 28)
 

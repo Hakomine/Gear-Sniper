@@ -11,6 +11,8 @@
  * zum Nachladen.
  */
 
+import { mitAlpha } from './palette'
+
 /**
  * Kleiner, stabiler Zufall aus einer Zahl.
  *
@@ -255,11 +257,27 @@ export function massivePlatte(
   ctx.strokeStyle = opt.kontur
   ctx.stroke()
 
-  // Der Akzentbalken traegt die Farbe - Seltenheit, Tuerart, Charakter. Oben,
-  // waagerecht, ausserhalb jeder Textzeile.
   ctx.save()
   pfad(0, 0)
   ctx.clip()
+
+  /*
+   * Ein Lichtsaum unter der Oberkante.
+   *
+   * Auf dem hellen Feld reichte ein flacher Akzentbalken - die Platte hob sich
+   * ohnehin ab. Auf dem Nachtfeld ist sie fast so dunkel wie der Grund, und
+   * ohne Lichtkante wird aus "Glas, das ueber dem Feld liegt" ein graues
+   * Rechteck. Der Saum ist der Beweis, dass die Platte eine *Oberflaeche* hat:
+   * Licht faellt von oben ein und laeuft nach unten aus.
+   */
+  const saum = ctx.createLinearGradient(x, y, x, y + Math.min(h, 64))
+  saum.addColorStop(0, mitAlpha(opt.akzent, aktiv ? 0.3 : 0.16))
+  saum.addColorStop(1, mitAlpha(opt.akzent, 0))
+  ctx.fillStyle = saum
+  ctx.fillRect(x, y, b, Math.min(h, 64))
+
+  // Der Akzentbalken traegt die Farbe - Seltenheit, Tuerart, Charakter. Oben,
+  // waagerecht, ausserhalb jeder Textzeile.
   ctx.fillStyle = opt.akzent
   ctx.fillRect(x, y, b, aktiv ? 8 : 5)
   ctx.restore()

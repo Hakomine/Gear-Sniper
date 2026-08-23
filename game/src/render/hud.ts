@@ -347,7 +347,7 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
       : z.phase === 1
         ? z.art.name
         : `${z.art.name} — PHASE 2`
-  ctx.font = `700 15px ${SCHRIFT.mono}`
+  ctx.font = `700 15px ${SCHRIFT.anzeige}`
   const nb = ctx.measureText(name).width + 32
   hudPlatte(ctx, breite / 2 - nb / 2, by - 34, nb, 26, z.art.farbe)
   ctx.textAlign = 'center'
@@ -407,7 +407,7 @@ function zaehler(
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
-  ctx.font = `600 11px ${SCHRIFT.mono}`
+  ctx.font = `600 11px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(titel, x + breite / 2, y + 12)
   ctx.font = `700 26px ${SCHRIFT.mono}`

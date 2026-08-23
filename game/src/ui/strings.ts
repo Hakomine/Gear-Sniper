@@ -76,9 +76,27 @@ export function zeitText(sekunden: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+/**
+ * Dezimalzahl mit Komma.
+ *
+ * `toFixed` liefert immer einen Punkt - das ist die englische Schreibweise.
+ * In einem Spiel, dessen Oberflaeche durchgehend deutsch ist, steht damit auf
+ * jeder Karte ein `x1.00`, wo `x1,00` hingehoert. Kein Fehler, den jemand
+ * benennen wuerde, aber genau eines der kleinen Zeichen dafuer, dass eine
+ * Oberflaeche nicht fuer die Sprache gemacht wurde, in der sie steht.
+ *
+ * Von Hand statt ueber `toLocaleString`: Die Schreibweise soll an der Maschine
+ * haengen, die das Spiel *anzeigt*, nicht an der, auf der es laeuft. Ein
+ * Screenshot aus dem Prueflauf soll dieselben Zahlen zeigen wie das Spiel bei
+ * Hakan.
+ */
+export function kommaText(wert: number, stellen: number): string {
+  return wert.toFixed(stellen).replace('.', ',')
+}
+
 /** Grosse Zahlen kuerzen, damit die Anzeige nicht springt. */
 export function zahlText(wert: number): string {
   if (wert < 1000) return String(Math.floor(wert))
-  if (wert < 1_000_000) return `${(wert / 1000).toFixed(1)}k`
-  return `${(wert / 1_000_000).toFixed(1)}M`
+  if (wert < 1_000_000) return `${kommaText(wert / 1000, 1)}k`
+  return `${kommaText(wert / 1_000_000, 1)}M`
 }

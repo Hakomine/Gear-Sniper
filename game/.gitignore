@@ -2,6 +2,9 @@ node_modules/
 dist/
 
 # Screenshots und Berichte aus dem Playwright-Lauf - jederzeit neu erzeugbar.
+# Ausgenommen ist `docs/`: Das Vorher-Nachher-Bild laesst sich gerade *nicht*
+# neu erzeugen, weil seine linke Haelfte einen Stand zeigt, den es im Baum
+# nicht mehr gibt.
 screenshots/
 test-results/
 playwright-report/

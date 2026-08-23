@@ -10,6 +10,8 @@ import type { Befehle } from './game/state'
 import { erzeugeSpielstand, leereBefehle, starteTageslauf, tick } from './game/state'
 import { rufeKern } from './game/bosse'
 import { setzeZeichen } from './game/zeichen'
+import { GEGNER_ARTEN } from './game/enemies'
+import { legeGegner } from './game/spawner'
 import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
 import { SICHT_RADIUS, Zeichner } from './render/draw'
 
@@ -206,7 +208,24 @@ const schleife = new Schleife({
 eingabe.verbinden()
 zeichner.passeAn()
 window.addEventListener('resize', () => zeichner.passeAn())
-schleife.start()
+
+/*
+ * Erst zeichnen, wenn die Schrift da ist.
+ *
+ * Ohne diese Zeile zeigt das erste Bild den Titel in der Ersatzschrift, und
+ * einen Wimpernschlag spaeter springt alles um. Ein sichtbarer Schriftwechsel
+ * im ersten Moment ist genau der Eindruck, den diese Runde loswerden soll -
+ * und man sieht ihn nur beim allerersten Start, also nie beim Testen und immer
+ * bei dem, der das Spiel zum ersten Mal oeffnet.
+ *
+ * `catch` ist kein Zierrat: In einem Browser ohne `document.fonts` oder mit
+ * blockierten Schriften darf das Spiel nicht ausbleiben. Kein Schriftwechsel
+ * ist ein Schoenheitsfehler, ein schwarzer Bildschirm nicht.
+ */
+void document.fonts.ready.then(
+  () => schleife.start(),
+  () => schleife.start(),
+)
 
 /*
  * Griff fuer den Playwright-Test.
@@ -226,6 +245,10 @@ declare global {
       waffen: typeof WAFFEN
       ruesteAus: typeof ruesteAus
       werteAuf: typeof werteAuf
+      zeichner: typeof zeichner
+      /** Nur fuer die Bildzeitmessung: Feld auffuellen wie in `test/perf.ts`. */
+      legeGegner: typeof legeGegner
+      arten: typeof GEGNER_ARTEN
       rufeKern: typeof rufeKern
       starteTageslauf: typeof starteTageslauf
       setzeZeichen: typeof setzeZeichen
@@ -238,6 +261,9 @@ window.__scherbenfeld = {
   waffen: WAFFEN,
   ruesteAus,
   werteAuf,
+  zeichner,
+  legeGegner,
+  arten: GEGNER_ARTEN,
   rufeKern,
   starteTageslauf,
   setzeZeichen,

@@ -12,7 +12,7 @@
  *
  * 1. Waehrend des Weltdurchgangs schieben leuchtende Dinge nur ihre *Daten*
  *    hierher - Ort, Radius, Farbe, Staerke. Der Formcode laeuft nicht erneut.
- * 2. Alles wandert auf eine Nebenleinwand in **Viertelaufloesung**. Ein
+ * 2. Alles wandert auf eine Nebenleinwand in **einem Fuenftel der Kante**. Ein
  *    Leuchtpunkt ist dort ein einziges `drawImage` eines vorgerenderten
  *    Verlaufsplaettchens - nicht ein Verlauf, der je Punkt neu gebaut wird.
  * 3. Weichzeichnen passiert auf der *kleinen* Leinwand, wo es fast nichts
@@ -26,7 +26,7 @@
  */
 
 /** Wie stark die Nebenleinwand kleiner ist als das Bild. */
-const TEILER = 4
+const TEILER = 5
 
 /**
  * Wie viele Leuchtpunkte ein Bild hoechstens traegt.
@@ -35,7 +35,7 @@ const TEILER = 4
  * Wellenpuffer. Bei einer Kettenreaktion im vollen Feld faellt sonst genau
  * dann Arbeit an, wenn ohnehin am wenigsten Zeit ist.
  */
-const MAX_PUNKTE = 900
+const MAX_PUNKTE = 300
 
 /** Kantenlaenge eines Verlaufsplaettchens. */
 const PLAETTCHEN = 64
@@ -76,6 +76,15 @@ export class Glut {
     this.hoehe = Math.max(1, Math.round(hoehe / TEILER))
     this.leinwand.width = this.breite
     this.leinwand.height = this.hoehe
+    /*
+     * Keine Glaettung beim Kopieren der Plaettchen.
+     *
+     * Sie kostet gemessen eine halbe Millisekunde je Bild und ist hier
+     * unsichtbar: Auf die Nebenleinwand folgen ein Weichzeichner und eine
+     * fuenffache Vergroesserung: Zwei Glaettungen, die jede Stufe im Verlauf
+     * ohnehin auswaschen. Eine dritte davor ist bezahlte Arbeit ohne Wirkung.
+     */
+    this.ctx.imageSmoothingEnabled = false
   }
 
   /**
@@ -107,7 +116,7 @@ export class Glut {
    * Wird nach dem Weltdurchgang aufgerufen, wenn die Zielleinwand wieder in
    * Bildkoordinaten steht. `welt` ist die Kameramatrix, wie sie *waehrend* des
    * Durchgangs galt - daraus baut die Nebenleinwand dieselbe Sicht in
-   * Viertelgroesse.
+   * derselben Verkleinerung.
    */
   aufloesen(
     ziel: CanvasRenderingContext2D,
@@ -126,30 +135,49 @@ export class Glut {
      * Teiler. Weil beides reine Skalierungen sind, die *vor* allem anderen
      * angewendet wurden, genuegt es, alle sechs Komponenten zu teilen.
      */
+    /*
+     * Erst loeschen, dann die Kamera aufsetzen.
+     *
+     * Andersherum musste ein Rechteck geloescht werden, das gross genug ist,
+     * um jede Kameralage zu ueberdecken - und das heisst: ein Rechteck, das
+     * durch die Matrix laeuft, bevor es an der Leinwandkante abgeschnitten
+     * wird. Ohne Matrix sind es genau die 256 mal 144 Punkte, die es gibt.
+     */
+    g.setTransform(1, 0, 0, 1, 0, 0)
+    g.globalCompositeOperation = 'source-over'
+    g.clearRect(0, 0, this.breite, this.hoehe)
+
     const k = pixelSkala * TEILER
     g.setTransform(welt.a / k, welt.b / k, welt.c / k, welt.d / k, welt.e / k, welt.f / k)
-    g.globalCompositeOperation = 'source-over'
-    g.clearRect(-1e6, -1e6, 2e6, 2e6)
     g.globalCompositeOperation = 'lighter'
 
+    // Die zuletzt gesetzte Deckkraft merken: Jede Zuweisung an `globalAlpha`
+    // ist ein Zustandswechsel am Zeichenkontext, und die Mehrzahl der
+    // Leuchtpunkte meldet ohnehin volle Staerke.
+    let alpha = 1
+    g.globalAlpha = 1
     for (let i = 0; i < this.anzahl; i++) {
-      const bild = this.holePlaettchen(this.farben[i])
       // Der Radius wird grosszuegig genommen: Ein Leuchten, das genau so gross
       // ist wie der Koerper, sieht aus wie eine Umrandung. Es soll darueber
       // hinausreichen.
       const r = this.radien[i] * 2.6
       if (r < 0.5) continue
-      g.globalAlpha = Math.min(1, this.staerken[i])
+      const a = this.staerken[i] < 1 ? this.staerken[i] : 1
+      if (a !== alpha) {
+        g.globalAlpha = a
+        alpha = a
+      }
+      const bild = this.holePlaettchen(this.farben[i])
       g.drawImage(bild, this.xs[i] - r, this.ys[i] - r, r * 2, r * 2)
     }
     g.globalAlpha = 1
 
-    // Weichzeichnen auf der kleinen Leinwand: 320 x 180 statt 1280 x 720 sind
-    // ein Sechzehntel der Bildpunkte, und genau deshalb ist echtes Bloom hier
-    // ueberhaupt bezahlbar.
+    // Weichzeichnen auf der kleinen Leinwand: 256 x 144 statt 1280 x 720 sind
+    // ein Fuenfundzwanzigstel der Bildpunkte, und genau deshalb ist echtes
+    // Bloom hier ueberhaupt bezahlbar.
     g.setTransform(1, 0, 0, 1, 0, 0)
     g.globalCompositeOperation = 'copy'
-    g.filter = 'blur(3px)'
+    g.filter = 'blur(2px)'
     g.drawImage(this.leinwand, 0, 0)
     g.filter = 'none'
     g.globalCompositeOperation = 'source-over'

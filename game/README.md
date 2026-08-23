@@ -14,6 +14,13 @@ Punkte.
 
 Keine Laufzeit-Abhängigkeiten: TypeScript, Canvas 2D, sonst nichts.
 
+![Vorher und nachher: derselbe Waffenbau auf dem alten und auf dem neuen
+Feld](docs/vorher-nachher.jpg)
+
+Beides ist dasselbe Spiel, dieselbe Minute, derselbe Bau — dazwischen liegt nur
+die siebte Runde. Wie es dazu kam, steht unter [Das
+Nachtfeld](#das-nachtfeld).
+
 ## Losspielen
 
 ```bash
@@ -149,7 +156,7 @@ Aus drei vorgelegten Richtungen fiel die Wahl auf **massiv**:
 
 | Regel | Vorher | Jetzt |
 |---|---|---|
-| Spielfeld | fast schwarz | **heller als die Figuren** (`#2a2f3e`) |
+| Spielfeld | fast schwarz | **heller als die Figuren** (`#2a2f3e`) — bis Runde 7, siehe unten |
 | Gegner | gefüllt, dünne Kante in Grundfarbe | gefüllt, **3 px dunkle Kontur**, Schlagschatten |
 | Karten | durchscheinende Umrisse mit Linien im Text | **massive Platten** mit Kante, Schatten, Akzentbalken oben |
 | Bruchlinien | quer über die Fläche | nur im **Kopfstreifen**, nie in der Textfläche |
@@ -172,6 +179,162 @@ gegenseitig auslöschen; Zonen füllen dunkel statt hell, weil das Feld jetzt
 hell ist. Der Todesbildschirm besteht aus drei Platten — Punktetafel oben, was
 passiert ist links, woran sie gestorben sind rechts — und der Sprung im Glas
 läuft **hinter** ihnen durch, nicht über den Text.
+
+## Das Nachtfeld
+
+Nach der sechsten Runde kam die Rückmeldung, die schwerer zu fassen war als
+alle davor:
+
+> „Das Game ist schon cool, aber es sieht mir immer noch so aus, als wäre das
+> so wie KI gemacht beziehungsweise so billig gemacht."
+
+Das ist kein Geschmacksurteil, das man wegdiskutieren kann, und es war auch
+keine Frage von fehlenden Zeichnern. Die Ursachen standen im Quelltext, und
+jede einzelne ließ sich benennen:
+
+| Was billig wirkte | Woher es kam |
+|---|---|
+| Der Boden war Millimeterpapier | einfarbiger Grund plus ein regelmäßiges 80-px-Raster in zwei Grautönen, das sich nie bewegte |
+| Nichts leuchtete | kein einziges `globalCompositeOperation` im ganzen Projekt — in einem Spiel über Glas und Kristalle glühte nichts |
+| Farbkonfetti ohne Rangfolge | dreizehn voll gesättigte Töne auf ähnlicher Helligkeit; nichts trat zurück |
+| Eine Monospace für alles | `SCHRIFT` hatte genau einen Eintrag — Titel, Fließtext und Zahlen teilten ihn sich |
+| Kamera ohne Charakter | ein nackter exponentieller Nachzug, kein Vorausblick, kein Kick |
+| Kein Hitstop | Wucht bestand aus Wackeln und einem weißen Vollbild-Rechteck |
+| Bewegung ohne Gewicht | die Position wurde direkt aus der Tastenrichtung geschrieben: volles Tempo im ersten Bild |
+
+Die Regel, die alles trägt, stand schon seit Runde 5 in `palette.ts` — der Code
+hielt sich nur nicht daran:
+
+> **Die Form sagt, was es ist. Die Farbe sagt, in welchem Zustand es ist.**
+
+Die Vorbilder für die gewählte Richtung sind alle vier Spiele **ohne
+Grafikdateien**, die trotzdem teuer aussehen: **Geometry Wars** (wellendes
+Gitter, additives Leuchten — beides reine Mathematik), **Nex Machina** und
+**Resogun** (dunkler Grund, leuchtende Körper, Konturen bleiben), **Devil
+Daggers** (eine einzige Lichtquelle trägt eine ganze Ästhetik) und **Downwell**
+(Farbdisziplin als Stilmittel statt als Verzicht).
+
+### Der Grund wird schwarz und lebendig
+
+`grund` fällt von `#2a2f3e` auf ein Nachtblau um `#070912`. Damit kehrt sich
+die Bildsprache um: Nicht mehr der Boden trägt, sondern das Licht darauf. Die
+dunkle Kontur aus Runde 5 bleibt — sie trennt jetzt *Leuchtendes* voneinander
+statt Flächen.
+
+An die Stelle des Rasters tritt ein **Federnetz** (`render/gitter.ts`): 22 × 14
+Knoten im Abstand 56, jeder mit einer Geschwindigkeit und einer Federkraft
+zurück in die Ruhelage, an Weltkoordinaten verankert, damit es mitscrollt.
+Impulse kommen aus Momenten, die es ohnehin schon gibt — jede Zersplitterung,
+jeder Bossangriff, jeder Schalenbruch. Der Boden **reagiert** damit auf das
+Spiel, statt es nur zu unterlegen, und das ist der ganze Unterschied zwischen
+einer Szene und einer Kulisse.
+
+Die Simulation zeichnet dabei nichts. Sie *meldet* Impulse in einen kleinen
+Ringpuffer (`game/wellen.ts`), genau wie `game/klaenge.ts` es für den Ton tut,
+und `render/gitter.ts` leert ihn je Bild. `src/game/` bleibt browserfrei — die
+Regel, die alle Messungen ohne Fenster überhaupt erst möglich macht.
+
+### Die Glut — Bloom ohne Shader
+
+Der größte einzelne Hebel, und der Grund, warum flaches Canvas 2D nach Prototyp
+aussieht: **es emittiert nichts.** Jede Form wird gefüllt und umrandet, fertig.
+
+`render/glut.ts` baut echtes Bloom ohne Shader, ohne Bibliothek und ohne den
+Zeichencode zweimal zu durchlaufen:
+
+1. Leuchtende Dinge schieben während des Weltdurchgangs nur ihre *Daten*
+   hinein — Ort, Radius, Farbe, Stärke. Der Formcode läuft **nicht** erneut.
+2. Alles wandert auf eine Nebenleinwand mit einem Fünftel der Kantenlänge
+   (256 × 144). Ein Leuchtpunkt ist dort ein einziges `drawImage` eines
+   **vorgerenderten Verlaufsplättchens** — je Farbe eines, faul erzeugt.
+3. Weichgezeichnet wird auf der *kleinen* Leinwand, wo es fast nichts kostet.
+4. Einmal mit `globalCompositeOperation = 'lighter'` in voller Größe zurück.
+
+Was leuchtet: Spieler und Stoßring, Kristalle, eigene Geschosse und
+Feindschüsse, Effektringe, Zeichen-Ringe, Schreine, der Kern und seine Schalen,
+offene Risse, kritische Zahlen.
+
+Was **nicht** leuchtet: gewöhnliche Gegnerkörper. Bei 1400 Stück wäre das eine
+Lichtsuppe, in der nichts mehr zu erkennen ist — und damit genau der Fehler,
+den die Farbdisziplin gerade behebt.
+
+### Farbe ist ab jetzt eine Aussage
+
+Die sieben eigenen Gegnerfarben sind weg. Der Körper trägt eine von drei
+Helligkeiten aus einer kühlen, fast einfarbigen Familie; **Farbton lebt nur
+noch im Kern**, und nur dort, wo er etwas sagt: Der Kitt ist rosa, weil man ihn
+zuerst wegmachen muss. Der Speier ist orange, weil man zu ihm hin muss. Der
+Rest trägt Stahlblau, das nur sagt „lebt".
+
+Dazu bekommt jeder Körper einen **hellen Kern** bei 52 % Radius in derselben
+Silhouette, ein Stück nach oben versetzt. Das ist Beleuchtung von oben für den
+Preis einer Zahl — und es macht aus einem Aufkleber einen Körper mit Ober- und
+Unterseite. Ein runder Kern in einem Sechseck sähe aus wie ein aufgemaltes
+Auge; dieselbe Form in klein liest sich als *dasselbe Ding, von innen
+beleuchtet*, und die Formensprache aus neun Arten bleibt bis in den Kern
+erhalten.
+
+### Eine Schriftdatei — die erste Asset-Datei überhaupt
+
+Bis hierher galt „keine Dateien, alles Code". Für die Schrift ist die Regel
+gebrochen, und zwar bewusst: Eine Monospace im Fließtext ist der
+zuverlässigste Hinweis darauf, dass eine Oberfläche von jemandem gebaut wurde,
+der Code schreibt.
+
+**Space Grotesk** liegt jetzt unter `public/schrift/` (22 kB, SIL Open Font
+License, Lizenztext daneben), wird per `@font-face` lokal eingebunden und
+**nicht** nachgeladen: kein externer Abruf, kein Netz nötig, und im späteren
+Steam-Paket ändert sich nichts. `SCHRIFT` hat drei Rollen statt einer —
+`anzeige` für Überschriften, `text` für Fließtext und `mono` **nur noch für
+Zahlen**, weil in einer Proportionalschrift beim Hochzählen die ganze Zeile
+springt.
+
+Der erste Bildaufbau wartet auf `document.fonts.ready`. Ein sichtbarer
+Schriftwechsel im ersten Moment ist genau der Eindruck, den diese Runde
+loswerden soll — und man sieht ihn nur beim allerersten Start, also nie beim
+Testen und immer bei dem, der das Spiel zum ersten Mal öffnet.
+
+## Wie es sich anfühlt
+
+Grafik war die eine Hälfte der Rückmeldung; „wie es sich spielen lässt" die
+andere. Vier Eingriffe, alle klein im Code und groß in der Hand:
+
+**Hitstop.** Der größte Hebel fürs Gefühl und fast umsonst: `laufendTick`
+rechnet ohnehin schon `sdt = dt * s.zeitskala * …`. Neu ist `s.stopRest` —
+solange es läuft, ist `sdt` null, `aktualisiereOptik` läuft aber weiter. Das
+Bild bleibt lebendig, die Welt steht still.
+
+| Moment | Dauer |
+|---|---|
+| Zersplitterung | 55 ms |
+| Zersplitterung an einem Boss | 90 ms |
+| Schalenbruch am Kern | 120 ms |
+| Treffer am Spieler | 70 ms |
+| Die Kernscherbe zerspringt | 140 ms |
+
+Gedeckelt bei 160 ms, damit eine Kettenreaktion — und die ist bei dieser
+Kernregel der Normalfall — das Spiel nicht einfriert. Zwei Splitter im selben
+Tick verlängern nichts; der längere gewinnt.
+
+**Kamera mit Charakter.** Sie zielt ein Stück in Laufrichtung **voraus**, damit
+man sieht, wohin man rennt, statt hinterherzuschauen. Ein abklingender **Kick**
+schiebt sie vom Einschlag weg. Und ein winziger **Zoomstoß** bei
+Zersplitterung, Schalenbruch und Bossauftritt gibt dem Bild einen Atemzug —
+bewusst nur ein paar Prozent, alles darüber liest das Auge als Ruckeln.
+
+**Trägheit.** Die Figur schrieb ihre Position bisher direkt aus der
+Tastenrichtung: im ersten Bild volles Tempo, beim Loslassen sofortiger Halt.
+Maximal präzise, und es fühlt sich an wie ein Mauszeiger — man schiebt einen
+Punkt herum, statt jemanden zu bewegen. Jetzt rampt eine eigene Geschwindigkeit
+in rund 70 ms auf das Ziel und rollt beim Loslassen aus. Gemessen an dem, was
+das Spiel verlangt, ist das eine Größenordnung unter jeder Vorwarnung: Der
+Stürmer kündigt seine Bahn 0,7 Sekunden vorher an, der Boss 0,8 bis 1,2. Der
+**Stoß** ist davon ganz ausgenommen und überschreibt sie vollständig — ein
+Ausweichmanöver darf nie daran scheitern, dass die Figur noch anfährt.
+
+**Tod mit Richtung.** Scherben fliegen jetzt *vom tödlichen Treffer weg* statt
+gleichmäßig ringsum, und Funken sprühen in Flugrichtung des Geschosses statt
+kugelförmig. Der Kill ist der häufigste Moment im Spiel — er trägt das Gefühl.
 
 ## Die Minikarte
 
@@ -487,10 +650,11 @@ und auf den Todesbildschirm, der von der Stelle des Todes aus zerspringt.
 
 ```bash
 npm run check      # TypeScript
-npm run test       # 263 Tests: Waffen, Karten, Risse, Gegner, Zeichen, Bosse, Kern,
-                   #            Etappen, Verhexungen, Chronik, Ton, Determinismus
+npm run test       # 274 Tests: Waffen, Karten, Risse, Gegner, Zeichen, Bosse, Kern,
+                   #            Etappen, Verhexungen, Chronik, Gefühl, Ton, Determinismus
 npm run perf       # Simulation ohne Zeichnen, misst ms pro Tick
-npm run smoke      # startet das Spiel im Browser, legt Screenshots ab
+npm run smoke      # startet das Spiel im Browser, misst die Bildzeit,
+                   # legt Screenshots ab
 ```
 
 `npm run smoke` braucht einen Chromium. Bringt Playwright seinen eigenen mit,
@@ -509,8 +673,10 @@ Die Bilder landen in `screenshots/`.
 src/
   core/     Zeitschritt, Eingabe, Zufall, Kollisionsgitter, Objektpools
   game/     Die Simulation — kennt keinen Browser
-  render/   Zeichnen, Partikel, Erschütterung, Anzeige
+  render/   Zeichnen, Federnetz, Glut, Partikel, Erschütterung, Anzeige
   ui/       Menüs und alle Texte
+public/
+  schrift/  Die einzige Asset-Datei im Projekt: Space Grotesk plus Lizenz
 ```
 
 ### Die Spiellogik kennt keinen Browser
@@ -599,6 +765,54 @@ Beim Messen kam eine Sache heraus, die man nicht vermutet: Das
 Auseinanderdrücken der Gegner **spart** Rechenzeit. Wird die Trennkraft
 gedeckelt, verklumpen sie, und dann liefert jede Gitterabfrage riesige
 Kandidatenlisten — mit Deckel kostete derselbe Zustand 11,7 statt 4,5 ms.
+
+### Und was bisher niemand gemessen hat: das Bild
+
+`npm run perf` misst **nur den Tick**. Das ist sein Zweck — er läuft ohne
+Browser. Aber die Glut-Schicht, das Federnetz, die Vignette und der Staub sind
+*Zeichen*kosten und dort schlicht unsichtbar: Das Bloom hätte still acht
+Millisekunden je Bild verschlingen können, und es wäre erst beim Spielen
+aufgefallen. Ohne diese Zahl wäre die ganze Bildrunde ein Blindflug gewesen.
+
+Also misst der Browser-Test sie jetzt, in zwei Zuständen:
+
+| Zustand | Median | p95 |
+|---|---|---|
+| gewöhnlicher Lauf nach einer Minute (~40 Gegner) | 1,5 ms | 1,9 ms |
+| 1300 Gegner, alle im Bild, fünf ausgereizte Waffen, 70 gezeichnete | 11,4 ms | 12,6 ms |
+
+Der zweite Wert braucht einen Vorbehalt, und der gehört neben die Zahl statt in
+eine Fußnote: **Der Prüflauf hat keine Grafikkarte.** Chromium meldet sich dort
+als *SwiftShader*, also als reiner Software-Rasterisierer auf vier Kernen —
+jede Füllung, jeder Strich und vor allem jede additive Überlagerung der Glut
+wird von der CPU gerechnet. Auf jedem Rechner mit Grafikkarte läuft dieselbe
+Leinwand über die GPU und liegt um ein Vielfaches darunter. Die Schranke im
+Test (15 ms) ist deshalb **kein Versprechen über Bildwiederholrate**, sondern
+eine Regressionsschranke auf der langsamsten Maschine, die das Projekt
+regelmäßig sieht.
+
+Aufgeschlüsselt durch Weglassen je einer Schicht, jede in einer frischen Seite
+gemessen:
+
+| Schicht | Anteil am Bild |
+|---|---|
+| Gegner — Füllung, Kontur, Kern | ~6,5 ms |
+| Glut — 300 Leuchtpunkte, Weichzeichner, Rückgabe | ~3,5 ms |
+| Anzeige, Kristalle, Partikel, Bruchlinien | ~1,5 ms |
+| Federnetz, Staub, Vignette, Zonen, Geschosse | unter dem Messrauschen |
+
+Das **Federnetz ist damit die billigste sichtbare Änderung der ganzen Runde** —
+das auffälligste Stück Bild kostet nichts Messbares. Teuer sind die Gegner, und
+das stimmt auch: rund tausend Formen, jede mit zwei Pfaden und einem Strich.
+
+Auf dem Weg dahin lag ein Umbau, der offensichtlich schneller sein *musste* und
+es nicht war. `stroke()` über tausend Formen mit runden Ecken gilt als teuer,
+also sollte die Kontur eine zweite, größere **Füllung** darunter werden. Gemessen
+kostete der zusätzliche Pfadaufbau mehr als der Strich, den er einsparen sollte:
+15,3 statt 12,2 ms. Der Strich blieb. Was wirklich half, war banaler und stand
+in keiner Vermutung: **Gegner außerhalb des Bildes gar nicht erst zeichnen** —
+`entferneVerlorene` hält sie bis zum 2,4-fachen Sichtradius am Leben, und ein
+guter Teil davon wurde in jeden Pfad aufgenommen, ohne je jemanden zu erreichen.
 
 ## Was die Screenshots geändert haben
 
@@ -710,6 +924,35 @@ Und in der sechsten Runde, mit dem Kern und den Zeichen:
 - **`textAlign` ist Zustand am Kontext.** Die Chronik zeichnet linksbündig, und
   die Hinweiszeile darunter stand danach nach rechts verschoben. Kein Fehler in
   der Zeile, sondern in der Zeile davor.
+
+Und in der siebten Runde, beim Umbau auf das Nachtfeld:
+
+- **Der Schlagschatten war zweimal umsonst da.** Auf dem hellen Feld gab er
+  jedem Körper eine Standfläche; auf dem Nachtfeld ist ein Schatten in
+  `rgba(2,3,8,0.55)` schlicht unsichtbar — nichts wirft bei Nacht einen
+  Schatten auf Schwarz. Gemessen kostete er einen vollen Pfadaufbau über 1300
+  Gegner, also rund drei Millisekunden je Bild, für nichts. Der leuchtende Kern
+  hat seinen Platz eingenommen: dieselben Kosten, aber er sagt etwas.
+- **Ein Zeichen lag außerhalb der mitgelieferten Schrift.** Die Chronik-Raute
+  `◈` steht nicht im Lateinsubset der Schriftdatei — im Browser fiel sie
+  kommentarlos auf die Ersatzschrift zurück und stand als einziges Zeichen im
+  ganzen Bild in einer anderen Type. Sie ist jetzt ein gezeichneter Pfad. Ein
+  Skript prüft, welche Zeichen im Quelltext außerhalb des Subsets liegen; es
+  war genau dieses eine.
+- **Ein Kamerakick auf einen Treffer am Spieler war Unsinn.** `kickeKamera(s,
+  sp.x, sp.y, 0)` stößt die Kamera vom Spieler weg — also von sich selbst, mit
+  Stärke null. Bei einem Treffer weiß niemand, woher er kam; dafür ist das
+  ungerichtete `s.trauma` da, und das lief längst.
+- **Die Bildzeitmessung maß 202 statt 1300 Gegner.** Fünf ausgereizte Waffen
+  räumen schneller ab, als der Spawner nachlegt — nach ein paar Sekunden stand
+  die Messung auf einem Siebtel des Feldes. Eine Bildzeit auf einem Siebtel
+  beweist nichts über das Bild, das man wirklich sieht. Sie füllt jetzt **in
+  jedem Bild** nach, so wie `test/perf.ts` es je Tick tut.
+- **`×1.00` in einem deutschen Spiel.** `toFixed` liefert immer einen Punkt.
+  Kein Fehler, den jemand benennen würde — und genau eines der kleinen Zeichen
+  dafür, dass eine Oberfläche nicht für die Sprache gemacht wurde, in der sie
+  steht. `weapons.ts` hatte den Komma-Helfer längst; die Menüs kannten ihn
+  nicht.
 
 ## Was noch fehlt
 

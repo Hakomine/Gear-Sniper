@@ -64,6 +64,19 @@ export class Zeichner {
    */
   private letzteZeit = performance.now()
 
+  /**
+   * Wie lange das letzte Bild zum Zeichnen gebraucht hat, in Millisekunden.
+   *
+   * `npm run perf` misst ausschliesslich den *Tick* - es laeuft ohne Browser,
+   * genau das ist sein Zweck. Die Glut-Schicht und das Federnetz sind aber
+   * Zeichenkosten und waeren dort unsichtbar: Sie koennten still acht
+   * Millisekunden je Bild verschlingen, und es fiele erst beim Spielen auf.
+   *
+   * Zwei Zeitnahmen je Bild sind dafuer ein sehr kleiner Preis, und der
+   * Browser-Test liest den Wert aus - siehe `test/smoke.spec.ts`.
+   */
+  bildZeit = 0
+
   constructor(
     private canvas: HTMLCanvasElement,
     private ctx: CanvasRenderingContext2D,
@@ -102,6 +115,7 @@ export class Zeichner {
    * Politur-Runde.
    */
   zeichne(s: Spielstand, _alpha: number): void {
+    const begonnen = performance.now()
     const ctx = this.ctx
     ctx.setTransform(this.pixelSkala, 0, 0, this.pixelSkala, 0, 0)
 
@@ -171,6 +185,8 @@ export class Zeichner {
     if (s.phase === 'pause') zeichnePause(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'atempause') zeichneAtempause(ctx, s, VIRT_B, VIRT_H)
     if (s.phase === 'tot') zeichneTod(ctx, s, VIRT_B, VIRT_H)
+
+    this.bildZeit = performance.now() - begonnen
   }
 }
 
@@ -481,19 +497,37 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   blitzende.length = 0
   schildTraeger.length = 0
 
+  /*
+   * Was nicht im Bild steht, wird nicht gezeichnet.
+   *
+   * Der groesste Fund der Bildzeitmessung. `entferneVerlorene` haelt Gegner bis
+   * zum 2,4-fachen Sichtradius am Leben - im vollen Feld steht damit ein guter
+   * Teil der 1400 weit ausserhalb des Bildschirms und wurde trotzdem in jeden
+   * Pfad aufgenommen: Fuellung, Kontur, Kern. Drei Pfadaufbauten fuer etwas,
+   * das niemand sieht.
+   *
+   * Zwei Vergleiche je Gegner ersetzen das. Der Rand ist grosszuegig, weil die
+   * Erschuetterung das Bild verschiebt und der Zoomstoss es weitet - ein Gegner
+   * darf niemals am Rand aufploppen.
+   */
+  const halbB = VIRT_B / 2 / WELT_ZOOM + SICHT_RAND
+  const halbH = VIRT_H / 2 / WELT_ZOOM + SICHT_RAND
+
   const gegner = s.gegner.aktiv
   for (let i = 0; i < gegner.length; i++) {
-    const id = gegner[i].art.id
+    const g = gegner[i]
+    if (Math.abs(g.x - s.kamera.x) > halbB || Math.abs(g.y - s.kamera.y) > halbH) continue
+
+    const id = g.art.id
     let liste = gegnerEimer.get(id)
     if (liste === undefined) {
       liste = []
       gegnerEimer.set(id, liste)
     }
     liste.push(i)
-    if (gegner[i].blitz > 0) blitzende.push(i)
-    if (gegner[i].art.verhalten === 'schild') schildTraeger.push(i)
-    const z = gegner[i].zeichen
-    if (z >= 0) zeichenEimer[z].push(i)
+    if (g.blitz > 0) blitzende.push(i)
+    if (g.art.verhalten === 'schild') schildTraeger.push(i)
+    if (g.zeichen >= 0) zeichenEimer[g.zeichen].push(i)
   }
 
   const drehung = s.zeit * 0.7
@@ -506,30 +540,32 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // eigene Arten mit, die dort nicht stehen - mit der alten Schleife waeren
   // sie unsichtbar gewesen.
   /*
-   * Drei Durchgaenge je Gegnerart, und die Reihenfolge ist der ganze Stil:
-   * Schatten, dann Fuellung, dann Kontur.
+   * Drei Durchgaenge je Gegnerart: Fuellung, Kontur, leuchtender Kern.
    *
-   * Der Schatten gibt jedem Koerper eine Standflaeche - ohne ihn schwebt alles
-   * auf derselben Ebene. Die Kontur schneidet ihn aus dem Grund heraus. Beides
-   * zusammen ist der Grund, warum tausend Koerper im Pulk noch tausend Koerper
-   * bleiben und nicht zu einem Teppich verschmelzen.
+   * Der Schlagschatten ist weggefallen, und das aus zwei Gruenden, die
+   * zufaellig zusammenfielen. Auf dem hellen Feld gab er jedem Koerper eine
+   * Standflaeche; auf dem Nachtfeld ist ein Schatten in `rgba(2,3,8,0.55)`
+   * schlicht unsichtbar - nichts wirft bei Nacht einen Schatten auf Schwarz.
+   * Und gemessen kostete er einen vollen Pfadaufbau ueber 1300 Gegner, also
+   * rund drei Millisekunden je Bild. Der Kern hat seinen Platz eingenommen:
+   * dieselben Kosten, aber er sagt etwas.
    *
-   * Drei Striche je Art, nicht je Gegner: Der Pfad wird einmal fuer die ganze
-   * Art aufgebaut und dreimal benutzt.
+   * Drei Striche je *Art*, nicht je Gegner: Der Pfad wird einmal fuer die
+   * ganze Art aufgebaut und mehrfach benutzt.
    */
   for (const [, liste] of gegnerEimer) {
     if (liste.length === 0) continue
 
-    ctx.save()
-    ctx.translate(0, SCHATTEN_VERSATZ)
-    ctx.beginPath()
-    for (let k = 0; k < liste.length; k++) {
-      formPfad(ctx, gegner[liste[k]], px, py, drehung)
-    }
-    ctx.fillStyle = FARBEN.schatten
-    ctx.fill()
-    ctx.restore()
-
+    /*
+     * Ein Pfad, zwei Verwendungen: erst gefuellt, dann umrandet.
+     *
+     * Der naheliegende Umbau waere, die Kontur als groessere Fuellung darunter
+     * zu zeichnen statt als Strich - `stroke()` ueber runde Ecken gilt als
+     * teuer. Gemessen war es das Gegenteil: Der zweite Pfadaufbau ueber 1300
+     * Formen kostete mehr als der Strich, den er einsparen sollte (15,3 statt
+     * 12,2 Millisekunden je Bild). Ein Pfad, zwei Aufrufe darauf bleibt der
+     * guenstigste Weg zu Fuellung und Kante.
+     */
     ctx.beginPath()
     for (let k = 0; k < liste.length; k++) {
       formPfad(ctx, gegner[liste[k]], px, py, drehung)
@@ -753,8 +789,15 @@ function trennKante(ctx: CanvasRenderingContext2D): void {
   ctx.stroke()
 }
 
-/** Wie weit der Schlagschatten nach unten versetzt liegt. */
-const SCHATTEN_VERSATZ = 4
+/**
+ * Wie weit ueber den Bildrand hinaus noch gezeichnet wird.
+ *
+ * Grosszuegig bemessen: Die Erschuetterung verschiebt das Bild um bis zu 16
+ * Punkte, der Zoomstoss weitet es, und der groesste Boss hat 88 Punkte Radius.
+ * Ein Gegner, der am Rand aufploppt, waere schlimmer als die paar Pfade, die
+ * der Rand kostet.
+ */
+const SICHT_RAND = 170
 
 /**
  * Wie `formPfad`, nur kleiner - der leuchtende Innenkoerper.
@@ -774,16 +817,33 @@ function kernPfad(
   py: number,
   drehung: number,
 ): void {
-  // Ohne neues Feld am Gegner: Der Pfad wird mit einem kleineren Radius
-  // gebaut, indem das Objekt kurz umhuellt wird. Ein flacher Aufsatz auf
-  // einem gepoolten Objekt kostet nichts - er verlaesst diese Zeile nie.
-  huelle.x = g.x
   // Ein Stueck nach oben versetzt: Damit sitzt der helle Teil oben und die
   // dunkle Fuellung schaut unten hervor. Das ist Beleuchtung von oben fuer den
   // Preis einer Zahl - und es gibt jedem Koerper eine Ober- und eine
   // Unterseite, statt ihn als flachen Aufkleber stehen zu lassen.
-  huelle.y = g.y - g.radius * 0.14
-  huelle.radius = g.radius * KERN_ANTEIL
+  skalierterPfad(ctx, g, px, py, drehung, KERN_ANTEIL, -g.radius * 0.14)
+}
+
+/**
+ * Dieselbe Form, kleiner - und optional nach oben versetzt.
+ *
+ * Ohne neues Feld am Gegner: Das Objekt wird kurz umhuellt und mit einem
+ * anderen Radius durch `formPfad` geschickt. Ein flacher Aufsatz, der die
+ * Zeile nie verlaesst, kostet nichts - im Gegensatz zu 1400 Objekten mit drei
+ * zusaetzlichen Feldern.
+ */
+function skalierterPfad(
+  ctx: CanvasRenderingContext2D,
+  g: { x: number; y: number; radius: number; blick?: number; art: { form: string } },
+  px: number,
+  py: number,
+  drehung: number,
+  anteil: number,
+  versatzY: number,
+): void {
+  huelle.x = g.x
+  huelle.y = g.y + versatzY
+  huelle.radius = g.radius * anteil
   huelle.blick = g.blick
   huelle.art = g.art
   formPfad(ctx, huelle, px, py, drehung)
@@ -813,7 +873,11 @@ function formPfad(
     // "schnell" und "kommt von dort".
     const dx = px - g.x
     const dy = py - g.y
-    const laenge = Math.hypot(dx, dy) || 1
+    // `Math.sqrt` statt `Math.hypot`: Letzteres schuetzt vor Ueberlauf bei
+    // riesigen Werten und ist dafuer ein Vielfaches langsamer. Hier stehen
+    // Bildschirmabstaende, also hoechstens ein paar tausend - der Schutz
+    // greift nie, die Kosten fallen bei jedem Gegner in jedem Bild an.
+    const laenge = Math.sqrt(dx * dx + dy * dy) || 1
     const nx = dx / laenge
     const ny = dy / laenge
     ctx.moveTo(g.x + nx * r * 1.35, g.y + ny * r * 1.35)
@@ -856,7 +920,8 @@ function formPfad(
     // damit auch waehrend der Vorwarnung eine Ansage.
     const dx = px - g.x
     const dy = py - g.y
-    const laenge = Math.hypot(dx, dy) || 1
+    // `Math.sqrt` statt `Math.hypot` - Begruendung siehe beim Dreieck.
+    const laenge = Math.sqrt(dx * dx + dy * dy) || 1
     const nx = dx / laenge
     const ny = dy / laenge
     const qx = -ny
@@ -1096,21 +1161,16 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // Sekunde, um die eigene Position zu verlieren.
   const blinkt = sp.unverwundbar > 0 && Math.floor(sp.unverwundbar * 22) % 2 === 0
 
-  // Dunkler Hof, bevor irgendetwas Helles kommt.
-  //
-  // Im Screenshot aus der spaeten Phase ging die Figur in einem Teppich aus
-  // Gegnern schlicht unter - sie wird zwar zuletzt gezeichnet und liegt damit
-  // obenauf, aber hell auf hell trennt das Auge nicht. Ein dunkler Ring
-  // darunter schneidet sie aus jedem Hintergrund heraus. In einem Spiel, in
-  // dem man permanent ausweicht, ist die eigene Position die eine
-  // Information, die niemals verloren gehen darf.
-  // Schlagschatten wie bei jedem Koerper - die Figur steht auf dem Feld,
-  // statt darueber zu schweben.
-  ctx.beginPath()
-  ctx.arc(sp.x, sp.y + SCHATTEN_VERSATZ, sp.radius * 1.08, 0, Math.PI * 2)
-  ctx.fillStyle = FARBEN.schatten
-  ctx.fill()
-
+  /*
+   * Kein Schlagschatten mehr - auch nicht am Spieler.
+   *
+   * Auf dem hellen Feld gab er der Figur eine Standflaeche. Auf Nacht wirft
+   * nichts einen Schatten auf Schwarz; was die Figur jetzt aus dem Getuemmel
+   * schneidet, ist ihr Licht (siehe die Glut-Meldung weiter unten). In einem
+   * Spiel, in dem man permanent ausweicht, ist die eigene Position die eine
+   * Information, die niemals verlorengehen darf - und ein heller Fleck traegt
+   * das besser als ein dunkler Ring.
+   */
   // Der Koerper: hell gefuellt, dunkel umrandet - dieselbe Regel wie bei den
   // Gegnern, nur heller als alles andere im Bild. Er ist als Einziger cremig
   // und rund; jede Gegnerart ist eckig und farbig. Damit ist er auch in einem
@@ -1348,10 +1408,18 @@ function zeichneBruchlinien(ctx: CanvasRenderingContext2D, s: Spielstand): void 
 
   // Und jeder gerissene Gegner glimmt. Bei drei Rissen zerspringt er - das
   // Glimmen ist die Vorwarnung, die es bisher nur als Strichzeichnung gab.
+  /*
+   * Nur die *fast* zersplitterten glimmen - ab dem zweiten Riss.
+   *
+   * Gemessen: Mit jedem gerissenen Gegner kostete die Glut-Schicht 8,7 der 20
+   * Millisekunden je Bild, weil im vollen Getuemmel hunderte gleichzeitig
+   * einen Riss tragen. Und sie sagte dabei am wenigsten: Ein Riss ist der
+   * Normalzustand, zwei sind die Ansage. Genau die bleibt.
+   */
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]
-    if (g.risse <= 0) continue
-    glut.melde(g.x, g.y, g.radius * (0.9 + g.risse * 0.22), FARBEN.riss, 0.16 * g.risse)
+    if (g.risse < RISS_SCHWELLE - 1) continue
+    glut.melde(g.x, g.y, g.radius * 1.4, FARBEN.riss, 0.4)
   }
 }
 

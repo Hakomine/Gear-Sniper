@@ -108,6 +108,9 @@ type Fenster = Window & {
     rufeKern: (s: Spiel) => GegnerLose | null
     starteTageslauf: (s: Spiel) => void
     setzeZeichen: (s: Spiel, g: GegnerLose, index: number) => void
+    zeichner: { bildZeit: number }
+    legeGegner: (s: Spiel, art: unknown, x: number, y: number) => GegnerLose | null
+    arten: ReadonlyArray<{ id: string; gewicht: number }>
   }
 }
 
@@ -836,4 +839,185 @@ test('Die Kernscherbe trägt ihre eigenen Risse', async ({ page }) => {
     () => (window as unknown as Fenster).__scherbenfeld.spiel.spieler.istGlas,
   )
   expect(glas).toBe(true)
+})
+
+/**
+ * Wie lange ein Bild zum Zeichnen braucht.
+ *
+ * `npm run perf` misst ausschliesslich den Tick - es laeuft ohne Browser, und
+ * genau das ist sein Zweck. Die Glut-Schicht, das Federnetz, die Vignette und
+ * der Staub sind aber *Zeichen*kosten und dort unsichtbar. Ohne diese Messung
+ * waere die ganze Bildrunde ein Blindflug: Das Bloom koennte still acht
+ * Millisekunden je Bild verschlingen, und es fiele erst beim Spielen auf.
+ *
+ * ## Welche Maschine hier misst
+ *
+ * Das ist der entscheidende Vorbehalt, und er gehoert neben die Zahl, nicht in
+ * eine Fussnote. Der Prueflauf startet ein Chromium ohne Grafikkarte; es
+ * meldet sich als *SwiftShader*, also als reiner Software-Rasterisierer auf
+ * vier Kernen. Jede Fuellung, jeder Strich und vor allem jede additive
+ * Ueberlagerung der Glut wird hier von der CPU gerechnet. Auf jedem Rechner
+ * mit Grafikkarte laeuft dieselbe Leinwand ueber die GPU und liegt um ein
+ * Vielfaches darunter.
+ *
+ * Diese Zahl ist damit **kein Versprechen ueber Bildwiederholrate**, sondern
+ * eine Regressionsschranke auf der langsamsten Maschine, die das Projekt
+ * regelmaessig sieht. Sie faengt genau das, wofuer sie da ist: dass jemand -
+ * ich - eine Schicht einbaut, die das Bild um die Haelfte teurer macht, ohne
+ * es zu merken.
+ *
+ * ## Was das Bild kostet, gemessen einzeln
+ *
+ * Aufgeschluesselt durch Weglassen je einer Schicht, jede in einer frischen
+ * Seite gemessen (11,5 ms Median gesamt):
+ *
+ * | Schicht | Anteil |
+ * |---|---|
+ * | Gegner - Fuellung, Kontur, Kern | ~6,5 ms |
+ * | Glut - 300 Leuchtpunkte, Weichzeichner, Rueckgabe | ~3,5 ms |
+ * | Anzeige, Kristalle, Partikel, Bruchlinien | ~1,5 ms |
+ * | Federnetz, Staub, Vignette, Zonen, Geschosse | unter Messrauschen |
+ *
+ * Das Federnetz ist damit die billigste sichtbare Aenderung dieser Runde und
+ * die Gegner die teuerste - was auch stimmt: Es sind rund tausend Formen im
+ * Bild, jede mit zwei Pfaden und einem Strich.
+ *
+ * Die Schranke steht bei 15 ms und damit rund 25 Prozent ueber dem gemessenen
+ * p95. Enger waere sie ein Flackerlicht: Der Software-Rasterisierer schwankt
+ * zwischen Laeufen um eine gute Millisekunde. Weiter waere sie wertlos.
+ */
+test('Ein Bild bleibt im Zeitbudget, auch bei vollem Getümmel', async ({ page }) => {
+  await starte(page)
+
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    s.zeit = 300
+    s.etappe = 4
+    s.bossNummer = 40
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e12
+    // Fuenf Waffen wie in der Tick-Messung: Der Ernstfall hat Geschosse,
+    // Zonen, Effekte und eine dauernd laufende Splitterkaskade.
+    s.spieler.waffen = griff.waffen.slice(0, 5).map((def, i) => {
+      const w = griff.ruesteAus(def, i)
+      griff.werteAuf(w)
+      griff.werteAuf(w)
+      return w
+    })
+    s.spieler.abklingMult = 0.7
+  })
+
+  await page.waitForTimeout(4000)
+
+  /*
+   * Das Feld je Bild auffuellen - genau wie `test/perf.ts` es je Tick tut.
+   *
+   * Einmal fuellen und dann messen reicht nicht: Fuenf aufgewertete Waffen
+   * raeumen schneller ab, als der Spawner nachlegt, und die Messung stand nach
+   * wenigen Sekunden bei 200 Gegnern. Eine Bildzeit auf einem Siebtel des
+   * Feldes beweist nichts ueber das Bild, das man wirklich sieht - und der
+   * Deckel von 1400 ist ja gerade der Zustand, fuer den das Budget gilt.
+   */
+  const messung = await page.evaluate(async () => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    const arten = griff.arten.filter((a) => a.gewicht > 0)
+    let saat = 0
+
+    const auffuellen = (): void => {
+      while (s.gegner.anzahl < 1300) {
+        saat++
+        const w = (saat / 90) * Math.PI * 2
+        const r = 90 + (saat % 9) * 60
+        const g = griff.legeGegner(
+          s,
+          arten[saat % arten.length],
+          s.spieler.x + Math.cos(w) * r,
+          s.spieler.y + Math.sin(w) * r,
+        )
+        if (g === null) break
+        // Bis zum Deckel gezeichnet: der teuerste Zustand, den es gibt.
+        if (s.gezeichnet < 70) griff.setzeZeichen(s, g, saat % 5)
+      }
+    }
+
+    const proben: number[] = []
+    await new Promise<void>((fertig) => {
+      const naechstes = (): void => {
+        auffuellen()
+        proben.push(griff.zeichner.bildZeit)
+        if (proben.length >= 260) fertig()
+        else requestAnimationFrame(naechstes)
+      }
+      requestAnimationFrame(naechstes)
+    })
+
+    // Die ersten dreissig verwerfen: Darin steckt das Auffuellen des halb
+    // leeren Feldes und die Aufwaermphase des Browsers.
+    const echte = proben.slice(30).sort((a, b) => a - b)
+    return {
+      gegner: s.gegner.anzahl,
+      gezeichnet: s.gezeichnet,
+      median: echte[Math.floor(echte.length * 0.5)],
+      p95: echte[Math.floor(echte.length * 0.95)],
+    }
+  })
+
+  console.log(
+    `  Bildzeit bei ${messung.gegner} Gegnern (${messung.gezeichnet} gezeichnet): ` +
+      `Median ${messung.median.toFixed(2)} ms, p95 ${messung.p95.toFixed(2)} ms`,
+  )
+
+  // Am p95 gemessen, nicht am Maximum: Ein einzelner Ausreisser ist der
+  // Muellsammler und sagt nichts ueber das Spiel - dieselbe Regel wie in
+  // `test/perf.ts`.
+  expect(messung.gegner).toBeGreaterThan(900)
+  expect(messung.p95).toBeLessThan(15)
+})
+
+/**
+ * Und dasselbe fuer das Bild, das wirklich jemand sieht.
+ *
+ * Die Messung darueber packt 1300 Gegner in einen Ball um den Spieler - der
+ * schlimmste Zustand, den das Spiel im spaeten Lauf erreicht. Der *haeufige*
+ * Zustand ist ein anderer, und er ist der, an dem sich entscheidet, ob das
+ * Spiel fluessig wirkt: eine Minute Spiel, so wie es kommt.
+ *
+ * Beide Zahlen zu haben ist der Punkt. Faellt nur diese hier, ist etwas
+ * Grundsaetzliches teuer geworden; faellt nur die andere, skaliert etwas
+ * schlecht mit der Menge. Eine Zahl allein koennte das nicht unterscheiden.
+ */
+test('Ein gewöhnliches Bild bleibt weit unter der Bildgrenze', async ({ page }) => {
+  await starte(page)
+  await spiele(page, 60)
+
+  const messung = await page.evaluate(async () => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const proben: number[] = []
+    await new Promise<void>((fertig) => {
+      const naechstes = (): void => {
+        proben.push(griff.zeichner.bildZeit)
+        if (proben.length >= 180) fertig()
+        else requestAnimationFrame(naechstes)
+      }
+      requestAnimationFrame(naechstes)
+    })
+    const echte = proben.slice(20).sort((a, b) => a - b)
+    return {
+      gegner: griff.spiel.gegner.anzahl,
+      median: echte[Math.floor(echte.length * 0.5)],
+      p95: echte[Math.floor(echte.length * 0.95)],
+    }
+  })
+
+  console.log(
+    `  Bildzeit im gewöhnlichen Lauf (${messung.gegner} Gegner): ` +
+      `Median ${messung.median.toFixed(2)} ms, p95 ${messung.p95.toFixed(2)} ms`,
+  )
+
+  // Sechs Millisekunden auf dem Software-Rasterisierer heisst: Auf einer
+  // Maschine mit Grafikkarte bleibt das Bild eine Nebensache.
+  expect(messung.p95).toBeLessThan(6)
 })
