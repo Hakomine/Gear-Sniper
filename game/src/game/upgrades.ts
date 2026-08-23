@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import { FUSIONEN, istFusion } from './fusionen'
 import { heileSpieler } from './player'
 import type { Spieler, Spielstand } from './state'
@@ -421,7 +422,7 @@ function passivKandidaten(s: Spielstand): Kandidat[] {
         name: def.name,
         beschreibung: def.beschreibung,
         seltenheit: def.seltenheit,
-        farbe: '#8d99b3',
+        farbe: FARBEN.koerperLeicht,
         maxStufe: def.maxStufe,
         stufeVon: s.stufen.get(def.id) ?? 0,
         anwenden: (st: Spielstand) => {

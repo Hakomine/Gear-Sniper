@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import type { Rng } from '../core/rng'
 import type { Spielstand } from './state'
 
@@ -56,21 +57,21 @@ export const SCHREINE: readonly SchreinDef[] = [
     name: 'Amboss',
     preis: 'Drei Sekunden stillstehen',
     lohn: 'Zwei Karten zur Wahl',
-    farbe: '#ffd166',
+    farbe: FARBEN.krit,
   },
   {
     art: 'gierscherbe',
     name: 'Gierscherbe',
     preis: 'Die Etappe wird 25 % schwerer',
     lohn: 'Sofort eine Stufe',
-    farbe: '#c86bff',
+    farbe: FARBEN.krit,
   },
   {
     art: 'bruchmal',
     name: 'Bruchmal',
     preis: 'Ruft sofort einen zweiten Boss',
     lohn: 'Eine Karte aus den besseren Seltenheiten',
-    farbe: '#ff4d5e',
+    farbe: FARBEN.gefahr,
   },
 ]
 

@@ -106,6 +106,9 @@ function bossArtAlsGegner(b: BossArt): GegnerArt {
     id: `boss:${b.id}`,
     name: b.name,
     form: 'sechseck',
+    // Jeder Boss sieht einen an. Bei einem einzelnen Gegner, der eine ganze
+    // Etappe traegt, ist das kein Rauschen, sondern das Mindeste.
+    auge: true,
     // Bosse laufen nicht ueber die Gegner-Registratur - `bewegeGegner` zweigt
     // sie vorher zu `bossTick` ab. Der Eintrag steht nur da, damit der Typ
     // vollstaendig ist.
@@ -131,7 +134,7 @@ export const BOSSE: readonly BossArt[] = [
   {
     id: 'waechter',
     name: 'Wächter',
-    farbe: '#ff6b3d',
+    farbe: FARBEN.gefahr,
     radius: 48,
     hp: 900,
     tempo: 34,
@@ -144,7 +147,7 @@ export const BOSSE: readonly BossArt[] = [
   {
     id: 'kolossus',
     name: 'Kolossus',
-    farbe: '#8f7bff',
+    farbe: FARBEN.gefahr,
     radius: 62,
     hp: 1000,
     tempo: 28,
@@ -157,7 +160,7 @@ export const BOSSE: readonly BossArt[] = [
   {
     id: 'zerbrecher',
     name: 'Zerbrecher',
-    farbe: '#ff4d5e',
+    farbe: FARBEN.gefahr,
     radius: 72,
     hp: 1300,
     tempo: 32,
@@ -183,7 +186,7 @@ export const BOSSE: readonly BossArt[] = [
      */
     id: 'flickwerk',
     name: 'Flickwerk',
-    farbe: '#ff3fa4',
+    farbe: FARBEN.gefahr,
     radius: 56,
     hp: 1050,
     tempo: 36,

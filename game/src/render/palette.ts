@@ -12,90 +12,122 @@
  */
 export const FARBEN = {
   /*
-   * Nachtfeld: Der Grund traegt nichts, das Licht darauf traegt alles.
+   * Tinte auf Papier. Vier Werte, und jeder sagt etwas.
    *
-   * Die Bildsprache hat zweimal die Richtung gewechselt, und beide Male aus
-   * einem gemessenen Grund. Zuerst war der Grund fast schwarz und alles
-   * darauf ebenfalls dunkel - es gab keine Ebene, nur Umrisse, und im
-   * Getuemmel verschwamm alles zu einer Flaeche. Dann wurde der Grund
-   * mittelhell, damit gefuellte Koerper mit dunkler Kontur sich von selbst
-   * freischneiden. Das hat funktioniert, sah aber weiterhin nach Aufklebern
-   * auf Millimeterpapier aus - weil nichts *emittierte*.
+   * Die Bildsprache hat dreimal die Richtung gewechselt, und der dritte
+   * Wechsel ist der einzige, der aus einer *Diagnose* kam statt aus einem
+   * Geschmacksurteil.
    *
-   * Jetzt ist der Grund wieder Nacht, aber diesmal mit der Glut-Schicht
-   * darueber (`render/glut.ts`): Koerper bleiben dunkel und konturiert, ihr
-   * *Zustand* leuchtet. Damit gilt endlich die Regel, die hier seit der
-   * ersten Runde steht: Die Form sagt, was es ist, die Farbe sagt, wie es
-   * ihm geht.
+   * Zuerst war der Grund fast schwarz und alles darauf ebenfalls dunkel - es
+   * gab keine Ebene, nur Umrisse. Dann wurde der Grund mittelhell, damit
+   * gefuellte Koerper mit dunkler Kontur sich freischneiden; das hat
+   * funktioniert, sah aber nach Aufklebern auf Millimeterpapier aus. Dann kam
+   * Nacht plus Leuchten - und die Rueckmeldung war, dass es damit *noch mehr*
+   * nach Maschine aussieht.
+   *
+   * Das war kein Geschmacksurteil, sondern nachweisbar. Die dokumentierte
+   * Handschrift maschinell erzeugter Gestaltung ist woertlich "neon-on-dark
+   * (cyan/violet) with glowing card borders" - also genau das, was hier stand.
+   * Wer diese Palette waehlt, waehlt die statistische Voreinstellung, und man
+   * sieht ihr das an.
+   *
+   * Jetzt: Druck. Ein Verfahren, das nur Tinte kennt und Papier - und das
+   * deshalb gar nicht leuchten *kann*. Farbton ist ab hier keine Dekoration
+   * mehr, sondern eine von vier Aussagen:
+   *
+   *   Tinte    - die Welt, die Gegner, alles Feste
+   *   Papier   - der Bruch, das Fehlende, und der Spieler
+   *   Zinnober - es kann dir wehtun
+   *   Ocker    - es ist gut fuer dich
+   *
+   * Vier statt dreizehn. Der Spieler ist damit ein *weisses Loch* in einer
+   * schwarzen Masse, und das ist bei 1400 Gegnern die staerkste Lesbarkeit,
+   * die es gibt - ohne eine einzige zusaetzliche Farbe.
    */
-  grund: '#070912',
-  grundTief: '#04050b',
-  gitter: '#1b2740',
-  gitterStark: '#2b4570',
+
+  /** Warmes, leicht gealtertes Weiss. Reines #fff waere Bildschirm, nicht Papier. */
+  grund: '#e9e3d5',
+  /** Flecken, Korn, der Schatten unter einem Schnipsel. */
+  grundTief: '#d8cfbb',
+  /** Die gedruckten Hilfslinien - so blass, dass sie das Feld nicht zustellen. */
+  gitter: '#cfc5ae',
+  gitterStark: '#b8ab90',
 
   /**
-   * Die Kontur. Eine einzige dunkle Farbe um *alles*, was lebt.
+   * Die Tinte. Ein einziges warmes Schwarz um *alles*, was lebt.
    *
-   * Sie ist der Grund, warum tausend Koerper im Pulk noch tausend Koerper
-   * bleiben und nicht zu einem Teppich verschmelzen - und auf dem Nachtfeld
-   * trennt sie jetzt Leuchtendes voneinander statt Flaechen.
+   * Bewusst nicht `#000000`: Reines Schwarz gibt es im Druck nicht, und das
+   * Auge liest es sofort als Bildschirm. Ein Schwarz mit einem Rest Braun
+   * darin liest sich als Farbe, die einmal fluessig war.
    */
-  kontur: '#03040a',
-  schatten: 'rgba(2, 3, 8, 0.55)',
+  kontur: '#16120f',
+  schatten: 'rgba(22, 18, 15, 0.22)',
 
-  spieler: '#fff6e2',
+  /**
+   * Der Spieler ist Papier.
+   *
+   * Er ist das einzige Ding im Bild, aus dem die Tinte *herausgenommen*
+   * wurde - und damit findet man ihn in jeder Masse sofort, ohne dass er
+   * heller, groesser oder bunter sein muss als alles andere.
+   */
+  spieler: '#f6f2e8',
   spielerKern: '#ffffff',
-  spielerRing: '#ffcb3d',
-  geschoss: '#cfe9ff',
+  spielerRing: '#c28a24',
+  geschoss: '#16120f',
 
   /*
-   * Gegnerkoerper: eine kuehle Familie aus drei Helligkeiten, kein Farbton.
+   * Gegnerkoerper: drei Tintendichten, kein Farbton.
    *
-   * Vorher trug jede Art ihren eigenen gesaettigten Ton - dreizehn davon auf
-   * aehnlicher Helligkeit, und im Screenshot sah das Feld aus wie ein
-   * Farbwaehler. Nichts trat zurueck, also trat auch nichts hervor.
-   *
-   * Jetzt sagt die *Form*, um welche Art es sich handelt (dafuer gibt es neun
-   * verschiedene), und der Farbton ist ausschliesslich Zustand. Die drei
-   * Stufen sagen nur, wie schwer der Brocken ist.
+   * Im Linolschnitt ist das die echte Abstufung - wie satt die Walze
+   * aufgetragen hat. Ein schwerer Brocken ist voll durchgedruckt, ein
+   * Splitter nur angetupft.
    */
-  koerperLeicht: '#4c5d7e',
-  koerperMittel: '#374663',
-  koerperSchwer: '#28324c',
+  koerperLeicht: '#625849',
+  koerperMittel: '#3a332b',
+  koerperSchwer: '#16120f',
 
-  kristall: '#4fe0ff',
-  kristallKern: '#e8fbff',
+  kristall: '#c28a24',
+  kristallKern: '#e6c377',
 
-  text: '#eef2fb',
-  textSchwach: '#8291ad',
-  textHervor: '#ffcb3d',
+  text: '#16120f',
+  textSchwach: '#6b6153',
+  textHervor: '#c28a24',
 
   /*
-   * Zustandsfarben - die einzigen gesaettigten Toene im ganzen Spiel.
+   * Die beiden Druckfarben - die einzigen gesaettigten Toene im ganzen Spiel.
    *
-   * Sie sind knapp gehalten, weil jede weitere die vorhandenen entwertet: Wenn
-   * alles leuchtet, sagt Leuchten nichts mehr. Ein Test haelt fest, dass keine
-   * zwei zu nah beieinander liegen.
+   * Zwei, weil eine Presse zwei Durchgaenge macht. Jede weitere Farbe
+   * entwertet die vorhandenen: Wenn alles etwas bedeutet, bedeutet nichts
+   * mehr etwas.
    */
-  gefahr: '#ff3a52',
-  heilung: '#4fe6a0',
-  krit: '#ffcb3d',
-  treffer: '#fff6e2',
-  /** Ein offener Riss - die Kernregel, und deshalb die auffaelligste Farbe. */
-  riss: '#7fd4ff',
+  /** Zinnober. Alles, was dir wehtun kann - Vorwarnung, Schuss, Boss, Kern. */
+  gefahr: '#c4362b',
+  /** Ocker. Alles, was dir guttut - Kristalle, Krit, Schreine, Stufe. */
+  heilung: '#c28a24',
+  krit: '#c28a24',
+  /** Ein Treffer nimmt Tinte weg, er legt keine drauf. */
+  treffer: '#f6f2e8',
+  /**
+   * Ein offener Riss - die Kernregel, und deshalb das Auffaelligste im Bild.
+   *
+   * Er ist *keine Farbe*, sondern eine Kerbe: eine Stelle, an der die Tinte
+   * fehlt. Damit ist das, wonach das Spiel benannt ist, endlich auch das,
+   * was man zuerst sieht.
+   */
+  riss: '#f6f2e8',
 
   /**
-   * Karten liegen **ueber** dem Feld: dunkles Glas, das eine Kante faengt.
+   * Karten sind Papierschnipsel, keine Platten.
    *
-   * Auf dem Nachtfeld waeren helle Platten Scheinwerfer und wuerden das
-   * Getuemmel dahinter erschlagen. Stattdessen sind sie nur wenig heller als
-   * der Grund und tragen ihr Gewicht ueber eine leuchtende Oberkante - so
-   * bleibt der Lauf sichtbar und die Karte trotzdem vorne.
+   * Vorher: dunkles Glas mit leuchtender Oberkante - laut Recherche woertlich
+   * "glowing card borders", der zweite Teil derselben Handschrift. Jetzt
+   * liegt schlicht ein Stueck Papier auf dem Papier, ein wenig heller, mit
+   * gerissener Kante und einem Schatten darunter.
    */
-  kartenGrund: '#131a2c',
-  kartenGrundTief: '#0d1322',
-  kartenRand: '#03040a',
-  kartenRandAktiv: '#ffcb3d',
+  kartenGrund: '#f2ede1',
+  kartenGrundTief: '#e2dacb',
+  kartenRand: '#16120f',
+  kartenRandAktiv: '#c4362b',
 } as const
 
 export type FarbName = keyof typeof FARBEN
@@ -109,13 +141,21 @@ export type FarbName = keyof typeof FARBEN
  * Blick sieht, was eine Karte wert ist.
  */
 export const SELTENHEIT_FARBE = {
-  gewoehnlich: '#8d99b3',
-  selten: '#4fa3ff',
-  episch: '#b46bff',
-  legendaer: '#ffb020',
-  // Fusionen bekommen ein helles Weissgold: Sie stehen ueber allem anderen
-  // und sollen auf einer Karte sofort als Sonderfall lesbar sein.
-  fusion: '#fff2c4',
+  /*
+   * Seltenheit im Druck: nicht vier Farben, sondern vier Tiefen.
+   *
+   * Die gewohnte Skala grau -> blau -> violett -> gold braucht vier
+   * Farbtoene, und dieses Spiel hat nur zwei. Statt sie zu erfinden, sagt
+   * hier die *Menge Tinte*, was eine Karte wert ist: Gewoehnliches ist
+   * blass gedruckt, Legendaeres steht im Ocker der Presse, und die Fusion
+   * bekommt als einzige den Zinnober - sie ist der Sonderfall, den es
+   * hoechstens einmal je Lauf gibt.
+   */
+  gewoehnlich: '#8a8072',
+  selten: '#4f4639',
+  episch: '#16120f',
+  legendaer: '#c28a24',
+  fusion: '#c4362b',
 } as const
 
 

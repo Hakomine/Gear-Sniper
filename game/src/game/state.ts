@@ -2366,7 +2366,7 @@ function leeresPartikel(): Partikel {
     leben: 0,
     maxLeben: 1,
     groesse: 2,
-    farbe: '#fff',
+    farbe: FARBEN.treffer,
     drehung: 0,
     drehTempo: 0,
   }

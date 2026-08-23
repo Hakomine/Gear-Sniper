@@ -1234,12 +1234,20 @@ function schleier(
   hoehe: number,
   staerke: number,
 ): void {
-  // Das Spielfeld bleibt sichtbar durchscheinen: Ein voll deckender Schleier
-  // schneidet den Lauf gefuehlt ab, ein halbdurchsichtiger haelt die Spannung.
-  // In der *Konturfarbe*, nicht in der Grundfarbe: Seit das Spielfeld hell
-  // ist, wuerde ein Schleier in Grundfarbe das Bild aufhellen statt es
-  // zurueckzunehmen - das Getuemmel bliebe genauso laut wie vorher.
-  ctx.fillStyle = mitAlpha(FARBEN.kontur, staerke)
+  /*
+   * Ein Blatt, das ueber das Feld gelegt wird.
+   *
+   * Zweimal hat diese Zeile schon die Farbe gewechselt, und beide Male aus
+   * demselben Grund: Der Schleier muss *gegen* das Feld arbeiten. Auf dunklem
+   * Feld war er hell, auf hellem Feld dunkel - und jetzt, wo der Grund Papier
+   * ist und alles darauf Tinte, ist er wieder Papier. Er nimmt dem Getuemmel
+   * die Tinte weg, statt Dunkelheit darueber zu giessen.
+   *
+   * Sichtbar durchscheinen soll das Feld weiterhin: Ein voll deckender
+   * Schleier schneidet den Lauf gefuehlt ab, ein halbdurchsichtiger haelt die
+   * Spannung.
+   */
+  ctx.fillStyle = mitAlpha(FARBEN.grund, staerke)
   ctx.fillRect(0, 0, breite, hoehe)
 }
 

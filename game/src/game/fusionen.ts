@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import type { WaffenDef } from './weapons'
 
 /**
@@ -34,7 +35,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Ein Loch, das alles Gefangene unter Strom setzt',
       seltenheit: 'fusion',
       verhalten: 'gewitterkern',
-      farbe: '#a98cff',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Sogweite',
       basis: {
@@ -63,7 +64,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Kreisende Klingen, die bei jeder Umdrehung rundum schlagen',
       seltenheit: 'fusion',
       verhalten: 'scherbenkranz',
-      farbe: '#9ef7ff',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Bahnweite',
       basis: {
@@ -92,7 +93,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Ein Strahl, der an jedem Getroffenen detoniert',
       seltenheit: 'fusion',
       verhalten: 'zerlegestrahl',
-      farbe: '#ff8a5c',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Strahlbreite',
       basis: {
@@ -121,7 +122,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Zielsuchende Nadeln, die sich bei jedem Kill teilen',
       seltenheit: 'fusion',
       verhalten: 'schwarmnadeln',
-      farbe: '#c8ff7a',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Lenkung',
       basis: {
@@ -150,7 +151,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Reißt erst alles zusammen, dann detoniert es',
       seltenheit: 'fusion',
       verhalten: 'kollaps',
-      farbe: '#b46bff',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Sogweite',
       basis: {
@@ -179,7 +180,7 @@ export const FUSIONEN: readonly Fusion[] = [
       beschreibung: 'Ein Strahl, der sich an jedem Gegner bricht',
       seltenheit: 'fusion',
       verhalten: 'bogenlicht',
-      farbe: '#7ad4ff',
+      farbe: FARBEN.kontur,
       maxStufe: 4,
       extraName: 'Strahlbreite',
       basis: {

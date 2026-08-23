@@ -62,7 +62,7 @@ const WELLE_LUECKE = 0.42
 export const KERN: BossArt = {
   id: 'kern',
   name: 'Der Kern',
-  farbe: '#ffd24a',
+  farbe: FARBEN.krit,
   radius: 88,
   /*
    * Bewusst niedrig fuer einen Endgegner - und das ist kein Versehen.
@@ -116,7 +116,7 @@ export function kittTick(s: Spielstand, g: Gegner, z: BossZustand, dt: number): 
   if (!z.kittGemeldet && z.kittRest <= KERN_KITT_WARNUNG) {
     z.kittGemeldet = true
     s.klaenge.melde('warnung', 0.9)
-    const e = legeEffekt(s, 'ring', g.x, g.y, g.radius * 3.4, KERN_KITT_WARNUNG, '#63d4ff', 5)
+    const e = legeEffekt(s, 'ring', g.x, g.y, g.radius * 3.4, KERN_KITT_WARNUNG, FARBEN.gefahr, 5)
     if (e !== null) e.warnung = true
   }
 
@@ -126,7 +126,7 @@ export function kittTick(s: Spielstand, g: Gegner, z: BossZustand, dt: number): 
   // Nichts anderes - kein Schaden, keine Heilung. Er nimmt einem genau das
   // weg, worauf man hingearbeitet hat.
   risseLoeschen(g)
-  legeEffekt(s, 'ring', g.x, g.y, g.radius * 1.6, 0.4, '#63d4ff', 4)
+  legeEffekt(s, 'ring', g.x, g.y, g.radius * 1.6, 0.4, FARBEN.gefahr, 4)
 }
 
 /**

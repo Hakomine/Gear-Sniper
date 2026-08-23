@@ -60,6 +60,14 @@ export type GegnerArt = {
    *
    * Wenn alles leuchtet, sagt Leuchten nichts mehr.
    */
+  /**
+   * Die Farbe der Schraffur - der einzige Ort, an dem ein Farbton lebt.
+   *
+   * Bis Runde 6 hiess das Feld dasselbe und meinte einen leuchtenden
+   * Innenkern. Im Druck gibt es kein Leuchten: Es ist jetzt die Farbe, in der
+   * die Schnitte quer ueber den Koerper laufen. Papierfarbe heisst "weniger
+   * Tinte, sonst nichts"; Zinnober heisst "der hier ist dein Problem".
+   */
   readonly kern: string
   readonly radius: number
   readonly hp: number
@@ -81,6 +89,23 @@ export type GegnerArt = {
    * noch ueberwiegend aus Splittern - viel Menge, keine Bedrohung.
    */
   readonly gewichtSpaet: number
+
+  /**
+   * Traegt diese Art ein Auge?
+   *
+   * Ein Auge macht aus einer Form eine Kreatur - der Griff von Binding of
+   * Isaac, Downwell und Rain World, und er kostet zwei Kreise. Er darf aber
+   * nicht jedem gehoeren: Bekaeme der Splitter eins, saessen bei vollem Feld
+   * tausend Augen im Bild, und aus Charakter wuerde Rauschen.
+   *
+   * Deshalb nur die Schweren. Der Pulk bleibt anonym, und *genau deshalb*
+   * wirkt das Grosse lebendig: Was einen ansieht, ist jemand; was einen nicht
+   * ansieht, ist Masse.
+   *
+   * Eine Gestaltungsentscheidung je Art und keine Radiusabfrage im Zeichner -
+   * damit eine neue Gegnerart sie bewusst treffen muss.
+   */
+  readonly auge: boolean
 }
 
 export const GEGNER_ARTEN = [
@@ -90,7 +115,7 @@ export const GEGNER_ARTEN = [
     form: 'dreieck',
     verhalten: 'jaeger',
     farbe: FARBEN.koerperLeicht,
-    kern: '#a6c0e8',
+    kern: FARBEN.grund,
     radius: 9,
     hp: 10,
     tempo: 78,
@@ -100,6 +125,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 0,
     gewicht: 100,
     gewichtSpaet: 18,
+    auge: false,
   },
   {
     id: 'brocken',
@@ -107,7 +133,7 @@ export const GEGNER_ARTEN = [
     form: 'quadrat',
     verhalten: 'jaeger',
     farbe: FARBEN.koerperSchwer,
-    kern: '#8ea8d0',
+    kern: FARBEN.grund,
     radius: 15,
     hp: 58,
     tempo: 42,
@@ -117,6 +143,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 55,
     gewicht: 34,
     gewichtSpaet: 55,
+    auge: true,
   },
   {
     id: 'elite',
@@ -124,7 +151,7 @@ export const GEGNER_ARTEN = [
     form: 'sechseck',
     verhalten: 'jaeger',
     farbe: FARBEN.koerperMittel,
-    kern: '#b8cdf0',
+    kern: FARBEN.grund,
     radius: 20,
     hp: 165,
     tempo: 58,
@@ -134,6 +161,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 130,
     gewicht: 9,
     gewichtSpaet: 62,
+    auge: false,
   },
   {
     id: 'schwaermer',
@@ -141,7 +169,7 @@ export const GEGNER_ARTEN = [
     form: 'raute',
     verhalten: 'schwaermer',
     farbe: FARBEN.koerperLeicht,
-    kern: '#a6c0e8',
+    kern: FARBEN.grund,
     radius: 10,
     hp: 22,
     tempo: 104,
@@ -151,6 +179,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 40,
     gewicht: 26,
     gewichtSpaet: 30,
+    auge: false,
   },
   {
     id: 'stuermer',
@@ -168,6 +197,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 80,
     gewicht: 16,
     gewichtSpaet: 34,
+    auge: false,
   },
   {
     id: 'speier',
@@ -175,7 +205,7 @@ export const GEGNER_ARTEN = [
     form: 'stern',
     verhalten: 'speier',
     farbe: FARBEN.koerperMittel,
-    kern: '#ff8a3d',
+    kern: FARBEN.gefahr,
     radius: 12,
     hp: 40,
     tempo: 54,
@@ -185,6 +215,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 120,
     gewicht: 10,
     gewichtSpaet: 26,
+    auge: true,
   },
   {
     id: 'teiler',
@@ -192,7 +223,7 @@ export const GEGNER_ARTEN = [
     form: 'doppelquadrat',
     verhalten: 'teiler',
     farbe: FARBEN.koerperLeicht,
-    kern: '#b07fe8',
+    kern: FARBEN.grund,
     radius: 16,
     hp: 70,
     tempo: 50,
@@ -202,6 +233,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 180,
     gewicht: 8,
     gewichtSpaet: 30,
+    auge: true,
   },
   {
     /*
@@ -215,7 +247,7 @@ export const GEGNER_ARTEN = [
     form: 'quadrat',
     verhalten: 'jaeger',
     farbe: FARBEN.koerperLeicht,
-    kern: '#b07fe8',
+    kern: FARBEN.grund,
     radius: 9,
     hp: 18,
     tempo: 96,
@@ -225,6 +257,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 1e9,
     gewicht: 0,
     gewichtSpaet: 0,
+    auge: false,
   },
   {
     id: 'kitt',
@@ -232,7 +265,7 @@ export const GEGNER_ARTEN = [
     form: 'kreuz',
     verhalten: 'kitt',
     farbe: FARBEN.koerperMittel,
-    kern: '#ff3fa4',
+    kern: FARBEN.gefahr,
     radius: 14,
     hp: 62,
     tempo: 64,
@@ -242,6 +275,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 210,
     gewicht: 5,
     gewichtSpaet: 11,
+    auge: true,
   },
   {
     id: 'schild',
@@ -249,7 +283,7 @@ export const GEGNER_ARTEN = [
     form: 'halbmond',
     verhalten: 'schild',
     farbe: FARBEN.koerperSchwer,
-    kern: '#7b95bd',
+    kern: FARBEN.grund,
     radius: 18,
     hp: 130,
     tempo: 46,
@@ -259,6 +293,7 @@ export const GEGNER_ARTEN = [
     abSekunde: 300,
     gewicht: 4,
     gewichtSpaet: 14,
+    auge: true,
   },
 ] as const satisfies readonly GegnerArt[]
 

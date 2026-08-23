@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import type { CharakterId } from './charaktere'
 import { CHARAKTERE } from './charaktere'
 import type { Spielstand } from './state'
@@ -113,7 +114,7 @@ function zahl(wert: unknown, ersatz: number): number {
 /** Name und Farbe eines Eintrags - fuer die Anzeige. */
 export function charakterAnzeige(id: string): { name: string; farbe: string } {
   const c = CHARAKTERE.find((x) => x.id === id)
-  return c === undefined ? { name: '—', farbe: '#8fa4c8' } : { name: c.name, farbe: c.farbe }
+  return c === undefined ? { name: '—', farbe: FARBEN.koerperLeicht } : { name: c.name, farbe: c.farbe }
 }
 
 /** Nur zur Typsicherung der Aufrufer - die Chronik speichert rohe Zeichenketten. */

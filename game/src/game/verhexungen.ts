@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import type { Spielstand } from './state'
 import { MAX_WAFFEN } from './weapons'
 
@@ -61,7 +62,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Hast',
     wirkung: 'Gegner laufen 20 % schneller',
     bonus: 0.15,
-    farbe: '#ff8a4d',
+    farbe: FARBEN.gefahr,
     anwenden: (s) => {
       s.tempoFeind = 1.2
     },
@@ -71,7 +72,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Enge',
     wirkung: 'Das Rissfenster schrumpft von 1,6 s auf 0,9 s',
     bonus: 0.3,
-    farbe: '#ffd24a',
+    farbe: FARBEN.krit,
     anwenden: (s) => {
       /*
        * Die interessanteste der sechs - und die billigste im Code.
@@ -93,7 +94,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Kargheit',
     wirkung: 'Ein Waffenplatz weniger',
     bonus: 0.25,
-    farbe: '#8fa4c8',
+    farbe: FARBEN.koerperLeicht,
     anwenden: (s) => {
       // Nie unter drei: Drei ist die Zersplitterungs-Schwelle, und ein Lauf,
       // der die Kernregel gar nicht mehr ausloesen kann, ist kein schwerer
@@ -106,7 +107,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Blindheit',
     wirkung: 'Keine Minikarte, keine Zeiger auf Schreine',
     bonus: 0.1,
-    farbe: '#a8c4e8',
+    farbe: FARBEN.koerperLeicht,
     anwenden: (s) => {
       s.blind = true
     },
@@ -116,7 +117,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Zoll',
     wirkung: `Jede Etappe kostet ${ZOLL_PRO_ETAPPE} maximale Leben`,
     bonus: 0.25,
-    farbe: '#ff4d5e',
+    farbe: FARBEN.gefahr,
     anwenden: (s) => {
       s.zoll = ZOLL_PRO_ETAPPE
     },
@@ -126,7 +127,7 @@ export const VERHEXUNGEN: readonly Verhexung[] = [
     name: 'Gezeichnet',
     wirkung: 'Doppelt so viele gezeichnete Gegner',
     bonus: 0.2,
-    farbe: '#c86bff',
+    farbe: FARBEN.koerperMittel,
     anwenden: (s) => {
       s.zeichenMult = 2
     },

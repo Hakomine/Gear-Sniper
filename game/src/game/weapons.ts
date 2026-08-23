@@ -218,7 +218,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Bogenhieb in Laufrichtung, trifft alles in der Nähe',
     seltenheit: 'gewoehnlich',
     verhalten: 'schwung',
-    farbe: '#9ef7ff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Hiebweite',
     basis: {
@@ -245,7 +245,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Zielsuchende Pfeile, die durchschlagen',
     seltenheit: 'selten',
     verhalten: 'suchend',
-    farbe: '#b6ff7a',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Lenkung',
     basis: {
@@ -271,7 +271,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Springt vom getroffenen Gegner zum nächsten',
     seltenheit: 'selten',
     verhalten: 'kette',
-    farbe: '#7ad4ff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Sprünge',
     basis: {
@@ -296,7 +296,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Träge Granate mit großem Flächenknall',
     seltenheit: 'episch',
     verhalten: 'sprengsatz',
-    farbe: '#b46bff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Knallradius',
     basis: {
@@ -321,7 +321,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Scherben kreisen dauerhaft um dich',
     seltenheit: 'episch',
     verhalten: 'trabant',
-    farbe: '#c9a3ff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Bahnweite',
     basis: {
@@ -350,7 +350,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Sofort-Laser quer durch das Bild',
     seltenheit: 'legendaer',
     verhalten: 'strahl',
-    farbe: '#ff7a45',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Strahlbreite',
     basis: {
@@ -375,7 +375,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Reißt alles zusammen, hält es fest, detoniert',
     seltenheit: 'legendaer',
     verhalten: 'singularitaet',
-    farbe: '#d08cff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Sogweite',
     basis: {
@@ -406,7 +406,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Zieht eine schneidende Spur hinter dir her',
     seltenheit: 'gewoehnlich',
     verhalten: 'schleifband',
-    farbe: '#ffb04d',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Spurbreite',
     basis: {
@@ -431,7 +431,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Schallwelle ringsum — trifft härter, was schneller läuft',
     seltenheit: 'gewoehnlich',
     verhalten: 'stimmgabel',
-    farbe: '#7ee8e0',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Nachhall',
     basis: {
@@ -456,7 +456,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Bohrt am zähesten Gegner und lädt sich dabei auf',
     seltenheit: 'selten',
     verhalten: 'fadenkreuz',
-    farbe: '#ff5c7a',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Aufladung',
     basis: {
@@ -481,7 +481,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Wirft feindliche Geschosse zurück — schneller und schärfer',
     seltenheit: 'selten',
     verhalten: 'spiegel',
-    farbe: '#cfe9f2',
+    farbe: FARBEN.kontur,
     maxStufe: 4,
     extraName: 'Fangradius',
     basis: {
@@ -506,7 +506,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Vereist — und Vereistes zerspringt mit zwei Waffen statt drei',
     seltenheit: 'selten',
     verhalten: 'frost',
-    farbe: '#8fd8ff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Frostdauer',
     basis: {
@@ -531,7 +531,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Zieht den entferntesten Gegner mitten in deinen Bau',
     seltenheit: 'selten',
     verhalten: 'anker',
-    farbe: '#c9b08a',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Zugkraft',
     basis: {
@@ -556,7 +556,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Bleibt stecken und reisst seinen Riss immer wieder neu auf',
     seltenheit: 'episch',
     verhalten: 'bohrkopf',
-    farbe: '#ff9d3d',
+    farbe: FARBEN.kontur,
     maxStufe: 4,
     extraName: 'Risstakt',
     basis: {
@@ -581,7 +581,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Ein Schlag setzt bei allem im Bild einen Riss',
     seltenheit: 'episch',
     verhalten: 'glocke',
-    farbe: '#ffd98a',
+    farbe: FARBEN.kontur,
     maxStufe: 4,
     extraName: 'Wucht',
     basis: {
@@ -606,7 +606,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Eine träge Knospe, die erst am Ende ihres Wegs aufgeht',
     seltenheit: 'episch',
     verhalten: 'saatgut',
-    farbe: '#9be87d',
+    farbe: FARBEN.kontur,
     maxStufe: 4,
     extraName: 'Blüte',
     basis: {
@@ -631,7 +631,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Schneidet alles zwischen dem nächsten und dem fernsten Gegner',
     seltenheit: 'episch',
     verhalten: 'schwarzband',
-    farbe: '#b98cff',
+    farbe: FARBEN.kontur,
     maxStufe: 4,
     extraName: 'Bandbreite',
     basis: {
@@ -656,7 +656,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Löst eine andere deiner Waffen ein zweites Mal aus',
     seltenheit: 'legendaer',
     verhalten: 'kaleidoskop',
-    farbe: '#fff2c4',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Spiegelstärke',
     basis: {
@@ -681,7 +681,7 @@ export const WAFFEN: readonly WaffenDef[] = [
     beschreibung: 'Alles im Umkreis läuft rückwärts — auch feindliche Geschosse',
     seltenheit: 'legendaer',
     verhalten: 'sanduhr',
-    farbe: '#e0c9ff',
+    farbe: FARBEN.kontur,
     maxStufe: 5,
     extraName: 'Umkehr',
     basis: {

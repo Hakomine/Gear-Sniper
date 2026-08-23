@@ -1,5 +1,5 @@
 import type { Rng } from '../core/rng'
-import { SELTENHEIT_FARBE } from '../render/palette'
+import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import type { Spieler, Statistik } from './state'
 import { istVollendet, ruesteAus, waffeMit, WAFFEN } from './weapons'
 
@@ -61,7 +61,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Der Grundzustand. Nichts geschenkt, nichts genommen.',
     vorteil: '—',
     nachteil: '—',
-    farbe: '#5ef2c4',
+    farbe: FARBEN.kontur,
     punkteFaktor: 1,
     anwenden: () => {},
     bedingung: null,
@@ -72,7 +72,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Belohnt, mitten hineinzugehen.',
     vorteil: 'Startet mit der Klinge · Nahe Kills stapeln Schaden',
     nachteil: '−25 Leben',
-    farbe: '#9ef7ff',
+    farbe: FARBEN.koerperLeicht,
     punkteFaktor: 1.15,
     anwenden: (sp) => {
       sp.maxHp -= 25
@@ -92,7 +92,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Viele Karten, schwache Waffen. Ein Bau-Charakter.',
     vorteil: 'Doppelter Einzugsradius · +60 % Erfahrung',
     nachteil: '−30 % Schaden',
-    farbe: '#4fc3ff',
+    farbe: FARBEN.koerperMittel,
     punkteFaktor: 1.1,
     anwenden: (sp) => {
       sp.magnetRadius *= 2
@@ -110,7 +110,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Sauber ausweichen wird belohnt. Ein Fehler kostet fast alles.',
     vorteil: 'Drei Sekunden ohne Treffer: zersplittert mit zwei Waffen statt drei',
     nachteil: 'Nur 60 Leben',
-    farbe: '#ff5c7a',
+    farbe: FARBEN.gefahr,
     punkteFaktor: 1.4,
     anwenden: (sp) => {
       sp.maxHp = 60
@@ -128,7 +128,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Wird nicht totgeklopft, kommt aber schwer aus dem Gedränge.',
     vorteil: '220 Leben · verletzt alles, was ihn berührt',
     nachteil: '−25 % Tempo · nur 4 Waffenplätze',
-    farbe: '#8f7bff',
+    farbe: FARBEN.krit,
     punkteFaktor: 1.05,
     anwenden: (sp) => {
       sp.maxHp = 220
@@ -188,7 +188,7 @@ export const CHARAKTERE: readonly Charakter[] = [
     beschreibung: 'Sie ist selbst aus Glas. Was sie umbringt, räumt für sie auf.',
     vorteil: '+45 % Schaden · Risse halten eine Sekunde länger',
     nachteil: '−30 Leben · drei verschiedene Gegnerarten lassen sie zersplittern',
-    farbe: '#9ad9ff',
+    farbe: FARBEN.koerperLeicht,
     punkteFaktor: 1.45,
     anwenden: (sp) => {
       sp.maxHp -= 30

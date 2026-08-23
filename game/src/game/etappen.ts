@@ -1,3 +1,4 @@
+import { FARBEN } from '../render/palette'
 import type { Spieler } from './state'
 import { MAX_WAFFEN } from './weapons'
 
@@ -73,7 +74,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Ruhe',
     preis: '',
     lohn: 'Eine Karte',
-    farbe: '#8fa4c8',
+    farbe: FARBEN.koerperLeicht,
     karten: 1,
     gute: false,
     anwenden: () => {
@@ -86,7 +87,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Gedränge',
     preis: 'Doppelter Nachschub',
     lohn: 'Zwei Karten',
-    farbe: '#ff8a4d',
+    farbe: FARBEN.gefahr,
     karten: 2,
     gute: false,
     anwenden: (w) => {
@@ -98,7 +99,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Gepanzertes Glas',
     preis: 'Gegner mit 60 % mehr Leben',
     lohn: 'Eine Karte aus den besseren Seltenheiten',
-    farbe: '#5ad1c8',
+    farbe: FARBEN.koerperMittel,
     karten: 1,
     gute: true,
     anwenden: (w) => {
@@ -110,7 +111,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Zwillinge',
     preis: 'Zwei Bosse statt einem',
     lohn: 'Zwei Karten aus den besseren Seltenheiten',
-    farbe: '#ff4d5e',
+    farbe: FARBEN.gefahr,
     karten: 2,
     gute: true,
     anwenden: (w) => {
@@ -122,7 +123,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Dünnhäutig',
     preis: 'Du nimmst doppelten Schaden — dauerhaft',
     lohn: 'Ein Waffenplatz mehr, dauerhaft',
-    farbe: '#c86bff',
+    farbe: FARBEN.koerperMittel,
     karten: 1,
     gute: false,
     anwenden: (_w, sp) => {
@@ -140,7 +141,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Sprödigkeit',
     preis: 'Risse verfallen doppelt so schnell',
     lohn: 'Zersplitterung trifft doppelt so weit',
-    farbe: '#ffd166',
+    farbe: FARBEN.krit,
     karten: 1,
     gute: false,
     anwenden: (w) => {
@@ -156,7 +157,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Zum Kern',
     preis: 'Hier endet der Lauf — so oder so',
     lohn: 'Der letzte Gegner. Sieg zählt 4000 Punkte',
-    farbe: '#ffd24a',
+    farbe: FARBEN.krit,
     karten: 0,
     gute: false,
     anwenden: () => {
@@ -169,7 +170,7 @@ export const TUEREN: readonly Tuer[] = [
     name: 'Tiefer ins Feld',
     preis: 'Eine Stufe Zerrüttung: zäher, mehr Zeichen, mehr Bosse',
     lohn: 'Zwei bessere Karten und die Hälfte mehr auf alle Punkte',
-    farbe: '#c86bff',
+    farbe: FARBEN.koerperMittel,
     karten: 2,
     gute: true,
     anwenden: () => {
