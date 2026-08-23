@@ -1,5 +1,5 @@
 import { FARBEN } from '../render/palette'
-import { GEGNER_ARTEN } from './enemies'
+import { artIndex, GEGNER_ARTEN } from './enemies'
 import { risseLoeschen } from './risse'
 import { legeGegner } from './spawner'
 import type { Gegner, Spielstand } from './state'
@@ -246,6 +246,11 @@ export const GEGNER_VERHALTEN: Record<GegnerVerhaltenId, GegnerVerhalten> = {
       p.schaden = g.schaden * 0.8
       p.leben = 3.2
       p.farbe = g.art.farbe
+      // Der Schuss traegt die Identitaet seines Schuetzen bis zum Einschlag -
+      // sonst zaehlten fuer die Kernscherbe alle Geschosse als dieselbe
+      // Quelle, und "drei verschiedene Gegnerarten" waere im Fernkampf eine
+      // Luege.
+      p.quelle = artIndex(g.art)
     },
   },
 

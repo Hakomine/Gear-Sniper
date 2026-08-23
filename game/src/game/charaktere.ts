@@ -26,6 +26,7 @@ export type CharakterId =
   | 'riss'
   | 'koloss'
   | 'prismatikerin'
+  | 'kernscherbe'
 
 export type Bedingung = {
   readonly text: string
@@ -160,6 +161,45 @@ export const CHARAKTERE: readonly Charakter[] = [
     bedingung: {
       text: 'Eine Waffe bis zur Vollendung bringen',
       erfuellt: (_st, sp) => sp.waffen.some((w) => istVollendet(w.def, w.stufe)),
+    },
+  },
+  {
+    /*
+     * Die Kernscherbe - die Kernregel zeigt zum ersten Mal auf den Spieler.
+     *
+     * Sie ist selbst aus Glas: Drei Treffer von drei *verschiedenen*
+     * Gegnerarten innerhalb von vier Sekunden lassen sie zerspringen. Das
+     * kostet ein knappes Fuenftel ihrer vollen Leben - reisst dafuer aber
+     * alles im Umkreis auf und schleudert es weg. Ihre Schwaeche ist damit
+     * zugleich ihre staerkste Waffe, und die Frage "welche Art trifft mich
+     * gerade" wird zum ersten Mal eine, die man beim Ausweichen mitdenkt.
+     *
+     * Der Preis steht auch in den *Zahlen* und nicht nur im Mechaniktext: 30
+     * Leben weniger. Ein Charakter, dessen ganzer Nachteil in einer
+     * Sondermechanik steckt, waere genau die Aufweichung, die diese Datei
+     * verhindern soll.
+     *
+     * Freigeschaltet wird sie durch den Sieg ueber den Kern - die schwerste
+     * Leistung des Spiels ist die einzige, die sie oeffnet. Bis dahin war der
+     * Kern ein Ende ohne Folge.
+     */
+    id: 'kernscherbe',
+    name: 'Kernscherbe',
+    beschreibung: 'Sie ist selbst aus Glas. Was sie umbringt, räumt für sie auf.',
+    vorteil: '+45 % Schaden · Risse halten eine Sekunde länger',
+    nachteil: '−30 Leben · drei verschiedene Gegnerarten lassen sie zersplittern',
+    farbe: '#9ad9ff',
+    punkteFaktor: 1.45,
+    anwenden: (sp) => {
+      sp.maxHp -= 30
+      sp.hp = sp.maxHp
+      sp.schadenMult *= 1.45
+      sp.rissDauer += 1
+      sp.istGlas = true
+    },
+    bedingung: {
+      text: 'Den Kern legen',
+      erfuellt: (st) => st.kernGelegt,
     },
   },
 ]

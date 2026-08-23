@@ -54,6 +54,7 @@ function leereStatistik(): Statistik {
     schaden: 0,
     zersplittert: 0,
     bosse: 0,
+    kernGelegt: false,
     schadenProPlatz: new Array<number>(PLATZ_ANZAHL).fill(0),
     platzName: new Array<string>(PLATZ_ANZAHL).fill(''),
     platzFarbe: new Array<string>(PLATZ_ANZAHL).fill(''),
@@ -175,6 +176,7 @@ describe('Freischaltung', () => {
     st.level = 25
     st.zersplittert = 250
     st.zeit = 300
+    st.kernGelegt = true
     const waffe = charakterMit('schleiferin')
     waffe.anwenden(sp, new Rng(1))
     for (const w of sp.waffen) w.stufe = w.def.maxStufe

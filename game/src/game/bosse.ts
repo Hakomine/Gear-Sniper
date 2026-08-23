@@ -1,6 +1,6 @@
 import { FARBEN } from '../render/palette'
 import type { GegnerArt } from './enemies'
-import { verfuegbareArten } from './enemies'
+import { QUELLE_BOSS, verfuegbareArten } from './enemies'
 import { bruchwelle, KERN, kernAngriffe, kittTick, kuendigeBruchwelleAn, schalenBruch } from './kern'
 import { legeGegner } from './spawner'
 import type { Gegner, Spielstand } from './state'
@@ -638,4 +638,7 @@ function schiess(s: Spielstand, g: Gegner, winkel: number, tempo: number, art: B
   p.schaden = art.schaden * 0.75
   p.leben = 5
   p.farbe = art.farbe
+  // Alle Bosse teilen sich eine Quelle: Sie stehen nicht in `GEGNER_ARTEN`,
+  // und fuer die Kernscherbe ist "ein Boss" ohnehin eine einzige Kategorie.
+  p.quelle = QUELLE_BOSS
 }

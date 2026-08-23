@@ -484,6 +484,25 @@ function zeichneWappenZeichen(
       ctx.stroke()
       break
     }
+    case 'kernscherbe': {
+      // Drei Risse, die auf *sie* zeigen statt von ihr weg - der Unterschied
+      // zum Riss-Charakter daneben, in einem Bild. Dazu der Ring, den ihre
+      // eigene Zersplitterung schlaegt.
+      ctx.beginPath()
+      for (let i = 0; i < 3; i++) {
+        const w = (i / 3) * Math.PI * 2 - Math.PI / 3
+        ctx.moveTo(x + Math.cos(w) * weit * 1.35, y + Math.sin(w) * weit * 1.35)
+        ctx.lineTo(x + Math.cos(w + 0.28) * r * 0.5, y + Math.sin(w + 0.28) * r * 0.5)
+      }
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.arc(x, y, weit * 1.32, 0, Math.PI * 2)
+      ctx.setLineDash([4, 8])
+      ctx.lineWidth = 2
+      ctx.stroke()
+      ctx.setLineDash([])
+      break
+    }
     default:
       // Splitter: der Grundzustand, ein schlichter Ring.
       ctx.beginPath()

@@ -1,6 +1,7 @@
 import { SCHILD_WINKEL } from '../game/gegnerVerhalten'
 import { schreinDef, SCHREIN_RADIUS } from '../game/schreine'
 import { STOSS_ABKLING } from '../game/player'
+import { RISS_SCHWELLE } from '../game/risse'
 import type { Effekt, Spielstand } from '../game/state'
 import { trabantenAnzahl, trabantPunkt } from '../game/verhalten'
 import { ZEICHEN } from '../game/zeichen'
@@ -902,6 +903,53 @@ function zeichneSpieler(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   ctx.arc(sp.x, sp.y, sp.radius * 0.36, 0, Math.PI * 2)
   ctx.fillStyle = FARBEN.spielerKern
   ctx.fill()
+
+  if (sp.istGlas) zeichneEigeneRisse(ctx, s)
+}
+
+/**
+ * Die Risse der Kernscherbe - auf ihrer eigenen Figur.
+ *
+ * Ohne sie waere die Mechanik unsichtbar: Man zerspringt beim dritten Treffer
+ * und weiss nicht, warum es diesmal passiert ist und beim letzten Mal nicht.
+ * Genau derselbe Grund, aus dem Gegner ihre Bruchlinien tragen - die Kernregel
+ * ist nur dann eine Regel, wenn man ihren Stand sieht.
+ *
+ * Die Linien werden laenger und wandern nach aussen, je naeher der dritte
+ * Riss kommt, und beim letzten pulsiert der Ring: Der gefaehrliche Zustand
+ * bewegt sich, der harmlose nicht.
+ */
+function zeichneEigeneRisse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
+  const sp = s.spieler
+  if (sp.risse === 0) return
+
+  const knapp = sp.risse >= RISS_SCHWELLE - 1
+  const puls = knapp ? 1 + Math.sin(performance.now() / 110) * 0.12 : 1
+  const r = sp.radius * puls
+
+  ctx.beginPath()
+  for (let i = 0; i < sp.risse; i++) {
+    // Feste Winkel statt Zufall: Zwei Risse sollen bei jedem Blick an
+    // derselben Stelle sitzen, sonst liest man Flackern statt Zustand.
+    const w = (i / RISS_SCHWELLE) * Math.PI * 2 - Math.PI / 3
+    ctx.moveTo(sp.x + Math.cos(w) * r * 0.2, sp.y + Math.sin(w) * r * 0.2)
+    ctx.lineTo(sp.x + Math.cos(w + 0.3) * r * 1.35, sp.y + Math.sin(w + 0.3) * r * 1.35)
+  }
+  ctx.lineWidth = 5
+  ctx.strokeStyle = FARBEN.kontur
+  ctx.stroke()
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = knapp ? FARBEN.gefahr : s.charakter.farbe
+  ctx.stroke()
+
+  // Beim zweiten Riss ein Ring dazu: Der naechste Treffer einer *neuen* Art
+  // laesst sie zerspringen, und das ist die Sekunde, in der man es wissen muss.
+  if (!knapp) return
+  ctx.beginPath()
+  ctx.arc(sp.x, sp.y, sp.radius * 1.6 * puls, 0, Math.PI * 2)
+  ctx.lineWidth = 2
+  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, 0.7)
+  ctx.stroke()
 }
 
 function zeichneZahlen(ctx: CanvasRenderingContext2D, s: Spielstand): void {

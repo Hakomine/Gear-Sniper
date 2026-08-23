@@ -72,14 +72,46 @@ export const ZERSPLITTER_NACHBAR_ANTEIL = 0.45
 export const KASKADE_MAX_TIEFE = 3
 
 /**
+ * Was Risse tragen kann.
+ *
+ * Lange war das ausschliesslich ein `Gegner`. Mit der Kernscherbe zeigt die
+ * Kernregel zum ersten Mal auf den *Spieler*: Sie ist selbst aus Glas, und
+ * drei Treffer von drei verschiedenen Gegnerarten lassen sie zerspringen.
+ *
+ * Beide Seiten tragen ohnehin genau diese drei Felder, deshalb reicht der
+ * schmale Typ. Er ist auch die ehrlichere Ansage als ein zweiter Satz
+ * Riss-Funktionen: Es gibt *eine* Buchfuehrung fuer Risse im ganzen Spiel, und
+ * wer sie fuehrt, ist ihr egal.
+ */
+export type Rissbar = {
+  risseMaske: number
+  risse: number
+  risseZeit: number
+}
+
+/**
+ * Das Rissfenster der Kernscherbe.
+ *
+ * Deutlich laenger als das der Gegner, und das muss so sein: Nach einem
+ * Treffer ist der Spieler 0,55 s unverwundbar, drei Treffer brauchen also
+ * mindestens 1,1 s - mit 1,6 s Fenster waere die Mechanik entweder nie zu
+ * sehen oder nur durch pures Pech. Vier Sekunden sind erreichbar, aber nicht
+ * geschenkt.
+ */
+export const GLAS_FENSTER = 4
+
+/**
  * Einen Riss setzen. Gibt zurueck, ob es ein *neuer* war.
  *
  * `platz` ist der Guertelplatz der Waffe, nicht der einzelne Treffer - so
  * zaehlt eine Waffe genau einmal, egal wie oft sie trifft. Explosionen und
  * Splitter erben den Platz ihres Verursachers, sonst waeren Bazooka-Geschoss
  * und Bazooka-Knall zwei verschiedene Waffen und die Regel waere ausgehebelt.
+ *
+ * Am Spieler steht statt des Guertelplatzes der Index der *Gegnerart* - siehe
+ * `artIndex` in `enemies.ts`. Dieselbe Rechnung, andere Richtung.
  */
-export function rissSetzen(g: Gegner, platz: number, zusatz = 0): boolean {
+export function rissSetzen(g: Rissbar, platz: number, zusatz = 0): boolean {
   // Ein Bit je Guertelplatz. Ein `Set` pro Gegner waere bei 1400 Gegnern
   // genau die Sorte Muell, die die Pools an anderer Stelle vermeiden - fuenf
   // Plaetze passen in fuenf Bits, und Pruefen wie Setzen sind je eine
@@ -116,14 +148,14 @@ export function zersplitterBereit(g: Gegner): boolean {
 }
 
 /** Risse verfallen lassen. Wird einmal je Gegner und Tick aufgerufen. */
-export function risseAblaufen(g: Gegner, dt: number): void {
+export function risseAblaufen(g: Rissbar, dt: number): void {
   if (g.risseZeit <= 0) return
   g.risseZeit -= dt
   if (g.risseZeit > 0) return
   risseLoeschen(g)
 }
 
-export function risseLoeschen(g: Gegner): void {
+export function risseLoeschen(g: Rissbar): void {
   g.risseMaske = 0
   g.risse = 0
   g.risseZeit = 0

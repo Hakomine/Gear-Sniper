@@ -67,6 +67,10 @@ export function erzeugeSpieler(): Spieler {
     gebremst: 0,
     zugX: 0,
     zugY: 0,
+    istGlas: false,
+    risseMaske: 0,
+    risse: 0,
+    risseZeit: 0,
   }
 }
 

@@ -290,3 +290,31 @@ export function gewichtFuer(art: GegnerArt, zeit: number): number {
 export function verfuegbareArten(zeit: number): GegnerArt[] {
   return GEGNER_ARTEN.filter((a) => zeit >= a.abSekunde)
 }
+
+/**
+ * Woher ein Treffer am Spieler kam - als Bitnummer.
+ *
+ * Gebraucht wird das nur von der Kernscherbe, die selbst aus Glas ist: Drei
+ * Treffer von drei *verschiedenen* Quellen lassen sie zerspringen. Damit ist
+ * die Frage "wer hat mich getroffen" zum ersten Mal eine, die das Spiel
+ * beantworten muss - und die Antwort ist dieselbe Bitmaske, mit der Gegner
+ * ihre Risse zaehlen.
+ *
+ * Zwei Nummern hinter den Arten sind reserviert: Bosse bringen ihre `GegnerArt`
+ * zur Laufzeit selbst mit und stehen deshalb nicht in `GEGNER_ARTEN`, und
+ * Bosszonen haben ueberhaupt keinen Koerper.
+ */
+export const QUELLE_BOSS = GEGNER_ARTEN.length
+export const QUELLE_UMWELT = GEGNER_ARTEN.length + 1
+
+/**
+ * Eine `Map` statt `indexOf`: Sie wird einmal gebaut und danach in konstanter
+ * Zeit gelesen. Bei zehn Eintraegen ist der Unterschied klein - aber diese
+ * Funktion liegt an einer Trefferstelle, und dort ist "klein und immer" die
+ * Sorte Kosten, die dieses Projekt an anderer Stelle konsequent vermeidet.
+ */
+const ART_INDEX = new Map<GegnerArt, number>(GEGNER_ARTEN.map((a, i) => [a, i]))
+
+export function artIndex(art: GegnerArt): number {
+  return ART_INDEX.get(art) ?? QUELLE_BOSS
+}

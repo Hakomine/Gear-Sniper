@@ -17,6 +17,7 @@ import {
   verteileSchreine,
 } from './schreine'
 import type { GegnerArt } from './enemies'
+import { artIndex, QUELLE_UMWELT } from './enemies'
 import { Klangpuffer } from './klaenge'
 import { aktualisiereKristalle, legeKristall } from './pickups'
 import { bewegeSpieler, erzeugeSpieler, stosse, stossTick, verletzeSpieler } from './player'
@@ -33,7 +34,15 @@ import {
   SCHLIFF_NAEHE,
   SCHLIFF_ZERFALL,
 } from './charaktere'
-import { risseAblaufen, rissSetzen, zersplitterBereit } from './risse'
+import {
+  GLAS_FENSTER,
+  RISS_FENSTER,
+  RISS_SCHWELLE,
+  risseAblaufen,
+  risseLoeschen,
+  rissSetzen,
+  zersplitterBereit,
+} from './risse'
 import type { Bewegung } from './gegnerVerhalten'
 import { GEGNER_VERHALTEN } from './gegnerVerhalten'
 import { entferneVerlorene, spawne, startWelle } from './spawner'
@@ -220,6 +229,24 @@ export type Spieler = {
    */
   zugX: number
   zugY: number
+
+  // --- Kernscherbe: die Kernregel zeigt auf den Spieler ---------------------
+
+  /**
+   * Ist dieser Charakter selbst aus Glas?
+   *
+   * Bei allen anderen `false`, und dann kostet die ganze Mechanik genau eine
+   * Abfrage pro Tick und eine je Treffer - dasselbe Muster wie bei den
+   * uebrigen Charaktermechaniken.
+   */
+  istGlas: boolean
+  /**
+   * Risse am *Spieler*. Ein Bit je Gegnerart - siehe `artIndex` in
+   * `enemies.ts`. Drei verschiedene lassen die Kernscherbe zerspringen.
+   */
+  risseMaske: number
+  risse: number
+  risseZeit: number
 }
 
 export type Gegner = {
@@ -411,6 +438,16 @@ export type FeindSchuss = {
   schaden: number
   leben: number
   farbe: string
+  /**
+   * Wer geschossen hat - Index der Gegnerart, siehe `artIndex` in
+   * `enemies.ts`.
+   *
+   * Ein Schuss traegt damit die Identitaet seines Schuetzen bis zum
+   * Einschlag. Ohne das zaehlten fuer die Kernscherbe alle Geschosse als
+   * dieselbe Quelle, und "drei verschiedene Gegnerarten" waere im Fernkampf
+   * eine Luege.
+   */
+  quelle: number
 }
 
 export type Kristall = {
@@ -485,6 +522,15 @@ export type Statistik = {
   schaden: number
   zersplittert: number
   bosse: number
+  /**
+   * Ist in diesem Lauf der Kern gefallen?
+   *
+   * Steht in der Statistik und nicht am Spielstand, weil die
+   * Freischaltbedingungen genau daraus lesen (`freigeschaltetDurch`) - und
+   * weil "was in diesem Lauf passiert ist" genau das ist, was diese Struktur
+   * beantwortet.
+   */
+  kernGelegt: boolean
   /**
    * Schaden je Guertelplatz - Grundlage der Auswertung am Ende.
    *
@@ -1732,7 +1778,14 @@ function raeumeTote(s: Spielstand): void {
       // zwei auf dem Feld - dann zaehlt der zweite.
       if (findeBoss(s) === null) s.etappeVorbei = true
       // Der Kern ist der letzte Gegner des Laufs. `laufendTick` schliesst ab.
-      if (istKern) s.gewonnen = true
+      if (istKern) {
+        s.gewonnen = true
+        // In die Statistik, weil die Freischaltbedingungen daraus lesen: Der
+        // Sieg ueber den Kern ist die schwerste Leistung des Spiels und die
+        // einzige, die einen Charakter oeffnet, den Zeit und Kills nicht
+        // oeffnen koennen.
+        s.statistik.kernGelegt = true
+      }
     }
 
     loeseZeichen(s, g)
@@ -1748,7 +1801,7 @@ function raeumeTote(s: Spielstand): void {
  * koennte ein Schockring waehrend der Gnadenfrist trotzdem treffen, und der
  * Spieler stuerbe an etwas, gegen das er sich nicht wehren konnte.
  */
-function trefferAmSpieler(s: Spielstand, schaden: number): void {
+function trefferAmSpieler(s: Spielstand, schaden: number, quelle = QUELLE_UMWELT): void {
   const sp = s.spieler
   if (sp.unverwundbar > 0) return
 
@@ -1777,6 +1830,62 @@ function trefferAmSpieler(s: Spielstand, schaden: number): void {
   // Aussetzer: Aus einem Fehler wird eine Chance - aber nur, wenn ringsum
   // genug steht. Wer sauber spielt, sieht diesen Gegenstand nie wirken.
   if (sp.aussetzer) reisseUmkreisAuf(s, sp.x, sp.y, 220)
+
+  // Kernscherbe: Der Treffer setzt einen Riss an *ihr*.
+  if (!sp.istGlas) return
+  rissSetzen(sp, quelle, GLAS_FENSTER - RISS_FENSTER)
+  if (sp.risse >= RISS_SCHWELLE) spielerZersplittert(s)
+}
+
+/**
+ * Wie viel Leben die Kernscherbe eine eigene Zersplitterung kostet und wie
+ * weit sie dabei aufreisst.
+ */
+const GLAS_WUCHT = 0.22
+const GLAS_RADIUS = 260
+
+/**
+ * Die Kernscherbe zerspringt.
+ *
+ * Der einzige Ort im Spiel, an dem die Kernregel gegen den Spieler laeuft -
+ * und sie laeuft nicht *nur* gegen ihn. Der Schlag kostet ein knappes Fuenftel
+ * ihrer vollen Leben, reisst dafuer aber alles im Umkreis auf und schleudert
+ * es weg. Wer mit ihr spielt, baut auf einen Gegner-Mix, der sie regelmaessig
+ * zerspringen laesst, und rechnet den Verlust ein.
+ *
+ * Warum drei *verschiedene* Arten und nicht einfach drei Treffer: In einem
+ * Feld aus lauter Splittern feuert das fast nie. Es feuert genau dann, wenn
+ * das Feld gemischt ist - spaet, im Gedraenge, neben Bossen und Speiern. Damit
+ * waechst die Gefahr mit demselben Verlauf wie das Spiel, statt eine feste
+ * Steuer auf jeden Treffer zu sein.
+ */
+function spielerZersplittert(s: Spielstand): void {
+  const sp = s.spieler
+  risseLoeschen(sp)
+  verletzeSpieler(sp, sp.maxHp * GLAS_WUCHT)
+
+  s.klaenge.melde('zersplittert', 1.5)
+  s.trauma = 1
+  s.blitz = Math.max(s.blitz, 0.8)
+  zerspringen(s, sp.x, sp.y, sp.radius * 3, s.charakter.farbe)
+  legeEffekt(s, 'ring', sp.x, sp.y, GLAS_RADIUS, 0.5, s.charakter.farbe, 5)
+
+  // Erst danach: Der Umkreis soll den Schlag *beantworten*, nicht ihn
+  // ausloesen - `reisseUmkreisAuf` kann eine Kaskade starten, und die haette
+  // sonst die Reihenfolge im Bild verdreht.
+  reisseUmkreisAuf(s, sp.x, sp.y, GLAS_RADIUS)
+
+  // Wegschleudern, was danebensteht. Ohne das steht der Pulk unveraendert da,
+  // und das Zerspringen fuehlt sich an wie ein Fehler statt wie einem Schlag.
+  gegnerImUmkreis(s, sp.x, sp.y, GLAS_RADIUS, aufreissZiele)
+  for (let i = 0; i < aufreissZiele.length; i++) {
+    const g = aufreissZiele[i]
+    const dx = g.x - sp.x
+    const dy = g.y - sp.y
+    const d = Math.hypot(dx, dy) || 1
+    g.stossX += (dx / d) * 420
+    g.stossY += (dy / d) * 420
+  }
 }
 
 /**
@@ -1819,7 +1928,7 @@ function bewegeFeindSchuesse(s: Spielstand, dt: number): void {
     const reichweite = p.radius + sp.radius
     if (dx * dx + dy * dy > reichweite * reichweite) continue
 
-    trefferAmSpieler(s, p.schaden)
+    trefferAmSpieler(s, p.schaden, p.quelle)
     s.feindSchuesse.freigeben(i)
   }
 }
@@ -1842,7 +1951,9 @@ function spielerKollision(s: Spielstand, dt: number): void {
     const reichweite = g.radius + sp.radius
     if (dx * dx + dy * dy > reichweite * reichweite) continue
 
-    trefferAmSpieler(s, g.schaden)
+    // Bosse bringen ihre Art zur Laufzeit mit und stehen nicht in
+    // `GEGNER_ARTEN` - `artIndex` gibt fuer sie `QUELLE_BOSS` zurueck.
+    trefferAmSpieler(s, g.schaden, artIndex(g.art))
     return
   }
 }
@@ -2051,7 +2162,17 @@ function leereZone(): Zone {
 }
 
 function leererFeindSchuss(): FeindSchuss {
-  return { x: 0, y: 0, vx: 0, vy: 0, radius: 6, schaden: 0, leben: 0, farbe: FARBEN.gefahr }
+  return {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    radius: 6,
+    schaden: 0,
+    leben: 0,
+    farbe: FARBEN.gefahr,
+    quelle: QUELLE_UMWELT,
+  }
 }
 
 function leererEffekt(): Effekt {
@@ -2205,6 +2326,7 @@ function leereStatistik(): Statistik {
     schaden: 0,
     zersplittert: 0,
     bosse: 0,
+    kernGelegt: false,
     // Drei Plaetze mehr als Waffen: Scherben, Geisterriss und Dornen.
     schadenProPlatz: new Array(PLATZ_ANZAHL).fill(0),
     platzName: new Array(PLATZ_ANZAHL).fill(''),
@@ -2262,6 +2384,11 @@ function charakterTick(s: Spielstand, dt: number): void {
   }
 
   if (sp.stillstandSchwelle > 0) sp.stillstand += dt
+
+  // Kernscherbe: Ihre eigenen Risse verfallen wie die eines Gegners. Wer vier
+  // Sekunden sauber ausweicht, faengt wieder bei null an - dieselbe Regel, nur
+  // andersherum gelesen.
+  if (sp.istGlas) risseAblaufen(sp, dt)
 
   // Koloss: verletzt alles, was ihn beruehrt. Eigener Durchgang, weil die
   // normale Spielerkollision nach dem ersten Treffer abbricht - hier soll
