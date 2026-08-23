@@ -72,43 +72,152 @@ export function zeichneTitel(
  */
 function gesprungenerTitel(ctx: CanvasRenderingContext2D, mx: number, my: number): void {
   /*
-   * Kein Strich mehr durch das Wort.
+   * Der Titel wird von einem gesprungenen Druckstock gedruckt.
    *
-   * Vorher war der Titel waagerecht durchgeschnitten und die Haelften
-   * gegeneinander versetzt - gemeint als Sprung im Glas, gelesen als
-   * Rendering-Fehler oder als Durchstreichung. Ein Strich durch Text heisst
-   * ueberall *ungueltig*, und beim eigenen Spieltitel ist das die denkbar
-   * schlechteste Ansage.
+   * Das ist das Bild, das spaeter auf die Steam-Seite kommt, und es muss das
+   * staerkste im ganzen Spiel sein. Zwei Fassungen davor sind gescheitert: die
+   * erste hat das Wort waagerecht durchgeschnitten und die Haelften versetzt -
+   * gemeint als Sprung im Glas, gelesen als Durchstreichung, und ein Strich
+   * durch Text heisst ueberall *ungueltig*. Die zweite war schlicht gesetzte
+   * Schrift mit Versatzschatten, also genau das, was jede Vorlage macht.
    *
-   * Der Bruch steckt jetzt in der *Tiefe*: eine harte dunkle Versatzschicht
-   * unter der Schrift, wie bei allen Platten dieser Bildsprache. Das Wort
-   * bleibt ganz und bekommt trotzdem Gewicht.
+   * Jetzt tut das Wort, was das Spiel tut: Es zerbricht. Der Stock ist
+   * gesprungen, die Teile sitzen nicht mehr genau, und quer durch die
+   * Buchstaben laufen Kerben, in denen keine Tinte liegt.
+   *
+   * Umgesetzt ueber eine Nebenleinwand: Text einmal setzen, dann bandweise mit
+   * Versatz zurueckkopieren. Damit bleiben es echte Buchstabenformen aus der
+   * mitgelieferten Schrift - zwoelf von Hand gebaute Glyphen waeren Wochen
+   * Arbeit und saehen schlechter aus - in einem Zustand, den keine
+   * Schriftdatei liefert.
    */
   const text = TEXTE.titel
-  ctx.font = `700 78px ${SCHRIFT.anzeige}`
   ctx.textAlign = 'center'
 
-  ctx.fillStyle = FARBEN.kontur
-  ctx.fillText(text, mx + 5, my + 6)
+  const stock = druckstock(ctx, text)
+  if (stock === null) {
+    // Ohne Nebenleinwand lieber schlicht als gar nicht: Ein fehlendes
+    // Titelbild waere schlimmer als ein ungebrochenes.
+    ctx.font = `700 ${TITEL_GROESSE}px ${SCHRIFT.anzeige}`
+    ctx.fillStyle = FARBEN.kontur
+    ctx.fillText(text, mx, my)
+  } else {
+    const x = mx - stock.width / 2
+    const y = my - stock.height / 2
 
-  ctx.fillStyle = FARBEN.spieler
-  ctx.fillText(text, mx, my)
-
-  // Zwei kurze Sprünge, die den Titel *streifen*, statt ihn zu teilen: unter
-  // der Grundlinie, ausserhalb der Buchstaben.
-  ctx.beginPath()
-  ctx.moveTo(mx - 268, my + 26)
-  ctx.lineTo(mx - 96, my + 20)
-  ctx.moveTo(mx + 104, my + 22)
-  ctx.lineTo(mx + 276, my + 27)
-  ctx.strokeStyle = mitAlpha(FARBEN.spielerRing, 0.85)
-  ctx.lineWidth = 3
-  ctx.stroke()
+    /*
+     * Drei Baender, jedes um ein paar Punkte verschoben.
+     *
+     * Waagerecht geschnitten und nicht schraeg: Ein schraeger Schnitt durch
+     * Grossbuchstaben laesst einzelne Buchstaben kippen und liest sich als
+     * Fehler. Ein waagerechter Versatz liest sich als *Druck*, weil genau das
+     * passiert, wenn ein Stock in Stuecken auf dem Karren liegt.
+     */
+    for (let i = 0; i < BAENDER.length; i++) {
+      const [von, bis, dx, dy] = BAENDER[i]
+      const h = stock.height * (bis - von)
+      ctx.drawImage(
+        stock,
+        0, stock.height * von, stock.width, h,
+        x + dx, y + stock.height * von + dy, stock.width, h,
+      )
+    }
+  }
 
   ctx.font = `400 19px ${SCHRIFT.text}`
   ctx.fillStyle = FARBEN.textSchwach
-  ctx.fillText(TEXTE.untertitel, mx, my + 58)
+  ctx.fillText(TEXTE.untertitel, mx, my + 62)
 }
+
+/** Schriftgroesse des Titels - an zwei Stellen gebraucht. */
+const TITEL_GROESSE = 78
+
+/**
+ * Die Baender, in die der Stock gesprungen ist.
+ *
+ * Je Eintrag: von, bis (Anteil der Hoehe), Versatz waagerecht, Versatz
+ * senkrecht. Von Hand gesetzt und nicht gewuerfelt - das Titelbild ist das
+ * eine Bild im Spiel, das jedes Mal gleich aussehen muss, und drei Zahlenpaare
+ * sind ehrlicher als ein Saatwert, der so lange gedreht wird, bis es passt.
+ *
+ * Die Versaetze sind klein. Ein Wort, das um zwanzig Punkte auseinanderfaellt,
+ * ist nicht mehr zu lesen, und ein Titel, den man buchstabieren muss, hat
+ * seine Aufgabe verfehlt.
+ */
+const BAENDER: ReadonlyArray<readonly [number, number, number, number]> = [
+  [0, 0.38, -3, 0],
+  [0.38, 0.72, 4, 1],
+  [0.72, 1, -1, 3],
+]
+
+/**
+ * Der Druckstock: das Wort einmal gesetzt, mit Kerben darin.
+ *
+ * Einmal gebaut und behalten. Ihn je Bild neu zu setzen waere dieselbe Sorte
+ * Verschwendung, die die Pools im ganzen Projekt vermeiden - und das Titelbild
+ * laeuft, solange niemand eine Taste drueckt.
+ */
+let titelStock: HTMLCanvasElement | null = null
+
+function druckstock(ctx: CanvasRenderingContext2D, text: string): HTMLCanvasElement | null {
+  if (titelStock !== null) return titelStock
+
+  ctx.font = `700 ${TITEL_GROESSE}px ${SCHRIFT.anzeige}`
+  const breite = Math.ceil(ctx.measureText(text).width) + 40
+  const hoehe = TITEL_GROESSE + 40
+
+  const c = document.createElement('canvas')
+  c.width = breite
+  c.height = hoehe
+  const k = c.getContext('2d')
+  if (k === null) return null
+
+  k.font = `700 ${TITEL_GROESSE}px ${SCHRIFT.anzeige}`
+  k.textAlign = 'center'
+  k.textBaseline = 'middle'
+  k.fillStyle = FARBEN.kontur
+  k.fillText(text, breite / 2, hoehe / 2)
+
+  /*
+   * Die Kerben - und hier steckt der eigentliche Griff.
+   *
+   * Sie werden mit `destination-out` gezeichnet, nehmen die Tinte also
+   * *weg*, statt eine helle Linie darauf zu legen. Damit ist die Kerbe auch
+   * dann Papier, wenn der Titel spaeter auf einem anderen Grund steht - und
+   * genau das ist der Unterschied zwischen "durchgestrichen" und "gebrochen".
+   */
+  k.globalCompositeOperation = 'destination-out'
+  k.lineCap = 'round'
+  k.lineJoin = 'round'
+  for (const [x1, y1, x2, y2, b] of KERBEN) {
+    k.beginPath()
+    k.moveTo(breite * x1, hoehe * y1)
+    // Der Knick sitzt nicht in der Mitte: Genau mittig geknickt liest sich als
+    // Zickzack-Muster, leicht daneben als Sprung.
+    k.lineTo(breite * (x1 + (x2 - x1) * 0.42), hoehe * (y1 + (y2 - y1) * 0.42) - 4)
+    k.lineTo(breite * x2, hoehe * y2)
+    k.lineWidth = b
+    k.stroke()
+  }
+
+  titelStock = c
+  return c
+}
+
+/**
+ * Wo die Kerben durch das Wort laufen.
+ *
+ * Je Eintrag: Anfang und Ende als Anteil von Breite und Hoehe, dann die
+ * Breite der Kerbe. Zwei kraeftige, die durch das ganze Wort gehen, und zwei
+ * feine als Ausfransung - so sieht ein gesprungener Stock aus, und nicht wie
+ * zwei parallele Striche.
+ */
+const KERBEN: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [-0.02, 0.34, 1.02, 0.44, 5],
+  [-0.02, 0.71, 1.02, 0.63, 4],
+  [0.18, 0.2, 0.31, 0.8, 2],
+  [0.62, 0.18, 0.71, 0.82, 2],
+]
 
 /** Breite der beiden Seitenplatten auf dem Titelbild. */
 const SEITE_B = 300
@@ -968,7 +1077,7 @@ function zeichneSchadensBalken(
     ctx.clip()
     ctx.fillStyle = e.farbe
     ctx.fillRect(bx, by - 9, bw * anteil, 18)
-    ctx.fillStyle = mitAlpha('#ffffff', 0.22)
+    ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.13)
     ctx.fillRect(bx, by - 9, bw * anteil, 4)
     ctx.restore()
     schraegBalken(ctx, bx, by - 9, bw, 18, 9)

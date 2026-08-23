@@ -306,6 +306,35 @@ export function schraffurMuster(
   return fertigMuster
 }
 
+/* -------------------------------------------------------------- Fehldruck */
+
+/**
+ * Wie weit eine Druckfarbe neben der Tinte liegt.
+ *
+ * Der billigste Handgriff dieser ganzen Runde und einer der wirksamsten.
+ * Nichts sagt "das hat eine Maschine gedruckt, die ein Mensch bedient hat" so
+ * deutlich wie ein Versatz, der nicht null ist - und umgekehrt ist perfekte
+ * Passgenauigkeit ueber alle Farben hinweg genau das, was ein Bild digital
+ * aussehen laesst.
+ *
+ * Konstant je Farbe, nicht je Objekt: Eine Presse ist einmal falsch justiert
+ * und dann fuer den ganzen Bogen. Waere der Versatz je Objekt zufaellig,
+ * saehe es nach Wackeln aus statt nach Druck.
+ *
+ * Ein bis anderthalb Punkte. Mehr, und aus "leicht daneben" wird "kaputt" -
+ * bei einem Kristall von acht Punkten Radius ist das die Grenze.
+ */
+export const FEHLDRUCK: Readonly<Record<string, readonly [number, number]>> = {
+  [FARBEN.krit]: [1.4, -1],
+  [FARBEN.gefahr]: [-1.2, 1.3],
+}
+
+export function versatzFuer(farbe: string): readonly [number, number] {
+  return FEHLDRUCK[farbe] ?? NULL_VERSATZ
+}
+
+const NULL_VERSATZ: readonly [number, number] = [0, 0]
+
 /* ----------------------------------------------------------------- Kerben */
 
 /**

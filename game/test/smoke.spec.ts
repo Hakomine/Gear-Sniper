@@ -536,10 +536,23 @@ test('Pausenmenü hält an und lässt sich bedienen', async ({ page }) => {
   await page.waitForTimeout(700)
   expect((await lies(page)).zeit).toBe(zeit)
 
-  // Und dieselbe Taste gibt wieder frei.
+  /*
+   * Und dieselbe Taste gibt wieder frei.
+   *
+   * Geprueft wird, dass die Pause *weg* ist - nicht, in welcher Phase der Lauf
+   * danach steht. Hier stand `toBe('laufend')`, und das ist prompt
+   * fehlgeschlagen, als das Zeichnen schneller wurde: `core/loop.ts` verwirft
+   * Simulationszeit, wenn ein Bild zu lange braucht (`MAX_TICKS_PRO_BILD`,
+   * danach `speicher = 0`). Bei 11,4 ms je Bild fiel der Lauf im Prueflauf
+   * staendig zurueck; bei 7,9 ms haelt er Schritt, kommt in denselben drei
+   * Sekunden weiter - und ist beim Entpausieren eine Stufe faellig.
+   *
+   * Der Lauf ging also weiter, genau wie er soll. Ein Test, der bei *mehr*
+   * Spielfortschritt rot wird, misst die falsche Sache.
+   */
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
-  expect((await lies(page)).phase).toBe('laufend')
+  expect((await lies(page)).phase).not.toBe('pause')
 })
 
 test('Schreine stehen im Feld und zeigen sich am Rand', async ({ page }) => {

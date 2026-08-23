@@ -224,22 +224,45 @@ export function massivePlatte(
     akzent: string
     /** Ausgewaehlt: dickere Kontur, hoeherer Balken, tieferer Schatten. */
     aktiv?: boolean
-    /** Wie tief die Ecke unten rechts abgeschnitten ist. */
+    /**
+     * Wie tief die Ecke unten rechts abgeschnitten ist.
+     *
+     * Bleibt als Feld stehen, weil ein Dutzend Aufrufer ihn setzt - seit die
+     * Karten gerissene Schnipsel sind, entscheidet aber der Saatwert ueber die
+     * Ecke, nicht mehr diese Zahl.
+     */
     ecke?: number
+    /**
+     * Wie dieser Schnipsel gerissen ist. Ohne Angabe aus Lage und Groesse
+     * abgeleitet - was fuer alles genuegt, das nicht wandert.
+     */
+    saat?: number
   },
 ): void {
-  const ecke = opt.ecke ?? 18
   const aktiv = opt.aktiv === true
   const tiefe = aktiv ? 7 : 5
 
+  /*
+   * Ein gerissener Schnipsel, kein gestanztes Rechteck.
+   *
+   * Bis hierher war jede Karte ein sauberes Rechteck mit *einer* abgeschnitte-
+   * nen Ecke - eine Form, die aussieht, als haette sie eine Maschine gemacht,
+   * weil genau das der Fall war. Die Recherche zu "sieht aus wie mit KI
+   * gemacht" nennt diese Karten woertlich beim Namen.
+   *
+   * `scherbenPfad` gibt es in dieser Datei seit Runde 5 und es tut genau das
+   * Richtige: acht Punkte rund um das Rechteck, jeder leicht versetzt, eine
+   * Ecke tief abgeschlagen, und alles aus einem Saatwert - keine Karte ist wie
+   * die andere, aber jede bleibt sich ueber alle Bilder treu. Es wurde nur nie
+   * hier eingesetzt.
+   *
+   * Der Saatwert kommt aus Lage und Groesse: Dieselbe Karte an derselben
+   * Stelle reisst immer gleich, eine Karte daneben anders.
+   */
+  const saat = opt.saat ?? Math.round(x * 3 + y * 7 + b)
+
   const pfad = (vx: number, vy: number): void => {
-    ctx.beginPath()
-    ctx.moveTo(x + vx, y + vy)
-    ctx.lineTo(x + b + vx, y + vy)
-    ctx.lineTo(x + b + vx, y + h - ecke + vy)
-    ctx.lineTo(x + b - ecke + vx, y + h + vy)
-    ctx.lineTo(x + vx, y + h + vy)
-    ctx.closePath()
+    scherbenPfad(ctx, x + vx, y + vy, b, h, saat)
   }
 
   // Harter Schatten statt weichem Verlauf: Er sitzt in der Konturfarbe direkt
@@ -262,22 +285,31 @@ export function massivePlatte(
   ctx.clip()
 
   /*
-   * Ein Lichtsaum unter der Oberkante.
+   * Kein Lichtsaum mehr. Papier glaenzt nicht.
    *
-   * Auf dem hellen Feld reichte ein flacher Akzentbalken - die Platte hob sich
-   * ohnehin ab. Auf dem Nachtfeld ist sie fast so dunkel wie der Grund, und
-   * ohne Lichtkante wird aus "Glas, das ueber dem Feld liegt" ein graues
-   * Rechteck. Der Saum ist der Beweis, dass die Platte eine *Oberflaeche* hat:
-   * Licht faellt von oben ein und laeuft nach unten aus.
+   * Hier stand ein Verlauf von der Oberkante nach unten - auf dem Nachtfeld
+   * war er noetig, damit die fast schwarze Platte ueberhaupt als Oberflaeche
+   * lesbar blieb. Genau diese Kante nennt die Recherche zur KI-Handschrift
+   * woertlich: "glowing card borders". Auf Papier ist sie nicht nur
+   * ueberfluessig, sondern falsch: Ein Blatt hat keine Lichtkante, es hat eine
+   * Faser.
+   *
+   * An seiner Stelle steht ein Anriss in der Kontur - der Schnipsel wurde von
+   * oben gerissen, und dort ist die Kante rauer als unten.
    */
-  const saum = ctx.createLinearGradient(x, y, x, y + Math.min(h, 64))
-  saum.addColorStop(0, mitAlpha(opt.akzent, aktiv ? 0.3 : 0.16))
-  saum.addColorStop(1, mitAlpha(opt.akzent, 0))
-  ctx.fillStyle = saum
-  ctx.fillRect(x, y, b, Math.min(h, 64))
+  ctx.beginPath()
+  for (let i = 0; i < 5; i++) {
+    const px = x + (b * (i + 0.5)) / 5 + (streu(saat, 70 + i) - 0.5) * b * 0.12
+    ctx.moveTo(px, y)
+    ctx.lineTo(px + (streu(saat, 80 + i) - 0.5) * 6, y + 3 + streu(saat, 90 + i) * 5)
+  }
+  ctx.lineWidth = 1.4
+  ctx.strokeStyle = mitAlpha(opt.kontur, 0.35)
+  ctx.stroke()
 
   // Der Akzentbalken traegt die Farbe - Seltenheit, Tuerart, Charakter. Oben,
-  // waagerecht, ausserhalb jeder Textzeile.
+  // waagerecht, ausserhalb jeder Textzeile. Er ist der einzige Ort auf einer
+  // Karte, an dem ueberhaupt eine Druckfarbe liegt.
   ctx.fillStyle = opt.akzent
   ctx.fillRect(x, y, b, aktiv ? 8 : 5)
   ctx.restore()

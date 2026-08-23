@@ -31,15 +31,22 @@ let saumSchluessel = ''
 function zeichneSaeume(ctx: CanvasRenderingContext2D, breite: number, hoehe: number): void {
   const schluessel = `${breite}x${hoehe}`
   if (saumOben === null || saumSchluessel !== schluessel) {
-    // In der Konturfarbe, nicht in der Grundfarbe: Seit das Spielfeld hell
-    // ist, wuerde ein Saum in Grundfarbe die Raender *aufhellen* - und damit
-    // genau das Gegenteil dessen tun, wofuer er da ist.
+    /*
+     * Wieder in der Grundfarbe - zum dritten Mal, und zum dritten Mal aus
+     * demselben Grund: Der Saum muss *gegen* das Feld arbeiten.
+     *
+     * Auf dunklem Feld war er hell, auf hellem dunkel, und seit der Grund
+     * Papier ist und alles darauf Tinte, ist er wieder Papier. Er nimmt dem
+     * Getuemmel unter der Anzeige die Tinte weg, statt zwei schwarze Baender
+     * ueber das Bild zu legen - und der Text darauf bleibt lesbar, weil er
+     * selbst Tinte ist.
+     */
     const oben = ctx.createLinearGradient(0, 0, 0, 104)
-    oben.addColorStop(0, mitAlpha(FARBEN.kontur, 0.85))
-    oben.addColorStop(1, mitAlpha(FARBEN.kontur, 0))
+    oben.addColorStop(0, mitAlpha(FARBEN.grund, 0.92))
+    oben.addColorStop(1, mitAlpha(FARBEN.grund, 0))
     const unten = ctx.createLinearGradient(0, hoehe - 96, 0, hoehe)
-    unten.addColorStop(0, mitAlpha(FARBEN.kontur, 0))
-    unten.addColorStop(1, mitAlpha(FARBEN.kontur, 0.85))
+    unten.addColorStop(0, mitAlpha(FARBEN.grund, 0))
+    unten.addColorStop(1, mitAlpha(FARBEN.grund, 0.92))
     saumOben = oben
     saumUnten = unten
     saumSchluessel = schluessel
@@ -72,7 +79,7 @@ export function zeichneHud(
   ctx.fillStyle = FARBEN.kristall
   ctx.fillRect(0, 0, breite * xpAnteil, xpHoehe)
   // Heller Kamm auf der Fuellung - dieselbe Lichtung wie an jedem Koerper.
-  ctx.fillStyle = mitAlpha('#ffffff', 0.28)
+  ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.16)
   ctx.fillRect(0, 0, breite * xpAnteil, 3)
 
   // --- Uhr, mittig oben ----------------------------------------------------
@@ -91,7 +98,7 @@ export function zeichneHud(
   // Sie beantwortet dieselbe Frage - wie weit ist dieser Lauf - nur eine
   // Ebene hoeher.
   ctx.font = `700 13px ${SCHRIFT.mono}`
-  ctx.fillStyle = s.zerruettung > 0 ? '#c86bff' : FARBEN.spielerRing
+  ctx.fillStyle = s.zerruettung > 0 ? FARBEN.gefahr : FARBEN.spielerRing
   const fortschritt =
     s.zerruettung > 0 ? `${TEXTE.etappe} ${s.etappe} · Z${s.zerruettung}` : `${TEXTE.etappe} ${s.etappe}`
   ctx.fillText(fortschritt, breite / 2, 74)
@@ -133,7 +140,7 @@ export function zeichneHud(
   const lebenFarbe = lebenAnteil > 0.34 ? FARBEN.heilung : FARBEN.gefahr
   ctx.fillStyle = lebenFarbe
   ctx.fillRect(bx, by, bw * lebenAnteil, bh)
-  ctx.fillStyle = mitAlpha('#ffffff', 0.25)
+  ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.14)
   ctx.fillRect(bx, by, bw * lebenAnteil, 4)
   ctx.restore()
 
@@ -186,12 +193,13 @@ function zeichneRandWarnung(
       hoehe / 2,
       Math.max(breite, hoehe) * 0.62,
     )
-    // Zur Mitte hin schon leicht sichtbar: Auf dem helleren Spielfeld geht
-    // ein reiner Randschimmer unter, und die Warnung soll man am Rand des
-    // Blickfelds mitbekommen, nicht suchen muessen.
-    verlauf.addColorStop(0, 'rgba(255,77,94,0)')
-    verlauf.addColorStop(0.72, 'rgba(255,77,94,0.35)')
-    verlauf.addColorStop(1, 'rgba(255,77,94,1)')
+    // Zur Mitte hin schon leicht sichtbar: Auf hellem Papier geht ein reiner
+    // Randschimmer unter, und die Warnung soll man am Rand des Blickfelds
+    // mitbekommen, nicht suchen muessen. In Zinnober, weil Zinnober im ganzen
+    // Spiel genau eines heisst - das kann dir wehtun.
+    verlauf.addColorStop(0, mitAlpha(FARBEN.gefahr, 0))
+    verlauf.addColorStop(0.72, mitAlpha(FARBEN.gefahr, 0.3))
+    verlauf.addColorStop(1, mitAlpha(FARBEN.gefahr, 0.9))
     randVerlauf = verlauf
     randVerlaufSchluessel = schluessel
   }
@@ -296,7 +304,7 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
   ctx.clip()
   ctx.fillStyle = z.art.farbe
   ctx.fillRect(bx, by, bw * anteil, bh)
-  ctx.fillStyle = mitAlpha('#ffffff', 0.22)
+  ctx.fillStyle = mitAlpha(FARBEN.kontur, 0.13)
   ctx.fillRect(bx, by, bw * anteil, 4)
   ctx.restore()
 
@@ -337,7 +345,7 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
     const rest = Math.max(0, z.kittRest) / z.art.kittTakt
     ctx.fillStyle = FARBEN.kontur
     ctx.fillRect(bx, by + bh + 6, bw, 5)
-    ctx.fillStyle = z.kittGemeldet ? FARBEN.gefahr : '#63d4ff'
+    ctx.fillStyle = z.kittGemeldet ? FARBEN.gefahr : FARBEN.kontur
     ctx.fillRect(bx, by + bh + 6, bw * rest, 5)
   }
 

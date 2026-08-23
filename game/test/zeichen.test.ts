@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FARBEN } from '../src/render/palette'
 import { TICK_DT } from '../src/core/loop'
 import { GEGNER_ARTEN } from '../src/game/enemies'
 import type { GegnerArt } from '../src/game/enemies'
@@ -56,10 +57,32 @@ function setze(s: Spielstand, artId: string, zeichenId: string, x = 0, y = 0): G
 }
 
 describe('Die Zeichen sind wirklich verschieden', () => {
-  it('hat fuenf Zeichen, alle mit eigener Farbe und eigenem Namen', () => {
+  it('hat fuenf Zeichen, jedes mit eigenem Namen und eigenem Strich', () => {
     expect(ZEICHEN.length).toBe(5)
-    expect(new Set(ZEICHEN.map((z) => z.farbe)).size).toBe(5)
     expect(new Set(ZEICHEN.map((z) => z.id)).size).toBe(5)
+
+    /*
+     * Geprueft wird der *Strich*, nicht mehr die Farbe.
+     *
+     * Bis das Spiel gedruckt wurde, trug jedes Zeichen einen eigenen
+     * gesaettigten Ton, und dieser Test hat auf die Farbe geschaut. Mit zwei
+     * Druckfarben ging das nicht mehr auf - vier der fuenf fielen auf
+     * Zinnober zusammen, und der Test hat es sofort gemeldet. Genau richtig:
+     * Wer nicht sieht, *welches* Zeichen ein Gegner traegt, kann nicht darauf
+     * reagieren, und dann ist die Mechanik nur noch "der da ist zaeher".
+     *
+     * Die Unterscheidung liegt jetzt im Strichmuster des Rings, so wie ein
+     * Stecher zwei Flaechen trennt, der nur eine Farbe zur Verfuegung hat.
+     * Der Test folgt der Sache und nicht der alten Umsetzung.
+     */
+    const striche = ZEICHEN.map((z) => z.strich.join(','))
+    expect(new Set(striche).size).toBe(5)
+
+    // Die Farbe sagt weiterhin etwas - nur nicht mehr *welches* Zeichen,
+    // sondern ob man davon etwas hat. Genau eines der fuenf ist ein Ziel.
+    const nuetzlich = ZEICHEN.filter((z) => z.farbe === FARBEN.krit)
+    expect(nuetzlich).toHaveLength(1)
+    expect(nuetzlich[0].id).toBe('klammer')
   })
 
   it('gibt keinem Zeichen dieselbe Wirkung wie einem anderen', () => {

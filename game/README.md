@@ -14,12 +14,12 @@ Punkte.
 
 Keine Laufzeit-Abhängigkeiten: TypeScript, Canvas 2D, sonst nichts.
 
-![Vorher und nachher: derselbe Waffenbau auf dem alten und auf dem neuen
-Feld](docs/vorher-nachher.jpg)
+![Drei Runden desselben Weltausschnitts: Farbkonfetti, Neon auf Schwarz,
+Tinte auf Papier](docs/vorher-nachher.jpg)
 
-Beides ist dasselbe Spiel, dieselbe Minute, derselbe Bau — dazwischen liegt nur
-die siebte Runde. Wie es dazu kam, steht unter [Das
-Nachtfeld](#das-nachtfeld).
+Dreimal dasselbe Spiel, dieselbe Minute, derselbe Bau. Die mittlere Fassung
+sollte die erste beheben und hat sie verschlimmert — warum, steht unter [Tinte
+auf Papier](#tinte-auf-papier).
 
 ## Losspielen
 
@@ -180,119 +180,168 @@ hell ist. Der Todesbildschirm besteht aus drei Platten — Punktetafel oben, was
 passiert ist links, woran sie gestorben sind rechts — und der Sprung im Glas
 läuft **hinter** ihnen durch, nicht über den Text.
 
-## Das Nachtfeld
+## Tinte auf Papier
 
-Nach der sechsten Runde kam die Rückmeldung, die schwerer zu fassen war als
-alle davor:
+Zweimal hintereinander kam dieselbe Rückmeldung, und beim zweiten Mal war sie
+schärfer:
 
 > „Das Game ist schon cool, aber es sieht mir immer noch so aus, als wäre das
-> so wie KI gemacht beziehungsweise so billig gemacht."
+> so wie KI gemacht."
 
-Das ist kein Geschmacksurteil, das man wegdiskutieren kann, und es war auch
-keine Frage von fehlenden Zeichnern. Die Ursachen standen im Quelltext, und
-jede einzelne ließ sich benennen:
+und nach der Runde, die genau das beheben sollte:
 
-| Was billig wirkte | Woher es kam |
+> „Er sieht jetzt **noch mehr** so aus, als wär das mit KI gemacht, weil das
+> sieht alles so clean aus. Guck dir mal an, wie das bei den anderen Games so
+> ist."
+
+Das ist kein Geschmacksurteil, das man wegdiskutieren kann — und es ließ sich
+belegen. Die dokumentierte Handschrift maschinell erzeugter Gestaltung ist
+wörtlich:
+
+> „neon-on-dark (cyan/violet) with **glowing card borders** and animated
+> accent-glow backgrounds"
+> — [SmoothUI, *AI Design Slop*](https://smoothui.dev/blog/ai-design-slop)
+
+Das war Punkt für Punkt das, was in der Runde davor hier eingebaut worden war.
+Ich hatte diese Richtung selbst vorgeschlagen und als Empfehlung markiert, ohne
+zu erkennen, dass ich damit die statistische Voreinstellung anbiete. Mehr Mühe
+in dieselbe Richtung machte es schlimmer, nicht besser.
+
+Die Gegenrichtung ist genauso belegt: Was handgemacht *wirkt*, kommt aus
+„irregular lines, uneven edges, visible materials", und das sei „difficult to
+replicate with **procedural or vector-based approaches**"
+([VSQUAD](https://vsquad.art/blog/mastering-indie-game-art-styles-a-developers-guide)).
+Genau da lag das Problem: Jedes Sechseck kam aus `cos(i * PI / 3)`, jeder
+Strich war exakt drei Punkte breit, jede Fläche eine einfarbige Füllung. Es sah
+maschinell aus, **weil es maschinell war**.
+
+Und die Spiele, mit denen dieses verglichen wird, machen alle das Gegenteil:
+Vampire Survivors wird als „charming, **scruffy**" beschrieben, Brotato als
+comic-artig wie Binding of Isaac
+([videochums](https://videochums.com/article/brotato-vs-vampire-survivors)).
+Keines davon ist clean. Keines davon leuchtet. Alle haben ein Gesicht.
+
+Also: **Druck.** Ein Verfahren, das nur Tinte kennt und Papier — und das
+deshalb gar nicht leuchten *kann*.
+
+### Vier Werte statt dreizehn
+
+Die Palette sagt ab jetzt etwas. Das ist der Unterschied zwischen einer
+Farbauswahl und einem Stil:
+
+| Wert | Bedeutung |
 |---|---|
-| Der Boden war Millimeterpapier | einfarbiger Grund plus ein regelmäßiges 80-px-Raster in zwei Grautönen, das sich nie bewegte |
-| Nichts leuchtete | kein einziges `globalCompositeOperation` im ganzen Projekt — in einem Spiel über Glas und Kristalle glühte nichts |
-| Farbkonfetti ohne Rangfolge | dreizehn voll gesättigte Töne auf ähnlicher Helligkeit; nichts trat zurück |
-| Eine Monospace für alles | `SCHRIFT` hatte genau einen Eintrag — Titel, Fließtext und Zahlen teilten ihn sich |
-| Kamera ohne Charakter | ein nackter exponentieller Nachzug, kein Vorausblick, kein Kick |
-| Kein Hitstop | Wucht bestand aus Wackeln und einem weißen Vollbild-Rechteck |
-| Bewegung ohne Gewicht | die Position wurde direkt aus der Tastenrichtung geschrieben: volles Tempo im ersten Bild |
+| **Tinte** (warmes Schwarz) | die Welt, die Gegner, alles Feste |
+| **Papier** (gealtertes Weiß) | der Bruch, das Fehlende — *und der Spieler* |
+| **Zinnober** | es kann dir wehtun |
+| **Ocker** | es ist gut für dich |
 
-Die Regel, die alles trägt, stand schon seit Runde 5 in `palette.ts` — der Code
-hielt sich nur nicht daran:
+Der Spieler ist damit ein **weißes Loch in einer schwarzen Masse**. Bei 1400
+Gegnern ist das die stärkste Lesbarkeit, die es gibt, und sie kostet keine
+einzige zusätzliche Farbe. Reines `#000` gibt es nicht: Ein Schwarz mit einem
+Rest Braun liest sich als Farbe, die einmal flüssig war; reines Schwarz liest
+das Auge sofort als Bildschirm.
 
-> **Die Form sagt, was es ist. Die Farbe sagt, in welchem Zustand es ist.**
+Möglich war der Wechsel, weil die Simulation die Palette nur über **Namen**
+abgreift (`FARBEN.gefahr`, nie ein Hex-Wert). Er ging durch das ganze Spiel,
+ohne dass in `src/game/` eine Regel fiel.
 
-Die Vorbilder für die gewählte Richtung sind alle vier Spiele **ohne
-Grafikdateien**, die trotzdem teuer aussehen: **Geometry Wars** (wellendes
-Gitter, additives Leuchten — beides reine Mathematik), **Nex Machina** und
-**Resogun** (dunkler Grund, leuchtende Körper, Konturen bleiben), **Devil
-Daggers** (eine einzige Lichtquelle trägt eine ganze Ästhetik) und **Downwell**
-(Farbdisziplin als Stilmittel statt als Verzicht).
+### Ausgebrochene Kanten
 
-### Der Grund wird schwarz und lebendig
+Der Kern der Sache. Jeder Eckpunkt rutscht aus seiner Sollposition — radial und
+quer, abgeleitet aus der `id` des Gegners. Kein Sechseck ist mehr wie das
+andere, aber jedes bleibt sich über alle Bilder treu; wäre der Versatz je Bild
+neu, flackerte das Feld, und aus „handgeschnitten" würde „kaputt".
 
-`grund` fällt von `#2a2f3e` auf ein Nachtblau um `#070912`. Damit kehrt sich
-die Bildsprache um: Nicht mehr der Boden trägt, sondern das Licht darauf. Die
-dunkle Kontur aus Runde 5 bleibt — sie trennt jetzt *Leuchtendes* voneinander
-statt Flächen.
+`ctx.rect` und `ctx.arc` sind dabei gefallen: Ein Rechteck und ein Kreisbogen
+lassen sich nicht verwackeln, und ein exaktes Rechteck zwischen lauter
+geschnittenen Formen fällt sofort auf. Der Halbmond des Schildträgers ist jetzt
+ein Polygonzug aus neun Stücken — aus der Ferne derselbe Bogen, aus der Nähe
+ein Schnitt.
 
-An die Stelle des Rasters tritt ein **Federnetz** (`render/gitter.ts`): 22 × 14
-Knoten im Abstand 56, jeder mit einer Geschwindigkeit und einer Federkraft
-zurück in die Ruhelage, an Weltkoordinaten verankert, damit es mitscrollt.
-Impulse kommen aus Momenten, die es ohnehin schon gibt — jede Zersplitterung,
-jeder Bossangriff, jeder Schalenbruch. Der Boden **reagiert** damit auf das
-Spiel, statt es nur zu unterlegen, und das ist der ganze Unterschied zwischen
-einer Szene und einer Kulisse.
+Die Kosten wären messbar gewesen: über zwanzigtausend Abfragen je Bild. Sie
+kommen deshalb aus einer Tabelle mit 256 Werten statt aus `Math.sin`.
 
-Die Simulation zeichnet dabei nichts. Sie *meldet* Impulse in einen kleinen
-Ringpuffer (`game/wellen.ts`), genau wie `game/klaenge.ts` es für den Ton tut,
-und `render/gitter.ts` leert ihn je Bild. `src/game/` bleibt browserfrei — die
-Regel, die alle Messungen ohne Fenster überhaupt erst möglich macht.
+### Was ein Druck kann und ein Vektorbild nicht
 
-### Die Glut — Bloom ohne Shader
+`render/papier.ts` liefert vier Dinge:
 
-Der größte einzelne Hebel, und der Grund, warum flaches Canvas 2D nach Prototyp
-aussieht: **es emittiert nichts.** Jede Form wird gefüllt und umrandet, fertig.
+- **Korn.** Papier ist nie glatt. Eine gekachelte Nebenleinwand, ein
+  Füllaufruf je Bild statt zwölftausend Punkten. Die Körner sind *dunkler* als
+  das Papier — helles Korn auf hellem Grund wäre Bildrauschen, also ein Fehler.
+- **Flecken.** Papier ist nie gleichmäßig. An Weltkoordinaten verankert: Man
+  sieht sie nur, wenn man sich bewegt, und dann sagen sie „du bist woanders"
+  statt „hier fliegt was".
+- **Schraffur.** Im Hochdruck gibt es keinen Verlauf — die Walze trägt Farbe
+  auf oder sie tut es nicht. Wer dunkler will, schneidet enger. Nur für Große:
+  Zwei Striche in einem Splitter von neun Punkten Radius wären kein Schnitt,
+  sondern Dreck.
+- **Kerben.** Ein Riss ist ab jetzt *fehlende Tinte*, kein hellblauer Strich
+  darauf. Damit sieht ein gerissener Gegner beschädigt aus statt bemalt — und
+  das, wonach das Spiel benannt ist, ist endlich auch das, was man zuerst
+  sieht.
 
-`render/glut.ts` baut echtes Bloom ohne Shader, ohne Bibliothek und ohne den
-Zeichencode zweimal zu durchlaufen:
+Die ganze Glut-Schicht der Runde davor ist **ersatzlos gelöscht**. Wo etwas
+strahlen soll, strahlt es so, wie ein Holzschnitt strahlt: mit Schnitten nach
+außen.
 
-1. Leuchtende Dinge schieben während des Weltdurchgangs nur ihre *Daten*
-   hinein — Ort, Radius, Farbe, Stärke. Der Formcode läuft **nicht** erneut.
-2. Alles wandert auf eine Nebenleinwand mit einem Fünftel der Kantenlänge
-   (256 × 144). Ein Leuchtpunkt ist dort ein einziges `drawImage` eines
-   **vorgerenderten Verlaufsplättchens** — je Farbe eines, faul erzeugt.
-3. Weichgezeichnet wird auf der *kleinen* Leinwand, wo es fast nichts kostet.
-4. Einmal mit `globalCompositeOperation = 'lighter'` in voller Größe zurück.
+### Fehldruck
 
-Was leuchtet: Spieler und Stoßring, Kristalle, eigene Geschosse und
-Feindschüsse, Effektringe, Zeichen-Ringe, Schreine, der Kern und seine Schalen,
-offene Risse, kritische Zahlen.
+Der billigste Handgriff der Runde und einer der wirksamsten: Die beiden
+Druckfarben liegen **ein bis anderthalb Punkte neben** der Tinte. Konstant je
+Farbe, nicht je Objekt — eine Presse ist einmal falsch justiert und dann für
+den ganzen Bogen.
 
-Was **nicht** leuchtet: gewöhnliche Gegnerkörper. Bei 1400 Stück wäre das eine
-Lichtsuppe, in der nichts mehr zu erkennen ist — und damit genau der Fehler,
-den die Farbdisziplin gerade behebt.
+Nichts sagt „das hat eine Maschine gedruckt, die ein Mensch bedient hat" so
+deutlich wie ein Versatz, der nicht null ist. Und umgekehrt ist perfekte
+Passgenauigkeit über alle Farben hinweg genau das, was ein Bild digital
+aussehen lässt.
 
-### Farbe ist ab jetzt eine Aussage
+### Augen
 
-Die sieben eigenen Gegnerfarben sind weg. Der Körper trägt eine von drei
-Helligkeiten aus einer kühlen, fast einfarbigen Familie; **Farbton lebt nur
-noch im Kern**, und nur dort, wo er etwas sagt: Der Kitt ist rosa, weil man ihn
-zuerst wegmachen muss. Der Speier ist orange, weil man zu ihm hin muss. Der
-Rest trägt Stahlblau, das nur sagt „lebt".
+Bis hierher war Scherbenfeld eine Simulation von Vielecken. Jedes Spiel, mit
+dem es verglichen wird, hat an dieser Stelle etwas: Isaac hat Gesichter,
+Downwell hat Augen, Brotato hat eine Kartoffel.
 
-Dazu bekommt jeder Körper einen **hellen Kern** bei 52 % Radius in derselben
-Silhouette, ein Stück nach oben versetzt. Das ist Beleuchtung von oben für den
-Preis einer Zahl — und es macht aus einem Aufkleber einen Körper mit Ober- und
-Unterseite. Ein runder Kern in einem Sechseck sähe aus wie ein aufgemaltes
-Auge; dieselbe Form in klein liest sich als *dasselbe Ding, von innen
-beleuchtet*, und die Formensprache aus neun Arten bleibt bis in den Kern
-erhalten.
+Es kostet zwei Kreise. Brocken, Schildträger, Speier, Teiler, Kitt und **jeder
+Boss** sehen einen jetzt an. Die Pupille folgt dem Spieler, beim Treffer kneift
+das Lid zu, und trägt der Gegner Risse, springt die Pupille — die Kernregel
+steht damit auch im Gesicht.
 
-### Eine Schriftdatei — die erste Asset-Datei überhaupt
+Der Pulk bleibt bewusst anonym, und *genau deshalb* wirkt das Große lebendig:
+Was einen ansieht, ist jemand; was einen nicht ansieht, ist Masse. Bekäme der
+Splitter ein Auge, säßen bei vollem Feld tausend davon im Bild, und aus
+Charakter würde Rauschen.
 
-Bis hierher galt „keine Dateien, alles Code". Für die Schrift ist die Regel
-gebrochen, und zwar bewusst: Eine Monospace im Fließtext ist der
-zuverlässigste Hinweis darauf, dass eine Oberfläche von jemandem gebaut wurde,
-der Code schreibt.
+### Der Titel wird von einem gesprungenen Druckstock gedruckt
 
-**Space Grotesk** liegt jetzt unter `public/schrift/` (22 kB, SIL Open Font
-License, Lizenztext daneben), wird per `@font-face` lokal eingebunden und
-**nicht** nachgeladen: kein externer Abruf, kein Netz nötig, und im späteren
-Steam-Paket ändert sich nichts. `SCHRIFT` hat drei Rollen statt einer —
-`anzeige` für Überschriften, `text` für Fließtext und `mono` **nur noch für
-Zahlen**, weil in einer Proportionalschrift beim Hochzählen die ganze Zeile
-springt.
+Das ist das Bild, das später auf die Steam-Seite kommt. Zwei Fassungen davor
+sind gescheitert: Die erste hat das Wort waagerecht durchgeschnitten — gemeint
+als Sprung im Glas, gelesen als Durchstreichung, und ein Strich durch Text
+heißt überall *ungültig*. Die zweite war schlicht gesetzte Schrift mit
+Versatzschatten, also das, was jede Vorlage macht.
 
-Der erste Bildaufbau wartet auf `document.fonts.ready`. Ein sichtbarer
-Schriftwechsel im ersten Moment ist genau der Eindruck, den diese Runde
-loswerden soll — und man sieht ihn nur beim allerersten Start, also nie beim
-Testen und immer bei dem, der das Spiel zum ersten Mal öffnet.
+Jetzt tut das Wort, was das Spiel tut: Es zerbricht. Der Stock ist gesprungen,
+die Bänder sitzen nicht mehr genau, und quer durch die Buchstaben laufen
+Kerben, in denen keine Tinte liegt. Die Kerben werden mit `destination-out`
+gezeichnet, nehmen die Tinte also *weg* — das ist der Unterschied zwischen
+„durchgestrichen" und „gebrochen".
+
+Es bleiben echte Buchstabenformen aus der mitgelieferten Schrift. Zwölf von
+Hand gebaute Glyphen wären Wochen Arbeit und sähen schlechter aus.
+
+### Und was dabei zerbrochen wäre, hätte kein Test gegriffen
+
+Mit zwei Druckfarben fielen **vier der fünf Zeichen auf Zinnober zusammen**.
+Ein Test hat es sofort gemeldet: `expected 2 to be 5`. Ein Zunder wäre von
+einem Frostmal nicht mehr zu unterscheiden gewesen — und wer nicht sieht,
+*welches* Zeichen ein Gegner trägt, kann nicht darauf reagieren. Dann ist die
+Mechanik nur noch „der da ist zäher".
+
+Der Ausweg ist der, den ein Stecher nimmt, der nur eine Farbe hat: **Er
+wechselt den Strich.** Durchgezogen, gestrichelt, gepunktet, lang-kurz,
+kurz-lang. Die Farbe sagt weiterhin etwas — nur nicht mehr *welches* Zeichen,
+sondern ob man davon etwas hat.
 
 ## Wie es sich anfühlt
 
@@ -778,8 +827,8 @@ Also misst der Browser-Test sie jetzt, in zwei Zuständen:
 
 | Zustand | Median | p95 |
 |---|---|---|
-| gewöhnlicher Lauf nach einer Minute (~40 Gegner) | 1,5 ms | 1,9 ms |
-| 1300 Gegner, alle im Bild, fünf ausgereizte Waffen, 70 gezeichnete | 11,4 ms | 12,6 ms |
+| gewöhnlicher Lauf nach einer Minute (~40 Gegner) | 0,9 ms | 1,1 ms |
+| 1300 Gegner, alle im Bild, fünf ausgereizte Waffen, 70 gezeichnete | 8,2 ms | 10,0 ms |
 
 Der zweite Wert braucht einen Vorbehalt, und der gehört neben die Zahl statt in
 eine Fußnote: **Der Prüflauf hat keine Grafikkarte.** Chromium meldet sich dort
@@ -796,20 +845,35 @@ gemessen:
 
 | Schicht | Anteil am Bild |
 |---|---|
-| Gegner — Füllung, Kontur, Kern | ~6,5 ms |
-| Glut — 300 Leuchtpunkte, Weichzeichner, Rückgabe | ~3,5 ms |
+| Gegner — Füllung, Kontur, Schraffur | ~6,5 ms |
 | Anzeige, Kristalle, Partikel, Bruchlinien | ~1,5 ms |
-| Federnetz, Staub, Vignette, Zonen, Geschosse | unter dem Messrauschen |
+| Federnetz, Korn, Flecken, Zonen, Geschosse | unter dem Messrauschen |
 
-Das **Federnetz ist damit die billigste sichtbare Änderung der ganzen Runde** —
-das auffälligste Stück Bild kostet nichts Messbares. Teuer sind die Gegner, und
-das stimmt auch: rund tausend Formen, jede mit zwei Pfaden und einem Strich.
+Das **Federnetz ist damit die billigste sichtbare Änderung** — das auffälligste
+Stück Bild kostet nichts Messbares. Teuer sind die Gegner, und das stimmt auch:
+rund tausend Formen, jede mit zwei Pfaden und einem Strich.
+
+Der Wechsel auf Druck war **nicht** teurer, sondern deutlich billiger: Die
+Glut-Schicht kostete rund dreieinhalb Millisekunden je Bild und ist ersatzlos
+weg; Korn, Kantenversatz und Schraffur zusammen kosten weniger als sie. Von
+11,4 auf 8,2 ms im Median.
+
+Das hatte eine Nebenwirkung, die kein Plan vorhergesehen hat: **Ein Test wurde
+rot, weil das Spiel schneller wurde.** `core/loop.ts` verwirft
+Simulationszeit, wenn ein Bild zu lange braucht (`MAX_TICKS_PRO_BILD`, danach
+`speicher = 0`). Bei 11,4 ms fiel der Lauf im Prüflauf ständig zurück; bei
+8,2 ms hält er Schritt und kommt in denselben drei Sekunden weiter — weit
+genug, um beim Entpausieren eine Stufe fällig zu haben. Der Test prüfte
+`phase === 'laufend'` und traf `'levelup'`. Der Lauf ging also weiter, genau
+wie er soll; ein Test, der bei *mehr* Spielfortschritt rot wird, misst die
+falsche Sache und prüft jetzt, was er meint: dass die Pause weg ist.
 
 Auf dem Weg dahin lag ein Umbau, der offensichtlich schneller sein *musste* und
 es nicht war. `stroke()` über tausend Formen mit runden Ecken gilt als teuer,
 also sollte die Kontur eine zweite, größere **Füllung** darunter werden. Gemessen
 kostete der zusätzliche Pfadaufbau mehr als der Strich, den er einsparen sollte:
-15,3 statt 12,2 ms. Der Strich blieb. Was wirklich half, war banaler und stand
+15,3 statt 12,2 ms. Der Strich blieb, mit der Messung im Kommentar, damit es
+niemand ein zweites Mal versucht. Was wirklich half, war banaler und stand
 in keiner Vermutung: **Gegner außerhalb des Bildes gar nicht erst zeichnen** —
 `entferneVerlorene` hält sie bis zum 2,4-fachen Sichtradius am Leben, und ein
 guter Teil davon wurde in jeden Pfad aufgenommen, ohne je jemanden zu erreichen.
@@ -953,6 +1017,26 @@ Und in der siebten Runde, beim Umbau auf das Nachtfeld:
   dafür, dass eine Oberfläche nicht für die Sprache gemacht wurde, in der sie
   steht. `weapons.ts` hatte den Komma-Helfer längst; die Menüs kannten ihn
   nicht.
+
+Und beim Umbau auf Druck, in derselben Runde:
+
+- **Vier von fünf Zeichen fielen auf dieselbe Farbe.** Siehe oben — der Test
+  hat es gemeldet, bevor irgendjemand ein Bild gesehen hat. Das ist der Fall,
+  für den Tests da sind: Eine Palettenentscheidung hat eine *Spielregel*
+  gebrochen, und im Screenshot wäre es als „hübsch" durchgegangen.
+- **Der Spieler ging in der schwarzen Masse unter.** Das benannte Risiko dieser
+  Richtung, und es trat im ersten Bild prompt ein: Tausend Körper in massiver
+  Tinte, und eine weiße Scheibe von dreizehn Punkten darin ist nicht
+  auffindbar. Statt den Spieler heller zu machen, wird jetzt *seine Umgebung
+  Papier* — eine Aussparung im Druckstock.
+- **Die vollendete Zeitwaffe schraffierte den ganzen Bogen zu.** 700 Punkte
+  Radius, und bei voller Dichte verschwand das Papier. Der Andruck nimmt jetzt
+  mit der Größe ab, so wie eine Presse große Flächen dünner aufträgt.
+- **Zweimal stand die Farbe falsch herum.** Der Menüschleier und die Säume um
+  die Anzeige lagen in Tinte — auf dunklem Feld richtig, auf hellem Papier zwei
+  schwarze Bänder quer über das Bild. Beide arbeiten jetzt wieder *gegen* das
+  Feld, also in Papier. Dieselbe Zeile hat damit zum dritten Mal die Farbe
+  gewechselt, und jedes Mal aus demselben Grund.
 
 ## Was noch fehlt
 

@@ -17,6 +17,7 @@ import {
   schraffurMuster,
   schraffurPfad,
   strahlen,
+  versatzFuer,
 } from './papier'
 import { erschuetterung } from './juice'
 import { FARBEN, mitAlpha, SCHRIFT } from './palette'
@@ -483,18 +484,19 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   // eigene Arten mit, die dort nicht stehen - mit der alten Schleife waeren
   // sie unsichtbar gewesen.
   /*
-   * Drei Durchgaenge je Gegnerart: Fuellung, Kontur, leuchtender Kern.
+   * Drei Durchgaenge je Gegnerart: Fuellung, Kontur, Schraffur.
    *
-   * Der Schlagschatten ist weggefallen, und das aus zwei Gruenden, die
-   * zufaellig zusammenfielen. Auf dem hellen Feld gab er jedem Koerper eine
-   * Standflaeche; auf dem Nachtfeld ist ein Schatten in `rgba(2,3,8,0.55)`
-   * schlicht unsichtbar - nichts wirft bei Nacht einen Schatten auf Schwarz.
-   * Und gemessen kostete er einen vollen Pfadaufbau ueber 1300 Gegner, also
-   * rund drei Millisekunden je Bild. Der Kern hat seinen Platz eingenommen:
-   * dieselben Kosten, aber er sagt etwas.
+   * Der Schlagschatten ist unterwegs weggefallen, und das aus zwei Gruenden,
+   * die zufaellig zusammenfielen. Er gab jedem Koerper eine Standflaeche -
+   * aber ein Druck hat keine Tiefe, eine Tintenflaeche wirft keinen Schatten
+   * auf Papier, und das Auge liest sie trotzdem als Gegenstand. Und gemessen
+   * kostete er einen vollen Pfadaufbau ueber 1300 Gegner, rund drei
+   * Millisekunden je Bild. Die Schraffur hat seinen Platz eingenommen:
+   * dieselben Kosten, aber sie sagt etwas.
    *
-   * Drei Striche je *Art*, nicht je Gegner: Der Pfad wird einmal fuer die
-   * ganze Art aufgebaut und mehrfach benutzt.
+   * Drei Durchgaenge je *Art*, nicht je Gegner: Der Pfad wird einmal fuer die
+   * ganze Art aufgebaut und mehrfach benutzt. Bei bis zu 1400 Gegnern ist
+   * nicht das Fuellen teuer, sondern der Wechsel der Farbe.
    */
   for (const [, liste] of gegnerEimer) {
     if (liste.length === 0) continue
@@ -580,7 +582,13 @@ function zeichneGegner(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   for (let k = 0; k < blitzende.length; k++) {
     formPfad(ctx, gegner[blitzende[k]], px, py, drehung)
   }
-  ctx.fillStyle = mitAlpha('#ffffff', 0.45)
+  // Der Trefferblitz nimmt Tinte weg, statt Weiss darauf zu legen.
+  //
+  // Auf dem Nachtfeld war ein weisser Ueberzug das Hellste, was es gab; auf
+  // Papier ist er schlicht nichts, weil der Grund schon weiss ist. Ein
+  // getroffener Koerper wird stattdessen *blasser* - so, als haette die Walze
+  // an dieser Stelle weniger aufgetragen.
+  ctx.fillStyle = mitAlpha(FARBEN.grund, 0.5)
   ctx.fill()
 }
 
@@ -639,7 +647,7 @@ function zeichneSchalen(ctx: CanvasRenderingContext2D, s: Spielstand, drehung: n
       // Kern bleiben.
       ctx.beginPath()
       ctx.arc(g.x, g.y, g.radius * 1.1, 0, Math.PI * 2)
-      ctx.fillStyle = mitAlpha('#ffffff', 0.14 + Math.abs(Math.sin(drehung * 12)) * 0.14)
+      ctx.fillStyle = mitAlpha(FARBEN.grund, 0.3 + Math.abs(Math.sin(drehung * 12)) * 0.3)
       ctx.fill()
     }
 
@@ -648,7 +656,7 @@ function zeichneSchalen(ctx: CanvasRenderingContext2D, s: Spielstand, drehung: n
       ctx.beginPath()
       ctx.arc(g.x, g.y, g.radius * (1.1 + z.kittRest), 0, Math.PI * 2)
       ctx.lineWidth = 4
-      ctx.strokeStyle = mitAlpha('#63d4ff', 0.85)
+      ctx.strokeStyle = mitAlpha(FARBEN.krit, 0.85)
       ctx.stroke()
     }
   }
@@ -686,15 +694,47 @@ function zeichneZeichenRinge(
       ctx.moveTo(g.x + g.radius * 1.6 * puls, g.y)
       ctx.arc(g.x, g.y, g.radius * 1.6 * puls, 0, Math.PI * 2)
     }
+    /*
+     * Der Ring wird zweimal gestrichen, und nur der zweite ist gestrichelt.
+     *
+     * Der breite Durchgang in Tinte liegt durchgezogen darunter und macht den
+     * Ring ueberhaupt erst zu einem Ring; das Muster sitzt im schmalen
+     * Durchgang darauf. Waeren beide gestrichelt, saehe man bei fuenf
+     * Gegnerarten und fuenf Mustern nur noch Punktwolken.
+     */
     ctx.lineWidth = 5
     ctx.strokeStyle = FARBEN.kontur
     ctx.stroke()
+
+    ctx.setLineDash(ZEICHEN[z].strich as number[])
     ctx.lineWidth = 2.5
     ctx.strokeStyle = ZEICHEN[z].farbe
     ctx.stroke()
-
   }
+
+  /*
+   * Zuruecksetzen, und zwar hier statt am naechsten Zeichner.
+   *
+   * `setLineDash` ist Zustand am Kontext, genau wie `textAlign`. Genau diese
+   * Sorte Fehler hat in Runde 6 schon einmal eine halbe Bildschirmseite
+   * verschoben: Die Chronik zeichnete linksbuendig, und die Zeile darunter
+   * stand daneben - kein Fehler in der Zeile, sondern in der davor. Wer den
+   * Zustand setzt, raeumt ihn weg.
+   */
+  ctx.setLineDash(LEER)
 }
+
+/**
+ * Ein geteiltes leeres Feld fuer `setLineDash`.
+ *
+ * `ctx.setLineDash([])` erzeugt bei jedem Aufruf ein neues Array - einmal je
+ * Bild ist das nichts, aber es ist auch umsonst, und die Pools im ganzen
+ * Projekt existieren genau dafuer, solchen Muell zu vermeiden.
+ */
+const LEER: number[] = []
+
+/** Kein Versatz - fuer alles, was in Tinte gedruckt wird. */
+const NULL_VERSATZ: readonly [number, number] = [0, 0]
 
 /**
  * Der Bogen vor dem Schildtraeger.
@@ -726,7 +766,7 @@ function zeichneSchildBoegen(
     ctx.arc(g.x, g.y, g.radius * 1.5, g.blick - SCHILD_WINKEL, g.blick + SCHILD_WINKEL)
   }
   ctx.lineWidth = 5
-  ctx.strokeStyle = mitAlpha('#dfe8ff', 0.75)
+  ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.55)
   ctx.stroke()
 }
 
@@ -1165,8 +1205,21 @@ function zeichneKristalle(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     }
     if (!welche) continue
 
+    /*
+     * Fehldruck: Die Ockerfuellung liegt neben der Tintenkontur.
+     *
+     * Hier faellt es am meisten auf, weil es die Kristalle zu Dutzenden gibt
+     * und sie alle denselben Versatz tragen - eine Presse ist einmal falsch
+     * justiert und dann fuer den ganzen Bogen. Genau das liest das Auge als
+     * "gedruckt" statt als "gerendert".
+     */
+    const [vx, vy] = wertvoll ? versatzFuer(FARBEN.kristall) : NULL_VERSATZ
+    ctx.save()
+    ctx.translate(vx, vy)
     ctx.fillStyle = wertvoll ? FARBEN.kristall : FARBEN.grund
     ctx.fill()
+    ctx.restore()
+
     ctx.lineWidth = wertvoll ? 2 : 1.4
     ctx.strokeStyle = FARBEN.kontur
     ctx.stroke()
@@ -1714,8 +1767,14 @@ function zeichneFeindSchuesse(ctx: CanvasRenderingContext2D, s: Spielstand): voi
     ctx.moveTo(p.x + p.radius, p.y)
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
   }
+  // Derselbe Fehldruck wie bei den Kristallen, nur fuer die andere Walze -
+  // und in die andere Richtung, weil zwei Farben nie gleich danebenliegen.
+  const [fx, fy] = versatzFuer(FARBEN.gefahr)
+  ctx.save()
+  ctx.translate(fx, fy)
   ctx.fillStyle = FARBEN.gefahr
   ctx.fill()
+  ctx.restore()
   // Dunkle Kontur wie bei allem anderen. Ein weisser Rand liess die Geschosse
   // vorher auf schwarzem Grund leuchten; auf hellem Feld trennt Dunkel besser.
   ctx.lineJoin = 'round'

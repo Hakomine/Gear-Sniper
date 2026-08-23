@@ -36,6 +36,26 @@ export type Zeichen = {
   readonly id: ZeichenId
   readonly name: string
   readonly farbe: string
+
+  /**
+   * Das Strichmuster des Rings - was die fuenf Zeichen unterscheidbar macht.
+   *
+   * Bis Runde 6 tat das die Farbe: fuenf gesaettigte Toene, einer je Zeichen.
+   * Seit das Spiel gedruckt wird, gibt es nur noch zwei Farben, und ein Test
+   * hat sofort angeschlagen - vier der fuenf waren auf Zinnober zusammen-
+   * gefallen. Das ist kein Schoenheitsfehler: Wer nicht sieht, *welches*
+   * Zeichen ein Gegner traegt, kann nicht darauf reagieren, und dann ist die
+   * ganze Mechanik nur noch "der da ist zaeher".
+   *
+   * Der Ausweg ist der, den ein Stecher nimmt, der nur eine Farbe hat: Er
+   * wechselt den Strich. Durchgezogen, gestrichelt, gepunktet, lang-kurz,
+   * doppelt - fuenf Muster, die man auch dann auseinanderhaelt, wenn zwei
+   * Ringe dieselbe Farbe tragen.
+   *
+   * Zahlenpaare fuer `setLineDash`; ein leeres Feld heisst durchgezogen.
+   */
+  readonly strich: readonly number[]
+
   /** Was das Zeichen dem Traeger an Trefferpunkten aufschlaegt. */
   readonly hpFaktor: number
   /** Und was es dafuer einbringt. Ein Zeichen ist ein *Ziel*, kein Aergernis. */
@@ -79,7 +99,10 @@ export const ZEICHEN: readonly Zeichen[] = [
   {
     id: 'zunder',
     name: 'Zunder',
-    farbe: '#ff7a2f',
+    farbe: FARBEN.gefahr,
+    // Durchgezogen: das erste Zeichen, dem man begegnet, und damit das, das
+    // ohne Vergleich lesbar sein muss.
+    strich: [],
     hpFaktor: 2.1,
     xpFaktor: 5,
     abEtappe: 1,
@@ -92,20 +115,23 @@ export const ZEICHEN: readonly Zeichen[] = [
       // teilen sich ein Gesamtbudget, Waffenzonen pruefen es nicht.
       if (s.zonen.anzahl >= MAX_ZONEN) return
 
-      const z = legeZone(s, 'brand', g.x, g.y, ZUNDER_RADIUS, 2.4, g.schaden * 0.55, -1, '#ff7a2f')
+      const z = legeZone(s, 'brand', g.x, g.y, ZUNDER_RADIUS, 2.4, g.schaden * 0.55, -1, FARBEN.gefahr)
       z.feindlich = true
     },
   },
   {
     id: 'frostmal',
     name: 'Frostmal',
-    farbe: '#63d4ff',
+    farbe: FARBEN.gefahr,
+    // Gestrichelt - der Ring ist unterbrochen, so wie das Frostmal die
+    // Bewegung unterbricht.
+    strich: [7, 5],
     hpFaktor: 2.2,
     xpFaktor: 5,
     abEtappe: 2,
     rissZerfall: 1,
     beiTod(s, g) {
-      legeEffekt(s, 'ring', g.x, g.y, FROSTMAL_RADIUS, 0.45, '#63d4ff', 3)
+      legeEffekt(s, 'ring', g.x, g.y, FROSTMAL_RADIUS, 0.45, FARBEN.gefahr, 3)
       const sp = s.spieler
       const dx = sp.x - g.x
       const dy = sp.y - g.y
@@ -119,7 +145,12 @@ export const ZEICHEN: readonly Zeichen[] = [
   {
     id: 'klammer',
     name: 'Klammer',
-    farbe: '#ffd24a',
+    // Das einzige Zeichen in Ocker. Die Klammer haelt Risse fest, statt dem
+    // Spieler zu schaden - sie ist ein *Ziel*, kein Aergernis, und traegt
+    // deshalb die Farbe, die im ganzen Spiel "gut fuer dich" heisst.
+    farbe: FARBEN.krit,
+    // Gepunktet: der Ring haelt in kurzen Abstaenden fest, so wie die Klammer.
+    strich: [2, 5],
     hpFaktor: 2.4,
     xpFaktor: 6,
     abEtappe: 3,
@@ -131,7 +162,9 @@ export const ZEICHEN: readonly Zeichen[] = [
   {
     id: 'echo',
     name: 'Echo',
-    farbe: '#c86bff',
+    farbe: FARBEN.gefahr,
+    // Lang-kurz: ein Strich und sein Nachhall - aus dem Echo werden zwei.
+    strich: [13, 4, 3, 4],
     hpFaktor: 2,
     xpFaktor: 5,
     abEtappe: 4,
@@ -150,7 +183,11 @@ export const ZEICHEN: readonly Zeichen[] = [
   {
     id: 'zieher',
     name: 'Zieher',
-    farbe: '#a6ff4d',
+    farbe: FARBEN.gefahr,
+    // Kurz-lang, also genau umgekehrt zum Echo: Beide sind dicht beieinander,
+    // und der Unterschied faellt erst auf, wenn man sie nebeneinander sieht -
+    // was im Getuemmel oft genug vorkommt.
+    strich: [3, 3, 9, 3],
     hpFaktor: 2.3,
     xpFaktor: 6,
     abEtappe: 5,

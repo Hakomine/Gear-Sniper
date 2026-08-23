@@ -203,13 +203,21 @@ export class Federnetz {
     ctx.lineWidth = 1.4
     ctx.stroke()
 
+    /*
+     * Die ausgelenkten Segmente drucken *staerker*, sie leuchten nicht.
+     *
+     * Hier stand ein additiver Durchgang - auf dem Nachtfeld glommen die
+     * Stellen auf, an denen gerade etwas zersprungen ist. Auf Papier ist
+     * `lighter` genau falsch herum: Es macht helles Papier noch heller, die
+     * Linie verschwindet also genau dort, wo sie am meisten zu sagen haette.
+     *
+     * Im Druck heisst "hier ist etwas passiert" nicht mehr Licht, sondern mehr
+     * Farbe: Die Walze hat an dieser Stelle staerker aufgetragen.
+     */
     if (!this.heisseLinien(ctx)) return
-    ctx.save()
-    ctx.globalCompositeOperation = 'lighter'
-    ctx.strokeStyle = mitAlpha(FARBEN.riss, 0.5)
-    ctx.lineWidth = 2
+    ctx.strokeStyle = mitAlpha(FARBEN.kontur, 0.55)
+    ctx.lineWidth = 2.2
     ctx.stroke()
-    ctx.restore()
   }
 
   /** Waagerechte und senkrechte Zuege - `stark` waehlt jede vierte Linie. */
