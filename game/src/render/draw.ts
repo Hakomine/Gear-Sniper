@@ -116,7 +116,16 @@ export class Zeichner {
     const stoss = erschuetterung(s.trauma, performance.now() / 1000)
     ctx.translate(VIRT_B / 2 + stoss.x, VIRT_H / 2 + stoss.y)
     ctx.rotate(stoss.winkel)
-    ctx.scale(WELT_ZOOM, WELT_ZOOM)
+    /*
+     * Der Zoomstoss - ein Atemzug bei den grossen Momenten.
+     *
+     * Bewusst winzig: Ein paar Prozent liest das Auge als Wucht, alles
+     * darueber als Ruckeln. Er sitzt in der Kameramatrix und nicht im
+     * Weltzoom, damit die Anzeige davon unberuehrt bleibt - eine mitzoomende
+     * Uhr waere sofort als Fehler zu erkennen.
+     */
+    const zoom = WELT_ZOOM * (1 + s.zoomStoss)
+    ctx.scale(zoom, zoom)
     ctx.translate(-s.kamera.x, -s.kamera.y)
 
     // Reihenfolge ist Lesbarkeit: Zonen liegen als Untergrund unter allem,
@@ -149,10 +158,7 @@ export class Zeichner {
     // --- Bildschirm -------------------------------------------------------
     zeichneVignette(ctx, s)
 
-    if (s.blitz > 0) {
-      ctx.fillStyle = mitAlpha('#ffffff', s.blitz * 0.28)
-      ctx.fillRect(0, 0, VIRT_B, VIRT_H)
-    }
+    if (s.blitz > 0) zeichneRandPuls(ctx, s.blitz)
 
     // Im Tod kein HUD: Uhr, Lebensbalken und Waffenleiste stehen sonst quer
     // durch die Auswertung, und der Lauf ist ohnehin vorbei.
@@ -395,6 +401,44 @@ function zeichneVignette(ctx: CanvasRenderingContext2D, s: Spielstand): void {
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
   ctx.fillStyle = stich
+  ctx.fillRect(0, 0, VIRT_B, VIRT_H)
+  ctx.restore()
+}
+
+/**
+ * Der Bildblitz als Rand-Puls.
+ *
+ * Vorher war Wucht ein weisses Vollbild-Rechteck bei 28 Prozent Deckkraft -
+ * die roheste Darstellung, die es gibt. Sie ueberdeckt das Getuemmel genau in
+ * dem Moment, in dem man es am dringendsten sehen will, und liest sich als
+ * Bildfehler statt als Schlag.
+ *
+ * Ein Puls, der von den Raendern nach innen laeuft, sagt dasselbe, ohne die
+ * Mitte zuzukleistern - und additiv aufgetragen wirkt er wie Licht, nicht wie
+ * ein Schleier. Dieselbe Ueberlegung wie bei der Warnung fuer wenig Leben,
+ * nur weiss und kurz.
+ */
+let pulsVerlauf: CanvasGradient | null = null
+
+function zeichneRandPuls(ctx: CanvasRenderingContext2D, staerke: number): void {
+  if (pulsVerlauf === null) {
+    const v = ctx.createRadialGradient(
+      VIRT_B / 2,
+      VIRT_H / 2,
+      Math.min(VIRT_B, VIRT_H) * 0.2,
+      VIRT_B / 2,
+      VIRT_H / 2,
+      Math.hypot(VIRT_B, VIRT_H) / 2,
+    )
+    v.addColorStop(0, 'rgba(255,255,255,0)')
+    v.addColorStop(0.55, 'rgba(190,220,255,0.16)')
+    v.addColorStop(1, 'rgba(255,255,255,0.85)')
+    pulsVerlauf = v
+  }
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  ctx.globalAlpha = Math.min(1, staerke * 0.55)
+  ctx.fillStyle = pulsVerlauf
   ctx.fillRect(0, 0, VIRT_B, VIRT_H)
   ctx.restore()
 }

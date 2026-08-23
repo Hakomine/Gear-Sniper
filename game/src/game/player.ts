@@ -64,6 +64,8 @@ export function erzeugeSpieler(): Spieler {
     stossLaden: 1,
     blickX: 1,
     blickY: 0,
+    laufX: 0,
+    laufY: 0,
     gebremst: 0,
     zugX: 0,
     zugY: 0,
@@ -144,6 +146,11 @@ export function bewegeSpieler(sp: Spieler, bx: number, by: number, dt: number): 
   if (sp.stossRest > 0) {
     sp.x += sp.stossVx * dt
     sp.y += sp.stossVy * dt
+    // Der Stoss uebernimmt auch den Anlauf: Ohne diese Zeile stuende die Figur
+    // am Ende des Stosses wie angewurzelt und muesste erst wieder anfahren -
+    // genau in der Sekunde, in der man weiterlaufen will.
+    sp.laufX = sp.stossVx
+    sp.laufY = sp.stossVy
     // Waehrend des Stosses greift kein Zieher. Das ist die ganze Gegenwehr:
     // Der Stoss reisst sich los, und weil er eine Abklingzeit hat, kostet
     // dieses Losreissen etwas.
@@ -156,8 +163,28 @@ export function bewegeSpieler(sp: Spieler, bx: number, by: number, dt: number): 
   // Das Frostmal bremst, es haelt nicht fest: Wer bei 45 Prozent Tempo nicht
   // mehr wegkommt, stand ohnehin zu tief drin.
   const tempo = sp.tempo * sp.tempoMult * (sp.gebremst > 0 ? 0.45 : 1)
-  sp.x += bx * tempo * dt
-  sp.y += by * tempo * dt
+
+  /*
+   * Anlauf statt Sofort-Tempo.
+   *
+   * Die Figur schrieb ihre Position bisher direkt aus der Tastenrichtung: im
+   * ersten Bild volles Tempo, beim Loslassen sofortiger Halt. Das ist maximal
+   * praezise und fuehlt sich an wie ein Mauszeiger - man schiebt einen Punkt
+   * herum, statt jemanden zu bewegen.
+   *
+   * Der Anlauf ist bewusst kurz gehalten. Bei 22 pro Sekunde sind rund 70
+   * Millisekunden vergangen, bis 80 Prozent des Tempos stehen - das ist
+   * spuerbar, aber weit unter der Zeit, die ein telegrafierter Sturmangriff
+   * laesst. Ein Ausweichmanoever darf nicht daran scheitern, dass die Figur
+   * noch anfaehrt; genau deshalb ist der Stoss davon ausgenommen und
+   * ueberschreibt sie vollstaendig.
+   */
+  const anteil = 1 - Math.exp(-ANLAUF * dt)
+  sp.laufX += (bx * tempo - sp.laufX) * anteil
+  sp.laufY += (by * tempo - sp.laufY) * anteil
+
+  sp.x += sp.laufX * dt
+  sp.y += sp.laufY * dt
 
   /*
    * Der gesammelte Zug aller Zieher - einmal gedeckelt, dann angewendet.
@@ -176,6 +203,16 @@ export function bewegeSpieler(sp: Spieler, bx: number, by: number, dt: number): 
   sp.zugX = 0
   sp.zugY = 0
 }
+
+/**
+ * Wie schnell die Figur auf Tempo kommt und wieder ausrollt.
+ *
+ * Gemessen an dem, was das Spiel verlangt: Der Stuermer kuendigt seine Bahn
+ * 0,7 Sekunden vorher an, der Boss 0,8 bis 1,2. Ein Anlauf von rund 70
+ * Millisekunden auf 80 Prozent liegt eine Groessenordnung darunter und kann
+ * damit kein Ausweichen kosten - er gibt der Bewegung nur Gewicht.
+ */
+const ANLAUF = 22
 
 /**
  * Deckel auf den gesammelten Zug.

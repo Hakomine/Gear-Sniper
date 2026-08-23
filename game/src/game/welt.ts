@@ -14,6 +14,7 @@ import {
   zersplitterBereit,
 } from './risse'
 import type { Effekt, Gegner, Geschoss, Spielstand, Zone } from './state'
+import { halteAn, kickeKamera } from './state'
 import { MAX_WAFFEN } from './weapons'
 
 /**
@@ -380,6 +381,18 @@ export function arbeiteKaskadeAb(s: Spielstand): void {
     // damit der, an dem das Federnetz haengt: Wer eine Kette ausloest, sieht
     // sie durch den Grund laufen.
     s.wellen.melde(g.x, g.y, istBoss ? 900 : 260, weite * 1.9)
+
+    /*
+     * Und die Welt steht kurz still.
+     *
+     * Das ist der Moment, um den sich das ganze Spiel dreht - drei
+     * verschiedene Waffen, und Glas zerspringt. Ohne Hitstop ist er eine
+     * Partikelwolke unter tausend anderen; mit ihm ist er ein Schlag. An
+     * einem Boss laenger, weil er seltener und teurer erkaempft ist.
+     */
+    halteAn(s, istBoss ? 0.09 : 0.055)
+    kickeKamera(s, g.x, g.y, istBoss ? 26 : 9)
+    s.zoomStoss = Math.max(s.zoomStoss, istBoss ? 0.05 : 0.018)
 
     // Tiefer als erlaubt darf die Welle keine neuen Zersplitterungen mehr
     // ausloesen - Schaden macht sie trotzdem.

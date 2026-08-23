@@ -4,6 +4,7 @@ import { verfuegbareArten } from './enemies'
 import { risseLoeschen } from './risse'
 import { legeGegner } from './spawner'
 import type { Gegner, Spielstand } from './state'
+import { halteAn } from './state'
 import { legeEffekt, legeZone } from './welt'
 
 /**
@@ -151,6 +152,8 @@ export function schalenBruch(s: Spielstand, g: Gegner, z: BossZustand): void {
   legeEffekt(s, 'ring', g.x, g.y, g.radius * 6, 0.9, KERN.farbe, 6)
   // Der groesste Stoss im Spiel: Beim Schalenbruch soll der halbe Boden wellen.
   s.wellen.melde(g.x, g.y, 2600, 620)
+  halteAn(s, 0.12)
+  s.zoomStoss = Math.max(s.zoomStoss, 0.09)
 
   const arten = verfuegbareArten(s.zeit)
   const art = arten[arten.length - 1]

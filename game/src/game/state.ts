@@ -3,7 +3,7 @@ import { Rng, tagesSaat } from '../core/rng'
 import { RaumGitter } from '../core/spatialHash'
 import { FARBEN, SELTENHEIT_FARBE } from '../render/palette'
 import { xpFuerLevel } from './damage'
-import { zerspringen } from './effects'
+import { funken, zerspringen } from './effects'
 import type { EtappenWerte, TuerId } from './etappen'
 import { ETAPPEN_PUNKTE, KERN_TUEREN, leereEtappenWerte, TUEREN, tuerMit } from './etappen'
 import { KERN_ETAPPE, KERN_PUNKTE } from './kern'
@@ -216,6 +216,18 @@ export type Spieler = {
    */
   blickX: number
   blickY: number
+
+  /**
+   * Die tatsaechliche Laufgeschwindigkeit - sie rampt zur gewuenschten hoch.
+   *
+   * Vorher schrieb `bewegeSpieler` die Position direkt aus der Tastenrichtung:
+   * volles Tempo im ersten Bild, sofortiger Halt beim Loslassen, harte
+   * Achtelrichtungen. Das laesst sich praezise steuern und fuehlt sich an, als
+   * schoebe man einen Mauszeiger. Ein kurzer Anlauf gibt der Figur Gewicht,
+   * ohne dass Ausweichen leidet - siehe `ANLAUF` in `player.ts`.
+   */
+  laufX: number
+  laufY: number
 
   // --- Was die Zeichen am Spieler anrichten ---------------------------------
 
@@ -565,7 +577,32 @@ export type Spielstand = {
   partikel: Pool<Partikel>
   zahlen: Pool<SchadensZahl>
   gitter: RaumGitter
-  kamera: { x: number; y: number }
+  /**
+   * Die Kamera - Position, Kickimpuls und Zoomstoss.
+   *
+   * Sie zog bis eben nur weich zum Spieler nach, und mehr nicht. Eine Kamera
+   * ohne Charakter ist der Unterschied zwischen "die Figur bewegt sich" und
+   * "ich bewege mich": Sie soll ein Stueck vorausschauen, bei einem Einschlag
+   * zurueckweichen und bei den grossen Momenten kurz atmen.
+   */
+  kamera: { x: number; y: number; kickX: number; kickY: number }
+  /**
+   * Kurzer Zoomstoss, klingt von selbst ab.
+   *
+   * Positiv heisst naeher heran. Bewusst klein gehalten - alles ueber ein paar
+   * Prozent liest sich nicht mehr als Wucht, sondern als Ruckeln.
+   */
+  zoomStoss: number
+  /**
+   * Hitstop: So lange steht die *Simulation* still, die Optik nicht.
+   *
+   * Der groesste Hebel fuers Spielgefuehl und im Code fast umsonst, weil
+   * `laufendTick` seinen Zeitschritt ohnehin schon skaliert. Ein paar
+   * eingefrorene Bilder im Moment des Treffers geben einem Schlag Gewicht,
+   * das keine Partikelwolke ersetzen kann - man *spuert* den Aufprall, statt
+   * ihn nur zu sehen.
+   */
+  stopRest: number
   /** Erschuetterung, 0..1. Quadriert in den Ausschlag - siehe render/juice.ts. */
   trauma: number
   /** Globaler Bildblitz, 0..1. */
@@ -759,7 +796,9 @@ export function erzeugeSpielstand(saat: number): Spielstand {
     partikel: new Pool<Partikel>(leeresPartikel, 512),
     zahlen: new Pool<SchadensZahl>(leereZahl, 64),
     gitter: new RaumGitter(72),
-    kamera: { x: 0, y: 0 },
+    kamera: { x: 0, y: 0, kickX: 0, kickY: 0 },
+    zoomStoss: 0,
+    stopRest: 0,
     trauma: 0,
     blitz: 0,
     zeitskala: 1,
@@ -835,6 +874,10 @@ export function starteLauf(s: Spielstand, saat = s.saat, charakter = s.charakter
   s.zahlen.alleFreigeben()
   s.kamera.x = 0
   s.kamera.y = 0
+  s.kamera.kickX = 0
+  s.kamera.kickY = 0
+  s.zoomStoss = 0
+  s.stopRest = 0
   s.trauma = 0
   s.blitz = 0
   s.zeitskala = 1
@@ -1018,7 +1061,21 @@ function laufendTick(s: Spielstand, b: Befehle, dt: number): void {
   // wieder lesen kann, was auf einen zukommt.
   const sp0 = s.spieler
   const knapp = sp0.zeitlupe > 0 && sp0.hp < sp0.maxHp * 0.3
-  const sdt = dt * s.zeitskala * (knapp ? Math.max(0.4, 1 - sp0.zeitlupe) : 1)
+  /*
+   * Hitstop: Die Simulation steht, die Optik laeuft weiter.
+   *
+   * Genau diese Trennung ist der Punkt. Wuerde auch die Optik einfrieren,
+   * saehe es aus wie ein Ruckler; so friert nur die *Welt* ein, waehrend
+   * Partikel fliegen, das Federnetz wellt und der Bildschirm wackelt. Das
+   * Gehirn liest das als Wucht, nicht als Fehler.
+   */
+  let stopFaktor = 1
+  if (s.stopRest > 0) {
+    s.stopRest -= dt
+    stopFaktor = 0
+  }
+
+  const sdt = dt * s.zeitskala * stopFaktor * (knapp ? Math.max(0.4, 1 - sp0.zeitlupe) : 1)
   s.zeit += sdt
   s.statistik.zeit = s.zeit
 
@@ -1517,6 +1574,17 @@ function bewegeGeschosse(s: Spielstand, dt: number): void {
         (p.vy / laenge) * p.rueckstoss,
       )
       p.getroffen.add(g.id)
+      /*
+       * Funken in Flugrichtung, direkt am Einschlagpunkt.
+       *
+       * Bisher gab es sichtbare Rueckmeldung nur bei kritischen Treffern - als
+       * Zahl. Ein gewoehnlicher Treffer, also der weitaus haeufigste Vorgang im
+       * ganzen Spiel, sah aus wie nichts. Zwei Funken kosten nichts und machen
+       * aus dem Aufprall ein Ereignis; dass sie *weiterfliegen* statt ringsum
+       * zu spritzen, sagt nebenbei, aus welcher Richtung geschossen wurde.
+       */
+      funken(s, g.x - (p.vx / laenge) * g.radius, g.y - (p.vy / laenge) * g.radius, p.farbe, 2, p.vx, p.vy)
+
       // Schwarmnadeln teilen sich bei jedem Kill. Die Kette endet von selbst,
       // weil jede Tochter eine Teilung weniger mitbekommt.
       if (g.tot && p.spaltet > 0) spalte(s, p)
@@ -1745,7 +1813,15 @@ function raeumeTote(s: Spielstand): void {
     if (!g.tot) continue
 
     legeKristall(s, g.x, g.y, g.xp)
-    zerspringen(s, g.x, g.y, g.radius, g.art.farbe)
+    /*
+     * Die Scherben fliegen vom toedlichen Schlag weg.
+     *
+     * Die Richtung steht schon da und musste nur gelesen werden: `stossX` und
+     * `stossY` sind der aufgestaute Rueckstoss der letzten Treffer, zeigen also
+     * genau *von* der Quelle weg. Die Gegenrichtung ist damit der Ort, an dem
+     * der Schlag herkam - ohne ein zusaetzliches Feld an 1400 Objekten.
+     */
+    zerspringen(s, g.x, g.y, g.radius, g.art.kern, g.x - g.stossX, g.y - g.stossY)
     s.statistik.kills++
 
     /*
@@ -1836,6 +1912,15 @@ function trefferAmSpieler(s: Spielstand, schaden: number, quelle = QUELLE_UMWELT
   verletzeSpieler(sp, schaden * sp.schadenNimmt)
   s.klaenge.melde('einschlag')
   s.wellen.melde(sp.x, sp.y, 300, 230)
+  /*
+   * Ein Treffer haelt kurz an.
+   *
+   * Kein Kamerakick: Der Einschlag sitzt genau auf dem Spieler, es gibt also
+   * keine Richtung, von der er wegzustossen waere. Die Erschuetterung
+   * (`s.trauma`) macht hier die Arbeit - sie schuettelt ungerichtet, und genau
+   * das ist bei einem Treffer am eigenen Koerper richtig.
+   */
+  halteAn(s, 0.07)
   sp.unverwundbar = UNVERWUNDBAR
   sp.blitz = 1
   s.trauma = Math.min(1, s.trauma + 0.45)
@@ -1884,6 +1969,10 @@ function spielerZersplittert(s: Spielstand): void {
   zerspringen(s, sp.x, sp.y, sp.radius * 3, s.charakter.farbe)
   legeEffekt(s, 'ring', sp.x, sp.y, GLAS_RADIUS, 0.5, s.charakter.farbe, 5)
   s.wellen.melde(sp.x, sp.y, 1400, GLAS_RADIUS * 2.2)
+  // Der laengste Halt im Spiel: Wenn die Kernscherbe selbst zerspringt, soll
+  // man begreifen, was gerade passiert ist, bevor es weitergeht.
+  halteAn(s, 0.14)
+  s.zoomStoss = Math.max(s.zoomStoss, 0.07)
 
   // Erst danach: Der Umkreis soll den Schlag *beantworten*, nicht ihn
   // ausloesen - `reisseUmkreisAuf` kann eine Kaskade starten, und die haette
@@ -2015,12 +2104,68 @@ function aktualisiereOptik(s: Spielstand, dt: number): void {
   if (s.spieler.blitz > 0) s.spieler.blitz -= dt * 3
 }
 
+/**
+ * Die Simulation kurz anhalten.
+ *
+ * Gedeckelt und nicht aufaddierend: Eine Kettenreaktion loest in einem
+ * einzigen Tick dutzende Zersplitterungen aus, und wuerde jede ihre 55
+ * Millisekunden dazulegen, staende das Spiel sekundenlang. Der laengste
+ * Anlass gewinnt, alle anderen verpuffen - so bleibt aus einer Kaskade ein
+ * kraeftiger Schlag statt einer Standpause.
+ */
+const MAX_STOP = 0.16
+
+export function halteAn(s: Spielstand, sekunden: number): void {
+  s.stopRest = Math.min(MAX_STOP, Math.max(s.stopRest, sekunden))
+}
+
+/** Die Kamera von einem Einschlag wegstossen. */
+export function kickeKamera(s: Spielstand, vonX: number, vonY: number, staerke: number): void {
+  const dx = s.kamera.x - vonX
+  const dy = s.kamera.y - vonY
+  const d = Math.hypot(dx, dy) || 1
+  s.kamera.kickX += (dx / d) * staerke
+  s.kamera.kickY += (dy / d) * staerke
+}
+
+/** Wie weit die Kamera hoechstens vorausschaut und wie weit ein Kick traegt. */
+const VORAUS = 78
+const MAX_KICK = 46
+
 function folgeKamera(s: Spielstand, dt: number): void {
-  // Weich nachziehen statt starr kleben. Eine fest zentrierte Kamera nimmt
-  // dem Ausweichen jedes Gefuehl von Tempo.
-  const faktor = 1 - Math.exp(-11 * dt)
-  s.kamera.x += (s.spieler.x - s.kamera.x) * faktor
-  s.kamera.y += (s.spieler.y - s.kamera.y) * faktor
+  const sp = s.spieler
+
+  /*
+   * Vorausblick.
+   *
+   * Die Kamera zielt nicht auf den Spieler, sondern ein Stueck vor ihn. Damit
+   * sieht man, *wohin* man laeuft, statt hinterherzuschauen - und weil das
+   * Ziel weich nachgezogen wird, entsteht beim Richtungswechsel ein leichtes
+   * Schwingen, das dem Laufen Gewicht gibt.
+   *
+   * Waehrend des Stosses zeigt sie weiter voraus: Genau dort muss man in dem
+   * Moment hinsehen.
+   */
+  const weite = sp.stossRest > 0 ? VORAUS * 1.6 : VORAUS
+  const zielX = sp.x + sp.blickX * weite + s.kamera.kickX
+  const zielY = sp.y + sp.blickY * weite + s.kamera.kickY
+
+  const faktor = 1 - Math.exp(-9 * dt)
+  s.kamera.x += (zielX - s.kamera.x) * faktor
+  s.kamera.y += (zielY - s.kamera.y) * faktor
+
+  // Der Kick klingt schneller ab, als die Kamera nachzieht - sonst bliebe er
+  // als Versatz stehen statt als Stoss zu wirken.
+  const abkling = Math.exp(-7 * dt)
+  s.kamera.kickX *= abkling
+  s.kamera.kickY *= abkling
+  const kick = Math.hypot(s.kamera.kickX, s.kamera.kickY)
+  if (kick > MAX_KICK) {
+    s.kamera.kickX = (s.kamera.kickX / kick) * MAX_KICK
+    s.kamera.kickY = (s.kamera.kickY / kick) * MAX_KICK
+  }
+
+  s.zoomStoss *= Math.exp(-6 * dt)
 }
 
 // ---------------------------------------------------------------------------
