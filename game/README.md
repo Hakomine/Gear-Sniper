@@ -8,7 +8,9 @@ XP-Kristalle bringen Aufwertungen. Der Reiz entsteht aus der *Kombination*
 mehrerer Waffen, nicht daraus, dass eine Zahl steigt.
 
 Jeder Lauf startet bei null — es gibt keine dauerhaften Aufwertungen. Was man
-freischaltet, sind **Charaktere**: andere Spielweisen, keine höheren Zahlen.
+freischaltet, sind **Charaktere**: andere Spielweisen, keine höheren Zahlen. Wer
+es schwerer will, legt sich vorher **Verhexungen** auf und bekommt dafür mehr
+Punkte.
 
 Keine Laufzeit-Abhängigkeiten: TypeScript, Canvas 2D, sonst nichts.
 
@@ -20,10 +22,17 @@ npm run dev        # http://localhost:5173
 ```
 
 Auf dem Titelbild wählt man mit A/D den Charakter und startet mit Leertaste.
+**W/S** wechselt in die Verhexungsreihe darunter, wo die Leertaste umschaltet
+statt zu starten. **T** startet die Tagesscherbe.
+
 WASD oder Pfeiltasten bewegen, Gamepad geht auch. **Leertaste stößt** — ein
 kurzer Satz, bei dem man unverwundbar ist, mit 2,5 s Abklingzeit. **Escape**
 hält an. Beim Levelup wählt man mit A/D und bestätigt mit Leertaste — oder
 drückt gleich 1, 2 oder 3.
+
+Ein Lauf führt in **sechs Etappen zum Kern** — dem einzigen Gegner, den man nur
+mit der Kernregel töten kann. Wer ihn schlägt, gewinnt; wer weiter will, nimmt
+**Zerrüttung** auf sich und läuft dieselben sechs Etappen härter noch einmal.
 
 ## Was daran eigen ist: Risse und Zersplitterung
 
@@ -252,6 +261,112 @@ Der Amboss ist der beste der drei, weil Stillstehen hier genau das ist, was
 einen umbringt — und weil er mit dem Charakter *Riss* kollidiert, dessen
 Geisterriss drei Sekunden **ohne Treffer** verlangt.
 
+## Der Kern — ein Lauf hat ein Ziel
+
+Bis zur fünften Runde hörte ein Lauf auf, wenn man starb, und sonst nie.
+Etappen und Bosse gaben ihm einen Takt, aber kein Ziel — und **eine Bestenliste
+ohne Ziel misst Sitzfleisch**: Die höchste Punktzahl gehört dem, der am
+längsten stillhalten konnte. Genau der Fehler, den das Spiel bei den
+dauerhaften Aufwertungen bewusst vermeidet.
+
+Nach der **sechsten Etappe** steht deshalb ein Tor mit zwei Seiten:
+
+| Tür | Kostet | Bringt |
+|---|---|---|
+| **Zum Kern** | hier endet der Lauf — so oder so | den letzten Gegner, ein Sieg zählt 4000 Punkte |
+| **Tiefer ins Feld** | eine Stufe Zerrüttung | zwei bessere Karten und die Hälfte mehr auf *alle* Punkte |
+
+Der Ausstieg ist eine Entscheidung, kein Zeitablauf. Und weil die Zerrüttung am
+Ende auf alles multipliziert, ist keine der beiden Seiten die feige: Wer zweimal
+vorbeigeht und dann fällt, kann mehr stehen haben als jemand, der beim ersten
+Mal gewinnt.
+
+### Warum der Kern anders ist als jeder andere Boss
+
+**Gewöhnlicher Schaden kratzt ihn kaum. Nur Zersplitterung tötet ihn.**
+
+- Er nimmt **ein Zehntel** des normalen Schadens.
+- Jede **Zersplitterung** nimmt ihm **12 %** seiner vollen Trefferpunkte.
+- Alle sechs Sekunden **kittet er sich selbst**: alle Risse weg, mit Vorwarnung
+  und einer eigenen Uhr unter seiner Leiste.
+
+Der Endkampf ist damit eine Prüfung auf genau die Regel, die das Spiel die ganze
+Zeit lehrt. Die zehn Prozent sind die Fairness-Klausel: Ein Bau ohne Mischung
+schafft ihn auch, nur langsam — es gibt keine Sackgasse, in der ein Lauf
+unlösbar wird.
+
+**Drei Schalen** bei 75, 50 und 25 %. Jede bricht mit einem
+Unverwundbarkeitsfenster, einem Ring aus dreißig Gegnern und einem Angriff mehr
+— darunter die **Bruchwelle**, der einzige Angriff im Spiel, dem man nicht
+ausweicht: ein wachsender Ring mit *einer* Lücke, durch die man hindurch muss.
+
+Wer ihn legt, sieht **VOLLENDET** statt ZERBROCHEN, in Gold statt in Rot, und
+schaltet die **Kernscherbe** frei.
+
+## Zeichen — fünfundvierzig Begegnungen aus neun Gegnern
+
+Der billigste Weg zu Vielfalt, den dieses Genre kennt, ist Risk of Rain 2s
+Elite-System: nicht neue Gegner, sondern **Aufsätze auf alle vorhandenen**.
+Wichtiger als die Zahl ist, *was* ein Zeichen ändert — das **räumliche
+Verhältnis** zum Spieler, nicht die Werte. Ein Gegner mit doppelten
+Trefferpunkten ist derselbe Gegner in länger.
+
+| Zeichen | Was es tut | Gegenmittel |
+|---|---|---|
+| **Zunder** | zieht eine brennende Spur hinter sich her | nicht hinterherlaufen |
+| **Frostmal** | platzt beim Tod zu einem Eisring, der *dich* bremst | woanders töten, oder stoßen |
+| **Klammer** | seine Risse verfallen **dreimal so schnell** | am Stück aufreißen statt anknabbern |
+| **Echo** | zerfällt beim Tod in zwei blanke Kopien | Fläche, oder das Rinnsal hinnehmen |
+| **Zieher** | **zieht den Spieler zu sich** | stoßen, oder ihn zuerst wegräumen |
+
+Die **Klammer** ist die wichtigste: Sie greift die Kernregel direkt an. Ein Bau,
+der Risse langsam ansammelt, kommt an ihr nicht vorbei.
+
+`Gegner.zeichen` ist ein Index, kein Objekt — `if (g.zeichen < 0)` ist der
+vollständige Aufwand für alle ungezeichneten, und das sind die meisten. Ein
+Deckel von 70 hält den Posten unabhängig von der Anteilskurve, ein Zähler mit
+Test hält fest, dass er nicht ausläuft.
+
+## Verhexungen — Schwierigkeit als Regler
+
+Der Pakt der Strafe aus *Hades*: Man stellt sich die Schwierigkeit selbst ein
+und bekommt dafür mehr Wertung. Ohne so einen Regler beantwortet eine
+Bestenliste nur „wer hat am längsten durchgehalten"; mit ihm lautet die Frage
+„wer hat sich am meisten zugemutet und es trotzdem geschafft".
+
+| Verhexung | Was | Punkte |
+|---|---|---|
+| **Hast** | Gegner laufen 20 % schneller | +15 % |
+| **Enge** | Rissfenster 1,6 s → 0,9 s | +30 % |
+| **Kargheit** | ein Waffenplatz weniger | +25 % |
+| **Blindheit** | keine Minikarte, keine Schreinzeiger | +10 % |
+| **Zoll** | jede Etappe kostet 12 maximale Leben | +25 % |
+| **Gezeichnet** | doppelt so viele gezeichnete Gegner | +20 % |
+
+Der Faktor ist **additiv** (`1 + Summe`), damit man ihn vor der Wahl im Kopf
+ausrechnen kann; alle sechs ergeben ×2,25. Auf dem Titelbild wechselt **W/S**
+zwischen Charakter- und Verhexungsreihe — keine neue Taste.
+
+Ein Test hält fest, dass **keine Verhexung den Lauf leichter macht**. Zwei
+Untergrenzen sichern das ab: Das Rissfenster fällt nie unter 0,45 s und der
+Gürtel nie unter drei Plätze — drei ist die Zersplitterungs-Schwelle, und ein
+Lauf, der die Kernregel gar nicht mehr auslösen kann, ist kein schwerer Lauf,
+sondern ein kaputter.
+
+## Chronik und Tagesscherbe
+
+Ein Bestwert sagt, wie hoch jemand gekommen ist, nicht *wie*. Die **Chronik**
+hält die besten zehn Läufe fest — Punkte, Charakter, Etappe, Zerrüttung, Zahl
+der Verhexungen, ein Zeichen für einen Sieg über den Kern. Sie bleibt reine
+Aufzeichnung: **kein Eintrag macht einen späteren Lauf leichter**, und ein Test
+hält das fest.
+
+Die **Tagesscherbe** (Taste **T**) läuft auf einem Saatwert aus dem Datum: ein
+Versuch pro Tag, für alle derselbe. Weil im ganzen Spiel kein `Math.random()`
+steht, ergibt derselbe Wert wirklich dieselben Gegner, Türen und Schreine —
+genau dafür sind die beiden getrennten Zufallsströme gebaut. Der Versuch wird
+beim *Start* vermerkt, nicht am Ende: Sonst wäre Aufgeben ein Freiversuch.
+
 ## Ton — ohne eine einzige Datei
 
 Das Spiel zeichnet sich aus Code. Der Ton entsteht genauso: WebAudio,
@@ -282,9 +397,20 @@ Vier Angriffe, **jeder mit Vorwarnung** — Speichenfeuer, Sturmangriff,
 Schockringe, Bruchruf. Ein Boss ohne Telegraf ist nicht schwer, sondern unfair;
 man verliert, ohne zu verstehen warum.
 
-Drei Arten, und **Phase zwei ändert das Muster, nicht die Zahlen**: Der Wächter
+Vier Arten, und **Phase zwei ändert das Muster, nicht die Zahlen**: Der Wächter
 feuert seine Speichen im Gegenlauf, sodass die Lücken wandern. Der Kolossus
 wechselt das Angriffsbild. Der Zerbrecher hat alle vier.
+
+**Flickwerk** ist der Kitt in groß: Er schließt die Risse von allem in seinem
+Umkreis *und* alle fünf Sekunden seine eigenen. Er zwingt den Kampf weg vom
+Pulk — im Getümmel steht er in seiner eigenen Werkstatt — und ist die
+Generalprobe für den Kern, an dem dieselbe Frage hängt: Schaffst du drei
+verschiedene Waffen *innerhalb* eines Fensters?
+
+Die Bosse laufen **reihum** statt ab der vierten Welle immer derselbe zu sein.
+Vorher blieb es beim Zerbrecher, und damit bestand die zweite Hälfte jedes
+Laufs aus demselben Kampf — bei sechs Etappen bis zum Kern sähe man vier davon
+denselben Gegner.
 
 Wer einen Boss legt, bekommt sofort eine Karte mit deutlich besseren
 Seltenheiten — zusätzlich zum normalen Aufstieg.
@@ -307,18 +433,38 @@ Vorteil *und* einen echten Nachteil.
 | **Riss** | 3 s ohne Treffer: zersplittert mit *zwei* Waffen | nur 60 Leben | 250 Gegner zersplittern |
 | **Koloss** | 220 Leben, verletzt bei Berührung | −25 % Tempo, 4 Plätze | 5 Minuten überleben |
 | **Prismatikerin** | startet mit einer Legendären auf Stufe 3 | nur 3 Plätze | eine Waffe vollenden |
+| **Kernscherbe** | +45 % Schaden, Risse halten 1 s länger | −30 Leben, **sie zersplittert selbst** | den Kern legen |
+
+Die **Kernscherbe** ist der einzige Ort im Spiel, an dem die Kernregel gegen den
+Spieler läuft: Sie ist selbst aus Glas. Trifft ein Gegner sie, setzt er einen
+Riss an *ihr* — das Bit kommt aus dem Index seiner Gegnerart. Drei Risse von
+drei **verschiedenen** Arten innerhalb von vier Sekunden, und sie zersplittert:
+22 % ihrer vollen Leben weg, dafür reißt alles im Umkreis auf und wird
+weggeschleudert. Ihre Schwäche ist zugleich ihre stärkste Waffe.
+
+Warum drei *verschiedene* Arten und nicht einfach drei Treffer: In einem Feld
+aus lauter Splittern feuert das fast nie. Es feuert genau dann, wenn das Feld
+gemischt ist — spät, im Gedränge, neben Bossen und Speiern. Die Gefahr wächst
+mit demselben Verlauf wie das Spiel, statt eine feste Steuer auf jeden Treffer
+zu sein. Ihre Risse stehen sichtbar auf der Figur, mit Warnring beim zweiten:
+Die Kernregel ist nur dann eine Regel, wenn man ihren Stand sieht.
 
 Der **Punkte-Faktor** hält die schwereren konkurrenzfähig:
 
 ```
-Punkte = Sekunden × 10 + Kills + Stufe × 50 + Zersplittert × 2 + Bosse × 500
+Punkte = (Sekunden × 10 + Kills + Stufe × 50 + Zersplittert × 2 + Bosse × 500)
        × Charakter-Faktor
+       + Etappen × 300
+       + 4000 bei einem Sieg über den Kern
+       × (1 + Zerrüttung × 0,5)
+       × (1 + Summe der Verhexungen)
 ```
 
-Gespeichert wird über `localStorage` genau zweierlei: welche Charaktere offen
-sind und der beste Punktestand. Keine Werte, keine Rechenkraft, nichts, was
-einen späteren Lauf leichter macht. Ein Test hält das fest, weil diese Regel
-beim Balancing als Erstes aufweicht.
+Gespeichert wird über `localStorage` genau viererlei: welche Charaktere offen
+sind, der beste Punktestand, die Chronik und die zuletzt gewählten
+Verhexungen. Keine Werte, keine Rechenkraft, nichts, was einen späteren Lauf
+leichter macht. Ein Test hält das fest, weil diese Regel beim Balancing als
+Erstes aufweicht.
 
 Am Ende zeigt ein Balkendiagramm, **woran die Gegner gestorben sind** — Waffe
 für Waffe, mit einem eigenen Balken für die Scherben. Man soll sehen, wie viel
@@ -341,7 +487,8 @@ und auf den Todesbildschirm, der von der Stelle des Todes aus zerspringt.
 
 ```bash
 npm run check      # TypeScript
-npm run test       # 195 Tests: Waffen, Karten, Risse, Gegner, Bosse, Etappen, Ton, Determinismus
+npm run test       # 263 Tests: Waffen, Karten, Risse, Gegner, Zeichen, Bosse, Kern,
+                   #            Etappen, Verhexungen, Chronik, Ton, Determinismus
 npm run perf       # Simulation ohne Zeichnen, misst ms pro Tick
 npm run smoke      # startet das Spiel im Browser, legt Screenshots ab
 ```
@@ -401,15 +548,22 @@ einen eigenen Test. Das bringt reproduzierbare Fehler, deterministische Tests
 und einen „Täglichen Lauf" als späteres Wiederkehr-Feature (`tagesSaat()` liegt
 bereit).
 
-### Fünf Plätze, acht Bits
+### Ein Bit je Platz — und seit der Kernscherbe auch am Spieler
 
 `platz` ist zugleich der Index im Gürtel **und** das Bit für die Risse. Beim
 Verschmelzen fallen zwei Einträge weg und einer kommt hinzu — würde der Platz
 aus der Array-Länge kommen, bekämen danach zwei Waffen dasselbe Bit, und die
 Kernregel wäre im Spiel unsichtbar ausgehebelt. Deshalb: **kleinster freier
-Index**, und er bleibt an der Waffe kleben. Drei reservierte Plätze dahinter
-gehören den Scherben, dem Geisterriss und den Dornen des Kolosses — daher acht
-Bits bei fünf Waffen.
+Index**, und er bleibt an der Waffe kleben. Fünf reservierte Plätze dahinter
+gehören den Scherben, dem Geisterriss, den Dornen des Kolosses, dem
+Fehlschlag-Riss und dem Frostkeil.
+
+Seit der Kernscherbe zeigt dieselbe Buchführung auch auf den Spieler: An ihr
+steht das Bit für die **Gegnerart**, die getroffen hat. Deshalb nimmt
+`rissSetzen` nicht mehr einen `Gegner`, sondern einen schmalen Typ `Rissbar` —
+es gibt *eine* Buchführung für Risse im ganzen Spiel, und wer sie führt, ist ihr
+egal. Feindgeschosse tragen ihre Quelle bis zum Einschlag mit, sonst wäre „drei
+verschiedene Arten" im Fernkampf eine Lüge.
 
 ## Was gemessen ist
 
@@ -423,12 +577,18 @@ bestückten Waffen**, 3000 Ticks, ohne zu zeichnen. Budget: 5 ms pro Tick, bei
 | 1400 Gegner, fünf Waffen | 1,8 ms | 2,7 ms |
 | 1400 Gegner, fünf Waffen **und dauernd ein Boss** | 1,6 ms | 2,5 ms |
 | 1400 Gegner **aus allen neun Arten**, fünf Waffen, ein Boss | 1,5 ms | 2,2 ms |
-| dieselbe Mischung, **gewichtet wie im Spiel** | 2,2 ms | 3,8 ms |
+| dieselbe Mischung, **gewichtet wie im Spiel** | 2,2 ms | 3,9 ms |
+| dieselbe Mischung **mit siebzig gezeichneten Gegnern** | 2,1 ms | 3,1 ms |
 | 2000 Gegner | 4,5 ms | 5,8 ms |
 
 Das ganze Waffensystem kostet also praktisch nichts, Bosse ebenso wenig — und
 neun Gegnerverhalten statt einem kosten rund zwei Zehntel Millisekunden. Die
 Obergrenze steht bei 1400, weil bei 2000 der p95 das Budget reißt.
+
+Dass die Zeile *mit* Zeichen **schneller** ist als die ohne, sieht falsch aus
+und ist es nicht: Zwischen beiden Messungen liegt der Zonendeckel (siehe unten).
+Siebzig gezeichnete Gegner kosten weniger als die 380 Zonen, die vorher unbemerkt
+mitliefen.
 
 Die Messung füllt bewusst mit **allen** Arten gemischt. Vorher lief sie nur mit
 Splittern und sah von den neuen Verhalten deshalb nichts: keine kreisenden
@@ -524,22 +684,46 @@ Zwei Sachen hat erst die Messung gezeigt, nicht das Bild:
   aufreißen. Der gemischte Bau wird damit über den ganzen Kampf belohnt statt
   einmal am Anfang.
 
+Und in der sechsten Runde, mit dem Kern und den Zeichen:
+
+- **460 Zonen gleichzeitig auf dem Feld.** Der Gegenstand „Splitterfeld"
+  stapelt: Mit drei Stück bleibt jede Zersplitterung neun Sekunden lang als Zone
+  liegen, und jede einzelne fragt pro Tick ihren Umkreis im Gitter ab. Das war
+  der teuerste Posten der ganzen Simulation — ausgelöst von einer Karte, die man
+  dreimal zieht, ohne etwas zu ahnen. Im Bild sah man nur, dass viel los ist.
+  Selbsttätige Zonenquellen teilen sich jetzt einen Deckel von 80, und die
+  Messung fiel von 2,21/3,90 auf 1,51/2,33 ms — **mit** siebzig gezeichneten
+  Gegnern obendrauf.
+- **Ab der vierten Welle kam immer derselbe Boss.** `bossFuer` klemmte am
+  letzten Eintrag fest. Bei drei Bossen und sechs Etappen bis zum Kern hätte man
+  vier davon denselben Kampf gesehen. Jetzt laufen sie reihum, und Flickwerk ist
+  als vierter dazugekommen.
+- **Die Bossleiste stand in der Uhr.** Auf y=78 schnitt ihre Namensplatte die
+  Zeitanzeige an und die Etappenzeile lief durch den Balken — im Screenshot mit
+  Boss war von „3:20" nur die untere Hälfte zu lesen. Zwei Runden lang hat das
+  niemand bemerkt, weil kein Bild einen Boss zeigte *und* auf die Uhr schaute.
+- **Ein halber Chronik-Eintrag nahm den ganzen Bildschirm mit.** Der Zeichner
+  griff ungeprüft auf `verhexungen.length` zu; ein Eintrag ohne dieses Feld warf
+  mitten im Zeichnen, und alles darunter — Charakterreihe, Bestwert,
+  Hinweiszeile — fehlte kommentarlos. Ein Zeichner darf an fehlenden Daten nicht
+  abbrechen.
+- **`textAlign` ist Zustand am Kontext.** Die Chronik zeichnet linksbündig, und
+  die Hinweiszeile darunter stand danach nach rechts verschoben. Kein Fehler in
+  der Zeile, sondern in der Zeile davor.
+
 ## Was noch fehlt
 
-- **Ein Ende.** Der Lauf hört auf, wenn man stirbt — sonst nie. Etappen und
-  Bosse geben ihm einen Takt, aber kein Ziel. Ein Endgegner oder ein Zeitlimit
-  fehlt weiterhin.
 - **Musik.** Klänge gibt es, einen Soundtrack nicht.
-- **Der Todesbildschirm und die Waffenleiste** sind noch in der alten
-  Formsprache. Sie funktionieren, aber sie tragen die massiven Platten noch
-  nicht durchgehend.
 - **Bossbalance.** Gemessen über fünf Läufe schwankt ein Bosskampf zwischen 4
   und 100 Sekunden — je nachdem, ob der Bau Einzelziel-Schaden hat. Dass ein
-  Flächenbau sich am Boss schwertut, ist gewollt; diese Spanne ist zu groß. Und
-  ob sich der Boss *schwer und fair zugleich* anfühlt, entscheidet sich am
-  Gamepad, nicht in einer Tabelle.
-- **Eine echte Bestenliste.** Der Punktestand steht, gespeichert wird lokal.
-  Online daraus zu machen ist ein Datenfeld, kein Umbau.
+  Flächenbau sich am Boss schwertut, ist gewollt; diese Spanne ist zu groß. Für
+  den **Kern** gilt dasselbe in schärfer: Er ist so gebaut, dass ihn nur die
+  Kernregel legt — wie lange das mit zwei ausgereizten Waffen wirklich dauert,
+  sagt keine Tabelle, sondern erst das Gamepad.
+- **Eine echte Bestenliste.** Chronik, Punkte, Verhexungsfaktor und Tagessaat
+  stehen — alles lokal. Online daraus zu machen ist jetzt wirklich nur noch ein
+  Datenfeld: Der Eintrag in `game/chronik.ts` ist bereits das Format, das ein
+  Server bekäme.
 - **Zwischenbilder.** Bei 144 Hz ist eine leichte Unruhe sichtbar, weil zwischen
   zwei Logikschritten nicht interpoliert wird.
 

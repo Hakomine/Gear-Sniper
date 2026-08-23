@@ -7,7 +7,9 @@ import { leseChronik } from './game/chronik'
 import { VERHEXUNGEN } from './game/verhexungen'
 import type { VerhexungId } from './game/verhexungen'
 import type { Befehle } from './game/state'
-import { erzeugeSpielstand, leereBefehle, tick } from './game/state'
+import { erzeugeSpielstand, leereBefehle, starteTageslauf, tick } from './game/state'
+import { rufeKern } from './game/bosse'
+import { setzeZeichen } from './game/zeichen'
 import { ruesteAus, WAFFEN, werteAuf } from './game/weapons'
 import { SICHT_RADIUS, Zeichner } from './render/draw'
 
@@ -206,10 +208,16 @@ zeichner.passeAn()
 window.addEventListener('resize', () => zeichner.passeAn())
 schleife.start()
 
-// Griff fuer den Playwright-Test: Er startet den Lauf, liest den Zustand aus
-// und kann Waffen ausruesten, statt sich auf Screenshots allein zu verlassen.
-// Ohne den Zugriff auf `WAFFEN` liesse sich kein Bild von einem fertigen Bau
-// machen - man muesste zehn Minuten spielen, um eine Vollendung zu sehen.
+/*
+ * Griff fuer den Playwright-Test.
+ *
+ * Er startet den Lauf, liest den Zustand aus und kann Waffen ausruesten, statt
+ * sich auf Screenshots allein zu verlassen. Ohne den Zugriff auf `WAFFEN`
+ * liesse sich kein Bild von einem fertigen Bau machen - man muesste zehn
+ * Minuten spielen, um eine Vollendung zu sehen. Dasselbe gilt fuer den Kern
+ * und die Zeichen: Der Endkampf steht am Ende von sechs Etappen, und ein
+ * gezeichneter Gegner ist in den ersten Minuten die Ausnahme.
+ */
 declare global {
   interface Window {
     __scherbenfeld?: {
@@ -218,7 +226,19 @@ declare global {
       waffen: typeof WAFFEN
       ruesteAus: typeof ruesteAus
       werteAuf: typeof werteAuf
+      rufeKern: typeof rufeKern
+      starteTageslauf: typeof starteTageslauf
+      setzeZeichen: typeof setzeZeichen
     }
   }
 }
-window.__scherbenfeld = { spiel, schleife, waffen: WAFFEN, ruesteAus, werteAuf }
+window.__scherbenfeld = {
+  spiel,
+  schleife,
+  waffen: WAFFEN,
+  ruesteAus,
+  werteAuf,
+  rufeKern,
+  starteTageslauf,
+  setzeZeichen,
+}

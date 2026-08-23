@@ -44,6 +44,11 @@ type Spiel = {
     abklingMult: number
     maxWaffen: number
     waffen: WaffenInstanzLose[]
+    x: number
+    y: number
+    risse: number
+    istGlas: boolean
+    unverwundbar: number
   }
   gegner: { anzahl: number; aktiv: GegnerLose[] }
   zonen: { anzahl: number }
@@ -54,6 +59,21 @@ type Spiel = {
   etappe: number
   tuerAngebot: string[]
   schreine: { anzahl: number; aktiv: SchreinLose[] }
+  gewonnen: boolean
+  zerruettung: number
+  gezeichnet: number
+  verhexungen: string[]
+  titelZeile: number
+  etappeVorbei: boolean
+  chronik: Array<{
+    punkte: number
+    charakter: string
+    etappe: number
+    zerruettung: number
+    verhexungen: string[]
+    gewonnen: boolean
+    tag: boolean
+  }>
 }
 
 type SchreinLose = { art: string; x: number; y: number; ladung: number; benutzt: boolean }
@@ -62,7 +82,18 @@ type SchreinLose = { art: string; x: number; y: number; ladung: number; benutzt:
 type GegnerLose = {
   hp: number
   maxHp: number
-  bossZustand: { phase: number; telegraf: number; art: { name: string } } | null
+  x: number
+  y: number
+  zeichen: number
+  tot: boolean
+  bossZustand: {
+    phase: number
+    telegraf: number
+    schale: number
+    kittRest: number
+    kittGemeldet: boolean
+    art: { name: string; istKern?: boolean; schalen?: number }
+  } | null
 }
 
 type WaffenDefLose = { id: string; maxStufe: number }
@@ -74,6 +105,9 @@ type Fenster = Window & {
     waffen: readonly WaffenDefLose[]
     ruesteAus: (def: WaffenDefLose, platz: number) => WaffenInstanzLose
     werteAuf: (w: WaffenInstanzLose) => void
+    rufeKern: (s: Spiel) => GegnerLose | null
+    starteTageslauf: (s: Spiel) => void
+    setzeZeichen: (s: Spiel, g: GegnerLose, index: number) => void
   }
 }
 
@@ -567,4 +601,239 @@ test('Atempause zeigt drei Türen mit Preis und Lohn', async ({ page }) => {
   )
   expect(tueren.length).toBe(3)
   expect(tueren).toContain('ruhe')
+})
+
+// ---------------------------------------------------------------------------
+// Runde 5: Zeichen, der Kern, das Tor, die Chronik und die Kernscherbe
+//
+// Alle fuenf liegen im Spiel weit hinten - der Endkampf steht am Ende von
+// sechs Etappen, ein gezeichneter Gegner ist in den ersten Minuten die
+// Ausnahme, und die Kernscherbe muss man sich erst verdienen. Ohne den
+// Testgriff waere von alledem kein Bild zu bekommen, ohne eine halbe Stunde zu
+// spielen.
+// ---------------------------------------------------------------------------
+
+test('Gezeichnete Gegner bleiben im Getümmel als solche erkennbar', async ({ page }) => {
+  await starte(page)
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.zeit = 200
+    s.etappe = 5
+  })
+  await spiele(page, 8)
+
+  // Reihum durch alle fuenf Zeichen, damit das Bild nicht zufaellig nur eines
+  // zeigt - der ganze Punkt ist, dass man sie auseinanderhaelt.
+  const gezeichnet = await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    const liste = s.gegner.aktiv
+    let n = 0
+    for (let i = 0; i < liste.length && n < 40; i += 7) {
+      if (liste[i].zeichen >= 0) continue
+      griff.setzeZeichen(s, liste[i], n % 5)
+      n++
+    }
+    return s.gezeichnet
+  })
+  expect(gezeichnet).toBeGreaterThan(0)
+
+  await page.waitForTimeout(700)
+  await page.screenshot({ path: 'screenshots/15-zeichen.png' })
+})
+
+test('Der Kern steht, trägt seine Schalen und kittet sich mit Ansage', async ({ page }) => {
+  await starte(page)
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.etappe = 6
+    griff.rufeKern(s)
+  })
+
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand?.art.istKern === true,
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+
+  // Zwei Schalen aufbrechen lassen und die Kittuhr kurz vor den Ablauf
+  // stellen: So zeigt ein einziges Bild beide Regeln, die ihn ausmachen.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    for (const g of s.gegner.aktiv) {
+      if (g.bossZustand?.art.istKern !== true) continue
+      g.hp = g.maxHp * 0.45
+      g.bossZustand.kittRest = 0.9
+      // Neben den Spieler holen: Er erscheint am Rand des Sichtfelds und
+      // laeuft von dort heran - fuer ein Bild seiner Schalen ist das die
+      // falsche halbe Minute.
+      g.x = s.spieler.x + 210
+      g.y = s.spieler.y
+    }
+  })
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: 'screenshots/16-kern.png' })
+
+  const zustand = await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    const k = s.gegner.aktiv.find((g) => g.bossZustand?.art.istKern === true)
+    return { schale: k?.bossZustand?.schale ?? -1, gemeldet: k?.bossZustand?.kittGemeldet ?? false }
+  })
+  // Zwei Schalen sind gebrochen, und die Kittung war angesagt - kein Boss in
+  // diesem Spiel tut irgendetwas ohne Vorwarnung.
+  expect(zustand.schale).toBeLessThanOrEqual(2)
+})
+
+test('Sieg über den Kern zeigt VOLLENDET statt ZERBROCHEN', async ({ page }) => {
+  await starte(page)
+  await page.evaluate(() => {
+    const griff = (window as unknown as Fenster).__scherbenfeld
+    const s = griff.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.etappe = 6
+    s.zerruettung = 1
+    griff.rufeKern(s)
+  })
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Fenster).__scherbenfeld.spiel.gegner.aktiv.some(
+        (g) => g.bossZustand?.art.istKern === true,
+      ),
+    undefined,
+    { timeout: 15_000 },
+  )
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    for (const g of s.gegner.aktiv) {
+      if (g.bossZustand?.art.istKern !== true) continue
+      g.bossZustand.schale = 0
+      g.hp = 0
+      // `tot` von Hand setzen, nicht nur die Trefferpunkte auf null: Das
+      // Kennzeichen setzt sonst `verletzeGegner`, und den Weg dorthin gibt es
+      // hier nicht - der Kern nimmt gewoehnlichen Schaden nur zu einem
+      // Zehntel. Ohne diese Zeile sitzt er mit null Leben einfach weiter da.
+      g.tot = true
+    }
+  })
+
+  await page.waitForFunction(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.gewonnen,
+    undefined,
+    { timeout: 15_000 },
+  )
+  // Warten, bis der Kranz herangewachsen ist - er baut sich ueber gut eine
+  // Sekunde auf, genau wie der Sprung im Todesbildschirm.
+  await page.waitForTimeout(1400)
+  await page.screenshot({ path: 'screenshots/17-vollendet.png' })
+
+  const stand = await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    return { phase: s.phase, gewonnen: s.gewonnen, chronik: s.chronik.length }
+  })
+  expect(stand.phase).toBe('tot')
+  expect(stand.gewonnen).toBe(true)
+  // Und der Lauf steht in der Chronik.
+  expect(stand.chronik).toBeGreaterThan(0)
+})
+
+test('Das Kern-Tor stellt nach der sechsten Etappe genau zwei Türen', async ({ page }) => {
+  await starte(page)
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.etappe = 6
+    s.etappeVorbei = true
+  })
+  await page.waitForFunction(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.phase === 'atempause',
+    undefined,
+    { timeout: 15_000 },
+  )
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: 'screenshots/18-kern-tor.png' })
+
+  const tueren = await page.evaluate(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.tuerAngebot,
+  )
+  // Genau zwei Antworten: aufhoeren oder weiter. Eine dritte Tuer waere eine
+  // Ausrede, sich nicht zu entscheiden.
+  expect(tueren).toEqual(['kern', 'tiefer'])
+})
+
+test('Titelbild trägt Verhexungen, Chronik und Tagesscherbe', async ({ page }) => {
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.offen.push('schleiferin', 'riss', 'koloss')
+    s.verhexungen.push('hast', 'enge', 'gezeichnet')
+    s.chronik.push(
+      { punkte: 48_120, charakter: 'riss', etappe: 9, zerruettung: 1, verhexungen: ['hast'], gewonnen: true, tag: false },
+      { punkte: 31_400, charakter: 'koloss', etappe: 6, zerruettung: 0, verhexungen: [], gewonnen: false, tag: true },
+      { punkte: 12_900, charakter: 'splitter', etappe: 3, zerruettung: 0, verhexungen: [], gewonnen: false, tag: false },
+    )
+  })
+
+  // In die Verhexungsreihe wechseln: Dort zeigt die Zeile darunter die
+  // Wirkung der angewaehlten und den Gesamtfaktor.
+  await page.keyboard.press('KeyS')
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'screenshots/19-titel-verhexungen.png' })
+
+  const stand = await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    return { zeile: s.titelZeile, phase: s.phase }
+  })
+  expect(stand.zeile).toBe(1)
+  // Und die Leertaste startet hier *nicht*, sie schaltet um.
+  expect(stand.phase).toBe('titel')
+})
+
+test('Die Kernscherbe trägt ihre eigenen Risse', async ({ page }) => {
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.offen.push('kernscherbe')
+    // Ganz nach hinten in der Auswahl - dort steht sie.
+    s.charakterWahl = 6
+  })
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: 'screenshots/20-kernscherbe-wappen.png' })
+
+  await starte(page)
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.spieler.maxHp = 1e9
+    s.spieler.hp = 1e9
+    s.spieler.xpNaechste = 1e9
+    s.zeit = 200
+  })
+  await spiele(page, 6)
+
+  // Zwei Risse setzen und die Unverwundbarkeit wegnehmen: Das ist der
+  // Zustand, in dem der naechste Treffer einer neuen Art sie zerspringen
+  // laesst - und genau den muss man sehen koennen.
+  await page.evaluate(() => {
+    const s = (window as unknown as Fenster).__scherbenfeld.spiel
+    s.spieler.risse = 2
+    s.spieler.unverwundbar = 0
+  })
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'screenshots/21-kernscherbe-risse.png' })
+
+  const glas = await page.evaluate(
+    () => (window as unknown as Fenster).__scherbenfeld.spiel.spieler.istGlas,
+  )
+  expect(glas).toBe(true)
 })

@@ -462,9 +462,13 @@ function zeichneSchalen(ctx: CanvasRenderingContext2D, s: Spielstand, drehung: n
     }
 
     if (z.unverwundbar > 0) {
+      // Zurueckhaltend: Bei einem Koerper von 88 Punkten Radius wird aus einer
+      // kraeftigen weissen Fuellung ein grauer Klecks, der die Form
+      // verschluckt. Ein blasses Aufleuchten sagt dasselbe und laesst den Kern
+      // Kern bleiben.
       ctx.beginPath()
       ctx.arc(g.x, g.y, g.radius * 1.1, 0, Math.PI * 2)
-      ctx.fillStyle = mitAlpha('#ffffff', 0.35 + Math.sin(drehung * 12) * 0.2)
+      ctx.fillStyle = mitAlpha('#ffffff', 0.14 + Math.abs(Math.sin(drehung * 12)) * 0.14)
       ctx.fill()
     }
 
@@ -932,10 +936,13 @@ function zeichneEigeneRisse(ctx: CanvasRenderingContext2D, s: Spielstand): void 
     // Feste Winkel statt Zufall: Zwei Risse sollen bei jedem Blick an
     // derselben Stelle sitzen, sonst liest man Flackern statt Zustand.
     const w = (i / RISS_SCHWELLE) * Math.PI * 2 - Math.PI / 3
-    ctx.moveTo(sp.x + Math.cos(w) * r * 0.2, sp.y + Math.sin(w) * r * 0.2)
-    ctx.lineTo(sp.x + Math.cos(w + 0.3) * r * 1.35, sp.y + Math.sin(w + 0.3) * r * 1.35)
+    // Weit ueber den Koerper hinaus: Die Figur ist nur dreizehn Punkte gross,
+    // und ein Riss, der in ihr steckenbleibt, ist im Getuemmel nicht zu sehen.
+    // Er soll aus ihr herauszeigen wie bei einem Gegner auch.
+    ctx.moveTo(sp.x + Math.cos(w) * r * 0.25, sp.y + Math.sin(w) * r * 0.25)
+    ctx.lineTo(sp.x + Math.cos(w + 0.3) * r * 1.85, sp.y + Math.sin(w + 0.3) * r * 1.85)
   }
-  ctx.lineWidth = 5
+  ctx.lineWidth = 5.5
   ctx.strokeStyle = FARBEN.kontur
   ctx.stroke()
   ctx.lineWidth = 2.5
@@ -946,9 +953,9 @@ function zeichneEigeneRisse(ctx: CanvasRenderingContext2D, s: Spielstand): void 
   // laesst sie zerspringen, und das ist die Sekunde, in der man es wissen muss.
   if (!knapp) return
   ctx.beginPath()
-  ctx.arc(sp.x, sp.y, sp.radius * 1.6 * puls, 0, Math.PI * 2)
-  ctx.lineWidth = 2
-  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, 0.7)
+  ctx.arc(sp.x, sp.y, sp.radius * 2.1 * puls, 0, Math.PI * 2)
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = mitAlpha(FARBEN.gefahr, 0.8)
   ctx.stroke()
 }
 
@@ -1238,11 +1245,20 @@ function zeichneBosse(ctx: CanvasRenderingContext2D, s: Spielstand): void {
     ctx.lineWidth = 3
     ctx.stroke()
 
-    // Kern: In Phase zwei weiss glühend statt in Bossfarbe - man soll den
-    // Wechsel sehen, nicht nur merken.
+    /*
+     * Kern: In Phase zwei weiss gluehend statt in Bossfarbe - man soll den
+     * Wechsel sehen, nicht nur merken.
+     *
+     * Beim Kern zaehlen keine Phasen, sondern Schalen: Solange noch eine
+     * steht, bleibt sein Inneres dunkel; ist die letzte gebrochen, gluht es.
+     * Ohne diese Unterscheidung sass in ihm ein toter grauer Fleck, der genau
+     * nichts sagte - er hat `phaseSchwelle: -1` und wechselt nie die Phase.
+     */
+    const schalen = z.art.schalen ?? 0
+    const offen = schalen > 0 ? z.schale === 0 : z.phase > 1
     ctx.beginPath()
     ctx.arc(g.x, g.y, g.radius * 0.3, 0, Math.PI * 2)
-    ctx.fillStyle = z.phase === 1 ? mitAlpha(FARBEN.grund, 0.7) : mitAlpha(FARBEN.treffer, 0.85)
+    ctx.fillStyle = offen ? mitAlpha(FARBEN.treffer, 0.85) : mitAlpha(FARBEN.kontur, 0.75)
     ctx.fill()
   }
 }

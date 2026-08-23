@@ -45,13 +45,17 @@ export function zeichneTitel(
   const gewaehlt = CHARAKTERE[s.charakterWahl] ?? CHARAKTERE[0]
   const offen = s.offen.includes(gewaehlt.id)
   zeichneCharakterPlatte(ctx, gewaehlt, offen, breite / 2, 200)
-  zeichneVerhexungen(ctx, s, breite / 2, 480)
+  zeichneVerhexungen(ctx, s, breite / 2, 496)
   // Links die Tagesscherbe, rechts die Chronik - beide in den Raum neben der
-  // Charakterplatte, der sonst leer stand.
-  zeichneTagesscherbe(ctx, s, 26, 214)
-  zeichneChronik(ctx, s, breite - 26 - SEITE_B, 214)
+  // Charakterplatte, der sonst leer stand, und buendig mit deren Oberkante.
+  zeichneTagesscherbe(ctx, s, 26, 200)
+  zeichneChronik(ctx, s, breite - 26 - SEITE_B, 200)
   zeichnePunkte(ctx, s, breite / 2, hoehe - 132)
 
+  // Ausrichtung zuruecksetzen: Die Chronik zeichnet ihre Zeilen linksbuendig,
+  // und `textAlign` ist Zustand am Kontext - ohne diese Zeile stand die
+  // Hinweiszeile darunter nach rechts verschoben.
+  ctx.textAlign = 'center'
   ctx.font = `400 16px ${SCHRIFT.mono}`
   ctx.fillStyle = FARBEN.textSchwach
   ctx.fillText(TEXTE.charakterHinweis, breite / 2, hoehe - 42)
@@ -123,8 +127,8 @@ function zeichneChronik(
   x: number,
   y: number,
 ): void {
-  const h = 244
-  massivePlatte(ctx, x, y, SEITE_B, h, {
+  // Dieselbe Hoehe wie die Charakterplatte - die drei stehen als eine Reihe.
+  massivePlatte(ctx, x, y, SEITE_B, PLATTE_H, {
     grund: FARBEN.kartenGrundTief,
     kontur: FARBEN.kontur,
     akzent: FARBEN.spielerRing,
@@ -161,9 +165,15 @@ function zeichneChronik(
 
     ctx.font = `400 11px ${SCHRIFT.mono}`
     ctx.fillStyle = FARBEN.textSchwach
-    const teile = [`E${e.etappe}`]
-    if (e.zerruettung > 0) teile.push(`Z${e.zerruettung}`)
-    if (e.verhexungen.length > 0) teile.push(`${e.verhexungen.length}×V`)
+    // Wehrhaft gegen halbe Eintraege: `leseChronik` raeumt zwar auf, was aus
+    // dem Speicher kommt - aber ein Zeichner, der an einem fehlenden Feld
+    // abbricht, nimmt den *ganzen* Bildschirm mit. Genau das ist beim ersten
+    // Screenshot passiert: Ein unvollstaendiger Testeintrag hat die
+    // Charakterreihe darunter verschluckt.
+    const teile = [`E${e.etappe ?? 1}`]
+    if ((e.zerruettung ?? 0) > 0) teile.push(`Z${e.zerruettung}`)
+    const hexen = e.verhexungen?.length ?? 0
+    if (hexen > 0) teile.push(`${hexen}×V`)
     if (e.tag) teile.push('Tag')
     ctx.fillText(teile.join(' · '), x + SEITE_B - 18, zy + 13)
 
@@ -738,10 +748,25 @@ export function zeichneTod(
   ctx.strokeStyle = mitAlpha(akzent, gewonnen ? 0.45 : 0.3)
   ctx.lineWidth = gewonnen ? 3 : 2
   ctx.beginPath()
-  sprungOverlay(ctx, breite, hoehe, gewonnen ? 1 - seitTod * 0.75 : seitTod, s.saat, breite / 2, hoehe / 2)
+  // Beim Sieg geht der Sprung von der Punktetafel aus statt von der Bildmitte:
+  // Sein Ursprung liegt damit *hinter* der Platte und nicht im Spalt zwischen
+  // den beiden Auswertungsplatten, wo er als loser Stern im Nichts stand.
+  sprungOverlay(
+    ctx,
+    breite,
+    hoehe,
+    gewonnen ? 1 - seitTod * 0.75 : seitTod,
+    s.saat,
+    breite / 2,
+    gewonnen ? 132 : hoehe / 2,
+  )
   ctx.stroke()
 
-  if (gewonnen) zeichneKranz(ctx, breite / 2, hoehe / 2, seitTod)
+  // Der Kranz sitzt um die *Punktetafel*, nicht um die Bildmitte: Dort liegen
+  // die beiden Auswertungsplatten, und ein Kranz dahinter waere nur ein
+  // Sternchen im Spalt zwischen ihnen. Um die Zahl herum, auf die ohnehin
+  // jeder zuerst schaut, wird daraus eine Krone.
+  if (gewonnen) zeichneKranz(ctx, breite / 2, 132, seitTod)
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -830,9 +855,9 @@ export function zeichneTod(
  * heiler Bildschirm, sondern ein Bruch, den man selbst gesetzt hat.
  */
 function zeichneKranz(ctx: CanvasRenderingContext2D, mx: number, my: number, t: number): void {
-  const zacken = 12
-  const innen = 150 + t * 40
-  const aussen = innen + 46
+  const zacken = 14
+  const innen = 268 + t * 24
+  const aussen = innen + 44
   ctx.beginPath()
   for (let i = 0; i < zacken; i++) {
     const w = (i / zacken) * Math.PI * 2 - Math.PI / 2

@@ -272,7 +272,15 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
   const bw = 640
   const bh = 14
   const bx = (breite - bw) / 2
-  const by = 78
+  /*
+   * Tiefer, als es aussieht.
+   *
+   * Auf 78 stand die Leiste mitten in der Uhr und ihre Namensplatte darueber
+   * schnitt sie an - im Screenshot mit Boss war von "3:20" nur die untere
+   * Haelfte zu lesen, und die Etappenzeile lief durch den Balken. Jetzt
+   * stapelt sich alles sauber: Uhr, Etappe, Bossname, Leiste, Kittuhr.
+   */
+  const by = 130
   const anteil = Math.max(0, boss.hp / boss.maxHp)
 
   const schraege = bh * 0.8
@@ -335,7 +343,7 @@ function zeichneBossLeiste(ctx: CanvasRenderingContext2D, s: Spielstand, breite:
 
   const name =
     schalen > 0
-      ? `${z.art.name} — ${z.schale} SCHALEN`
+      ? `${z.art.name} — ${z.schale} ${z.schale === 1 ? 'SCHALE' : 'SCHALEN'}`
       : z.phase === 1
         ? z.art.name
         : `${z.art.name} — PHASE 2`
