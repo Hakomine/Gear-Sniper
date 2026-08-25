@@ -29,11 +29,11 @@ jobs:
     # Lieber Luft lassen, als den Job mittendrin abschneiden.
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Modus bestimmen
         id: mode
@@ -53,6 +53,40 @@ jobs:
           SNIPER_PLZ: ${{ secrets.SNIPER_PLZ }}
           SNIPER_ORT: ${{ secrets.SNIPER_ORT }}
         run: node collector.mjs --mode=${{ steps.mode.outputs.value }}
+
+      # Der Fehler-Alarm unten greift nur, wenn der Job ABSTUERZT. Der teurere
+      # Fall ist ein Sammler, der sauber durchlaeuft und dabei nichts findet -
+      # etwa weil Elgato die Seitenstruktur geaendert hat oder Kleinanzeigen
+      # dauerhaft sperrt. Dann wuerde eine leere Datei committet, alles saehe
+      # "frisch" aus, und niemand merkte es. Auch die Stale-Warnung des Workers
+      # greift dann nicht, denn die Daten SIND ja neu - nur leer.
+      #
+      # Schlaegt die Pruefung an, bricht der Job ab. Das ist Absicht: dann wird
+      # nichts committet, die letzten guten Daten bleiben stehen, und der
+      # Discord-Alarm unten laeuft ueber den vorhandenen failure()-Zweig.
+      #
+      # Schwellen bewusst locker (real: 652 Preise, 31 Modelle). Sie sollen
+      # einen Zusammenbruch fangen, nicht jede Schwankung.
+      - name: Plausibilität prüfen
+        run: |
+          node -e '
+            const fs = require("fs");
+            const preise = JSON.parse(fs.readFileSync("prices.json", "utf8"));
+            const markt  = JSON.parse(fs.readFileSync("markt.json", "utf8"));
+            const nPreise = (preise.items || []).length;
+            const modelle = markt.modelle || {};
+            const nModelle = Array.isArray(modelle) ? modelle.length : Object.keys(modelle).length;
+
+            console.log(`${nPreise} Preise, ${nModelle} Modelle mit Marktpreis`);
+
+            const fehler = [];
+            if (nPreise  <  300) fehler.push(`nur ${nPreise} Preise (erwartet >= 300)`);
+            if (nModelle <   15) fehler.push(`nur ${nModelle} Modelle mit Marktpreis (erwartet >= 15)`);
+            if (fehler.length) {
+              console.error("Datenlage unplausibel: " + fehler.join(", "));
+              process.exit(1);
+            }
+          '
 
       - name: Ergebnis committen
         run: |
@@ -81,7 +115,7 @@ jobs:
             "embeds": [{
               "title": "GitHub Actions Log",
               "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              "description": "Der Preis-Sammellauf ist abgebrochen. Meist hat Elgato die Seitenstruktur geaendert oder eine Quelle sperrt gerade.",
+              "description": "Der Sammellauf ist abgebrochen ODER die Datenlage war unplausibel (zu wenig Preise/Modelle). Meist hat Elgato die Seitenstruktur geaendert oder eine Quelle sperrt dauerhaft. Es wurde nichts committet, die letzten guten Daten stehen noch.",
               "color": 16007990
             }]
           }
