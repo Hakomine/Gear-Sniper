@@ -284,6 +284,31 @@ Stille ist zweideutig: „keine Deals" oder „alles kaputt"? Deshalb:
   Die Warnschwelle steht deshalb auf 4 Stunden – mit 90 Minuten meldete der
   Wächter GitHubs Trödelei statt echter Probleme. Der Nachtlauf um 3 Uhr kam
   entsprechend erst um 6 Uhr.
+- **Schlimmer noch: manchmal läuft der Zeitplan gar nicht.** Am 28.08.2026
+  meldete der Wächter 544 Minuten alte Daten. Die Fehlersuche ging ins Leere,
+  weil nichts kaputt war: kein fehlgeschlagener Lauf, keine 429er, der letzte
+  Sammler sauber durch mit 673 Preisen und 31 Modellen. Die Läufe wurden gar
+  nicht erst **erzeugt** – zwischen dem 26. und 28.08. wuchsen die Abstände
+  von 30 Minuten über 3,5 h und 4,7 h auf 9,4 h.
+
+  Minute 0 und 30 sind die meistbelegten Cron-Slots überhaupt, 3:00 UTC der
+  meistbelegte Zeitpunkt des Tages. Genau dort lässt GitHub geplante Läufe bei
+  Last als Erstes fallen. Seitdem `8,38 * * * *` statt `*/30` und
+  `13 3 * * *` statt `0 3`. **Merksatz: krumme Minuten wählen, nie die volle
+  Stunde.**
+
+  Achtung beim Ändern: der Schritt „Modus bestimmen" vergleicht
+  `github.event.schedule` **wörtlich** mit dem Cron-String. Wandert der Cron
+  ohne den Vergleich, wird aus dem Nachtlauf klammheimlich ein Schnelllauf –
+  der Job bleibt grün, der Katalog veraltet still.
+- **Ein stiller Sammler heißt nicht, dass der Sammler schuld ist.** Der eigent-
+  liche Alarmweg ist seit dem Flip-Umbau `sniper-live.mjs`. Am 28.08.2026 lief
+  der seit **17 Tagen** nicht mehr (`gesehen.json` unverändert, kein Prozess),
+  und niemandem fiel es auf, weil GitHub die langsame Schiene weiterbediente.
+  Dafür gibt es keinen Wächter: der Worker überwacht `prices.json`, nicht den
+  Poller. Vor dem Neustart `--once --dry-run` – nach mehr als `MERK_TAGE` = 14
+  Tagen Pause ist `gesehen.json` abgelaufen und der erste Lauf könnte laut
+  werden. (War er nicht: 242 Anzeigen, 116 neu, 0 Funde.)
 - **wrangler muss aus dem Projektordner laufen.** Im Home-Verzeichnis liegt
   unter deutschem Windows die versteckte Verknüpfung `Anwendungsdaten` (Verweis
   auf `AppData\Roaming`, mit Zugriffssperre). wrangler durchsucht das

@@ -207,6 +207,16 @@ GitHub-Job ab, meldet der sich selbst.
 - **GitHub hält sich nicht an den Zeitplan.** `*/30` läuft real alle 17 bis 190
   Minuten. Die Warnschwelle steht deshalb auf 4 Stunden, sonst meldet der
   Wächter GitHubs Trödelei statt echter Probleme.
+- **Und ab und zu läuft der Zeitplan gar nicht.** Am 28.08.2026 meldete der
+  Wächter 544 Minuten alte Daten. Nichts war kaputt: kein fehlgeschlagener
+  Lauf, letzter Sammler sauber mit 673 Preisen und 31 Modellen — die Läufe
+  wurden schlicht **nicht erzeugt**. Über zwei Tage wuchsen die Abstände von
+  30 Minuten auf 5 bis 9 Stunden. Minute 0 und 30 sind die meistbelegten
+  Cron-Slots, 3:00 UTC der meistbelegte Zeitpunkt des Tages; dort fallen
+  geplante Läufe bei Last als Erstes weg. Seitdem `8,38` statt `*/30` und
+  `13 3` statt `0 3`. **Merksatz: krumme Minuten wählen.** Und Vorsicht — der
+  Schritt „Modus bestimmen" vergleicht den Cron-String wörtlich, der muss
+  mitwandern, sonst wird der Nachtlauf still zum Schnelllauf.
 - **Umbenennen im Worker ist gefährlich.** Beim Wechsel von `cam` auf `jagd`
   blieb eine Variable stehen; der Alarm brach mit „cam is not defined" ab. Der
   Testaufbau in `scratchpad/test-worker.mjs` hat es gefangen, bevor es live ging.
