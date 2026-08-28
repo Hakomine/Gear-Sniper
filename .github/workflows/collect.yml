@@ -2,10 +2,17 @@ name: Preise sammeln
 
 on:
   schedule:
-    # Schnelllauf: Watchlist, Kleinanzeigen und ein rotierender Katalog-Block
-    - cron: '*/30 * * * *'
-    # Nachtlauf: kompletter Elgato-Katalog (dauert ~10 Min)
-    - cron: '0 3 * * *'
+    # Schnelllauf: Watchlist, Kleinanzeigen und ein rotierender Katalog-Block.
+    # Bewusst NICHT '*/30': zur vollen und halben Stunde stehen bei GitHub die
+    # meisten Zeitplaene an, und geplante Laeufe werden bei Last als Erstes
+    # fallen gelassen. Gemessen 26.-28.08.2026: aus dem 30-Minuten-Takt wurden
+    # Luecken von 5 bis 9 Stunden, ohne einen einzigen fehlgeschlagenen Lauf -
+    # die Laeufe wurden gar nicht erst erzeugt. Krumme Minuten liegen neben
+    # dem Andrang.
+    - cron: '8,38 * * * *'
+    # Nachtlauf: kompletter Elgato-Katalog (dauert ~10 Min).
+    # Ebenfalls krumm: 3:00 UTC ist der meistbelegte Cron-Slot ueberhaupt.
+    - cron: '13 3 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -38,7 +45,7 @@ jobs:
       - name: Modus bestimmen
         id: mode
         run: |
-          if [ "${{ github.event.schedule }}" = "0 3 * * *" ]; then
+          if [ "${{ github.event.schedule }}" = "13 3 * * *" ]; then
             echo "value=full" >> "$GITHUB_OUTPUT"
           else
             echo "value=${{ inputs.mode || 'fast' }}" >> "$GITHUB_OUTPUT"
